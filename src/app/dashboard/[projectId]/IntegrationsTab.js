@@ -10,7 +10,7 @@ export default function IntegrationsTab({ projectId }) {
   const [copied, setCopied] = useState(false);
 
   const embedCode = `<script
-  src="https://YOUR_DOMAIN/static/widget.js"
+  src="https://web-production-f2592.up.railway.app/static/widget.js"
   data-project="${projectId}">
 </script>`;
 
