@@ -27,7 +27,7 @@ export default function RootLayout({ children }) {
           {`
             window.fbAsyncInit = function () {
               FB.init({
-                appId: '2094436271357330_attach_here', // ⭐ replace with your real App ID
+                appId: '2088401315249131',
                 autoLogAppEvents: true,
                 xfbml: true,
                 version: 'v24.0'
