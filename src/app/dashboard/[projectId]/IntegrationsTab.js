@@ -9,9 +9,6 @@ export default function IntegrationsTab({ projectId }) {
   const [copied, setCopied] = useState(false);
   const [loadingWA, setLoadingWA] = useState(false);
 
-  // ===============================
-  // Chat Widget Embed Code
-  // ===============================
   const embedCode = `<script
   src="https://web-production-f2592.up.railway.app/static/widget.js"
   data-project="${projectId}">
@@ -24,11 +21,8 @@ export default function IntegrationsTab({ projectId }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ===============================
-  // WhatsApp Embedded Signup
-  // ===============================
   useEffect(() => {
-    window.addEventListener("message", (event) => {
+    const handler = (event) => {
       if (
         event.origin !== "https://www.facebook.com" &&
         event.origin !== "https://web.facebook.com"
@@ -39,13 +33,14 @@ export default function IntegrationsTab({ projectId }) {
       try {
         const data = JSON.parse(event.data);
 
-        if (data.type === "WA_EMBEDDED_SIGNUP") {
-          if (data.event === "FINISH") {
-            toast.success("WhatsApp connected");
-          }
+        if (data.type === "WA_EMBEDDED_SIGNUP" && data.event === "FINISH") {
+          toast.success("WhatsApp connected");
         }
       } catch {}
-    });
+    };
+
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
   }, []);
 
   const fbLoginCallback = (response) => {
@@ -56,25 +51,22 @@ export default function IntegrationsTab({ projectId }) {
 
     const code = response.authResponse.code;
 
-    try {
-      await fetch(
-        "https://web-production-f2592.up.railway.app/whatsapp/onboard",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            code,
-            projectId,
-          }),
-        }
-      );
-
-      toast.success("WhatsApp connected successfully");
-    } catch {
-      toast.error("WhatsApp connection failed");
-    }
-
-    setLoadingWA(false);
+    fetch("https://web-production-f2592.up.railway.app/whatsapp/onboard", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ code, projectId }),
+    })
+      .then(() => {
+        toast.success("WhatsApp connected successfully");
+      })
+      .catch(() => {
+        toast.error("WhatsApp connection failed");
+      })
+      .finally(() => {
+        setLoadingWA(false);
+      });
   };
 
   const launchWhatsAppSignup = () => {
@@ -95,16 +87,12 @@ export default function IntegrationsTab({ projectId }) {
 
   return (
     <div className="space-y-6">
-      {/* ===================================== */}
-      {/* Embeddable Chat Widget */}
-      {/* ===================================== */}
       <Card>
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">Embeddable Chat Widget</h2>
 
           <p className="text-sm text-muted-foreground">
-            Add this script to your website before the closing{" "}
-            <code>&lt;/body&gt;</code> tag.
+            Add this script before <code>&lt;/body&gt;</code>.
           </p>
 
           <div className="relative">
@@ -120,24 +108,15 @@ export default function IntegrationsTab({ projectId }) {
               {copied ? "Copied!" : "Copy"}
             </Button>
           </div>
-
-          <div className="text-xs text-muted-foreground">
-            ✔ Works on any website <br />
-            ✔ No login required <br />
-            ✔ Uses your indexed documents
-          </div>
         </CardContent>
       </Card>
 
-      {/* ===================================== */}
-      {/* WhatsApp Integration */}
-      {/* ===================================== */}
       <Card>
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">WhatsApp Integration</h2>
 
           <p className="text-sm text-muted-foreground">
-            Connect a WhatsApp number to this project to enable AI replies.
+            Connect a WhatsApp number to this project.
           </p>
 
           <Button onClick={launchWhatsAppSignup} disabled={loadingWA}>

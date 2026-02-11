@@ -1,4 +1,3 @@
-// app/layout.js
 import "./globals.css";
 import { Toaster } from "sonner";
 import Script from "next/script";
@@ -15,12 +14,13 @@ export default function RootLayout({ children }) {
         {children}
         <Toaster richColors position="top-right" />
 
+        {/* Facebook SDK */}
         <Script
           src="https://connect.facebook.net/en_US/sdk.js"
           strategy="afterInteractive"
           onLoad={() => {
             window.FB.init({
-              appId: "2088401315249131",
+              appId: "2088401315249131", // your real App ID
               autoLogAppEvents: true,
               xfbml: true,
               version: "v24.0",
