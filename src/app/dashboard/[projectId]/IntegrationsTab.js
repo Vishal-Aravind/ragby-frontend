@@ -48,7 +48,7 @@ export default function IntegrationsTab({ projectId }) {
     });
   }, []);
 
-  const fbLoginCallback = async (response) => {
+  const fbLoginCallback = (response) => {
     if (!response.authResponse) {
       setLoadingWA(false);
       return;
