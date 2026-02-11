@@ -1,5 +1,7 @@
+//app/layout.js
 import "./globals.css";
 import { Toaster } from "sonner";
+import Script from "next/script";   // ⭐ ADD THIS
 
 export const metadata = {
   title: "ragby",
@@ -10,8 +12,30 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body className="min-h-screen bg-background text-foreground">
+
         {children}
         <Toaster richColors position="top-right" />
+
+        {/* ⭐ Load Facebook SDK */}
+        <Script
+          strategy="afterInteractive"
+          src="https://connect.facebook.net/en_US/sdk.js"
+        />
+
+        {/* ⭐ Initialize SDK */}
+        <Script id="facebook-init" strategy="afterInteractive">
+          {`
+            window.fbAsyncInit = function () {
+              FB.init({
+                appId: '2094436271357330_attach_here', // ⭐ replace with your real App ID
+                autoLogAppEvents: true,
+                xfbml: true,
+                version: 'v24.0'
+              });
+            };
+          `}
+        </Script>
+
       </body>
     </html>
   );
