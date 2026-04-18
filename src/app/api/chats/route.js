@@ -27,8 +27,13 @@ export async function POST(req) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data, error } = await supabase
-    .from("chats")
-    .insert({ project_id: projectId, title })
+  .from("chats")
+  .insert({
+    project_id: projectId,
+    title,
+    external_id: user.id,      // 👈 IMPORTANT
+    channel: "inapp"           // 👈 IMPORTANT
+  })
     .select()
     .single();
 

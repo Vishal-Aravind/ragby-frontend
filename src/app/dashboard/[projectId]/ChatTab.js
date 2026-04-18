@@ -193,14 +193,16 @@ export default function ChatTab({ projectId }) {
   // --------------------------------------------------
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
-
+  
     let chatId = activeChatId;
     const userContent = input;
+  
     setInput("");
     setLoading(true);
-
+  
     setMessages(prev => prev.map(m => ({ ...m, showSources: false })));
-
+  
+    // ✅ Create chat if not exists
     if (!chatId) {
       const res = await fetch("/api/chats", {
         method: "POST",
@@ -210,56 +212,52 @@ export default function ChatTab({ projectId }) {
           title: userContent.slice(0, 30),
         }),
       });
-
+  
       const newChat = await res.json();
       chatId = newChat.id;
-
+  
       setActiveChatId(chatId);
       setChats(prev => [newChat, ...prev]);
     }
-
-    const userMsgRes = await fetch(`/api/chats/${chatId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+  
+    // ✅ Optimistic UI (show user message instantly)
+    setMessages(prev => [
+      ...prev,
+      {
         role: "user",
         content: userContent,
-      }),
-    });
-
-    const userMsg = await userMsgRes.json();
-    setMessages(prev => [...prev, userMsg]);
-
+        showSources: false,
+      }
+    ]);
+  
     try {
-      const history = messages.slice(-6).map(m => ({
-        role: m.role,
-        content: m.content,
-      }));
-
       const res = await fetch("/api/chat/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
+          chatId,   // ✅ REQUIRED
           message: userContent,
-          history,
         }),
       });
-
+  
+      if (!res.ok) {
+        console.error(await res.text());
+        return;
+      }
+  
       const data = await res.json();
-
-      const assistantRes = await fetch(`/api/chats/${chatId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+  
+      // ✅ Show assistant response
+      setMessages(prev => [
+        ...prev,
+        {
           role: "assistant",
           content: data.answer,
-          sources: data.sources,
-        }),
-      });
-
-      const assistantMsg = await assistantRes.json();
-      setMessages(prev => [...prev, { ...assistantMsg, showSources: false }]);
+          showSources: false,
+        }
+      ]);
+  
     } finally {
       setLoading(false);
     }

@@ -1,3 +1,5 @@
+//app\dashboard\[projectId]\ProjectClient.js
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -5,6 +7,7 @@ import DocumentsTab from "./DocumentsTab";
 import IntegrationsTab from "./IntegrationsTab";
 import LeadsTab from "./LeadsTab";
 import ChatTab from "./ChatTab";
+import SettingsTab from "./SettingsTab";
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
 
@@ -192,6 +195,12 @@ export default function ProjectClient({ project }) {
         >
           Leads
         </TabButton>
+        <TabButton
+          active={activeTab === "settings"}
+          onClick={() => setActiveTab("settings")}
+        >
+          Settings
+        </TabButton>
       </div>
 
       {activeTab === "documents" && (
@@ -209,6 +218,18 @@ export default function ProjectClient({ project }) {
         <IntegrationsTab projectId={project.id} />
       )}
       {activeTab === "leads" && <LeadsTab project={project} />}
+      {activeTab === "settings" && (
+        <SettingsTab
+          project={project}
+          onUpdate={async (data) => {
+            await fetch(`/api/projects/${project.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            });
+          }}
+        />
+      )}
 
       {/* Replace file dialog */}
       <AppAlertDialog

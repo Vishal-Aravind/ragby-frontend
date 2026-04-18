@@ -15,14 +15,14 @@ export default function RootLayout({ children }) {
         {children}
         <Toaster richColors position="top-right" />
 
-        {/* Load Facebook SDK */}
+        {/* Facebook SDK */}
         <Script
           src="https://connect.facebook.net/en_US/sdk.js"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
         />
 
-        {/* Initialize SDK */}
-        <Script id="fb-init" strategy="afterInteractive">
+        {/* Init BEFORE SDK loads */}
+        <Script id="fb-init" strategy="beforeInteractive">
           {`
             window.fbAsyncInit = function () {
               FB.init({

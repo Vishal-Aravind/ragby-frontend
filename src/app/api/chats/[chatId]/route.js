@@ -1,3 +1,5 @@
+//app\api\chats\[chatId]\route.js
+
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 
