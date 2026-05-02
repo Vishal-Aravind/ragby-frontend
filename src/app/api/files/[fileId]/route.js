@@ -4,18 +4,16 @@ import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 
 export async function DELETE(req, { params }) {
-  const { supabase } = getSupabase(req);
-  const { fileId } = params;
+  const { fileId } = await params; // FIX: await params in Next.js 15
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase } = getSupabase(req);
+  const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 1️⃣ Get file (ownership check)
+  // Ownership check
   const { data: file, error } = await supabase
     .from("files")
     .select("id, storage_path, project_id")
@@ -27,17 +25,17 @@ export async function DELETE(req, { params }) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // 2️⃣ Delete from storage
-  await supabase.storage
-    .from("documents")
-    .remove([file.storage_path]);
+  // Delete from storage
+  await supabase.storage.from("documents").remove([file.storage_path]);
 
-  // 3️⃣ Delete DB row
+  // Delete DB row
   await supabase.from("files").delete().eq("id", fileId);
 
-  // 4️⃣ Notify FastAPI cleanup (optional but recommended)
+  // Delete from Qdrant via FastAPI
+  const { data: { session } } = await supabase.auth.getSession();
   await fetch(`${process.env.BACKEND_BASE_URL}/document/${fileId}`, {
     method: "DELETE",
+    headers: { "Authorization": `Bearer ${session.access_token}` },
   });
 
   return NextResponse.json({ success: true });

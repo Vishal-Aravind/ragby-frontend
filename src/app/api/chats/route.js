@@ -1,3 +1,5 @@
+//app\api\chats\route.js
+
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 
@@ -13,6 +15,7 @@ export async function GET(req) {
     .from("chats")
     .select("*")
     .eq("project_id", projectId)
+    .neq("channel", "public")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

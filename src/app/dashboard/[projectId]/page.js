@@ -1,3 +1,5 @@
+// [projectId]/page.js
+
 import { headers } from "next/headers"; // Import headers
 import ProjectClient from "./ProjectClient";
 import Navbar from "@/components/Navbar";

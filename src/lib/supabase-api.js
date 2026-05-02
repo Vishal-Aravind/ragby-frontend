@@ -1,3 +1,5 @@
+// lib/supabase-api.js
+
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
@@ -19,4 +21,11 @@ export function getSupabase(req) {
   );
 
   return { supabase, res };
+}
+
+// FIX: Separate helper that returns the access token from the session.
+// Call this in API routes that need to forward the JWT to FastAPI.
+export async function getToken(supabase) {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token ?? null;
 }

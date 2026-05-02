@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AppAlertDialog from "@/components/alertdialog";
+import ReactMarkdown from "react-markdown";
 import {
   Plus,
   MessageSquare,
@@ -379,8 +380,10 @@ return (
               }}
               className={msg.role === "user" ? "text-right" : ""}
             >
-              <div className="inline-block max-w-[80%] p-3 rounded border text-sm whitespace-pre-wrap">
-                {msg.content}
+              <div className="inline-block max-w-[80%] p-3 rounded border text-sm">
+                <div className="prose prose-sm max-w-none">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
               </div>
             </div>
           ))}
