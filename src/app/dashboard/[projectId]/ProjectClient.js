@@ -260,7 +260,16 @@ export default function ProjectClient({ project }) {
   // --------------------------------------------------
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{project.name}</h1>
+      <div className="flex items-center gap-3">
+        {project.logo_url && (
+          <img
+            src={project.logo_url}
+            alt={project.name}
+            className="h-10 w-10 object-contain rounded-lg border p-0.5"
+          />
+        )}
+        <h1 className="text-2xl font-semibold">{project.name}</h1>
+      </div>
 
       <div className="flex gap-2 border-b pb-2">
         <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>Documents</TabButton>

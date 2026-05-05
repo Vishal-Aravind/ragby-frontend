@@ -33,7 +33,7 @@ export async function GET(req, { params }) {
 
   const { data, error } = await supabase
     .from("projects")
-    .select("id, name, created_at, intent, domain")
+    .select("id, name, domain, intent, user_id, logo_url, brand_color, chat_enabled, chat_password")
     .eq("id", projectId)
     .eq("user_id", user.id)
     .single();
