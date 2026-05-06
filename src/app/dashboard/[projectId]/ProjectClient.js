@@ -297,7 +297,7 @@ export default function ProjectClient({ project }) {
 
       {activeTab === "chat" && <ChatTab projectId={project.id} />}
       {activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
-      {activeTab === "leads" && <LeadsTab project={project} />}
+      {activeTab === "leads" && <LeadsTab project={project.id} />}
       {activeTab === "settings" && (
         <SettingsTab
           project={project}

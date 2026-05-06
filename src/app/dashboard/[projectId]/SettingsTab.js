@@ -18,9 +18,7 @@ export default function SettingsTab({ project, onUpdate }) {
   const [customDomain, setCustomDomain] = useState("");
 
   const handleSave = async () => {
-    const finalDomain =
-      domain === "Other" ? customDomain.trim() : domain;
-
+    const finalDomain = domain === "Other" ? customDomain.trim() : domain;
     await onUpdate({ domain: finalDomain });
   };
 

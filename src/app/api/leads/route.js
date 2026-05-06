@@ -1,50 +1,38 @@
-import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { NextResponse } from 'next/server'
+import { getSupabase } from '@/lib/supabase-api'
+
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
 export async function GET(req) {
-  const response = NextResponse.next();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        get: (name) => req.cookies.get(name)?.value,
-        set: (name, value, options) =>
-          response.cookies.set({ name, value, ...options }),
-        remove: (name, options) =>
-          response.cookies.set({ name, value: "", ...options }),
-      },
-    }
-  );
-
-  const { searchParams } = new URL(req.url);
-  const projectId = searchParams.get("projectId");
+  const { supabase } = getSupabase(req)
+  const { searchParams } = new URL(req.url)
+  const projectId = searchParams.get('projectId')
 
   if (!projectId) {
-    return NextResponse.json({ error: "projectId required" }, { status: 400 });
+    return NextResponse.json({ error: 'projectId required' }, { status: 400 })
   }
 
-  // auth check
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data, error } = await supabase
-    .from("leads")
-    .select(
-      "id, name, email, phone, status, source, created_at, last_action_at"
-    )
-    .eq("project_id", projectId)
-    .order("created_at", { ascending: false });
+  try {
+    const res = await fetch(`${BACKEND}/leads?project_id=${projectId}`, {
+      headers: { Authorization: `Bearer ${session.access_token}` }
+    })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!res.ok) {
+      const text = await res.text()
+      console.error('Backend leads error:', text)
+      return NextResponse.json([], { status: 200 })
+    }
+
+    const data = await res.json()
+    return NextResponse.json(Array.isArray(data) ? data : [])
+  } catch (err) {
+    console.error('Leads fetch error:', err)
+    return NextResponse.json([], { status: 200 })
   }
-
-  return NextResponse.json(data || []);
 }
