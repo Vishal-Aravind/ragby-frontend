@@ -46,6 +46,7 @@ export default function ChatTab({ projectId }) {
 
   const scrollRef = useRef(null);
   const messageRefs = useRef({});
+  const skipLoadRef = useRef(false);
 
   // --------------------------------------------------
   // LOAD CHATS / MESSAGES
@@ -56,8 +57,15 @@ export default function ChatTab({ projectId }) {
   }, [projectId]);
 
   useEffect(() => {
-    if (activeChatId) loadMessages(activeChatId);
-    else setMessages([]);
+    if (activeChatId) {
+      if (skipLoadRef.current) {
+        skipLoadRef.current = false;
+        return;
+      }
+      loadMessages(activeChatId);
+    } else {
+      setMessages([]);
+    }
   }, [activeChatId]);
 
   useEffect(() => {
@@ -213,10 +221,11 @@ export default function ChatTab({ projectId }) {
           title: userContent.slice(0, 30),
         }),
       });
-  
+    
       const newChat = await res.json();
       chatId = newChat.id;
-  
+    
+      skipLoadRef.current = true; // ← add this before setActiveChatId
       setActiveChatId(chatId);
       setChats(prev => [newChat, ...prev]);
     }
