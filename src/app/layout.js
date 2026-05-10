@@ -4,7 +4,7 @@ import { Toaster } from "sonner";
 import Script from "next/script";
 
 export const metadata = {
-  title: "ragby",
+  title: "zavo",
   description: "Multi-project RAG SaaS",
 };
 

@@ -603,8 +603,8 @@ function SlackItem({ projectId }) {
           <div className="bg-white border rounded-xl px-4 py-3 space-y-2">
             <p className="text-xs font-medium">How to use:</p>
             <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-              <li>Invite the bot to a channel: <code>/invite @Ragby</code></li>
-              <li>Mention it with your question: <code>@Ragby what is the pricing?</code></li>
+              <li>Invite the bot to a channel: <code>/invite @Zavo</code></li>
+              <li>Mention it with your question: <code>@Zavo what is the pricing?</code></li>
               <li>For DMs: open a direct message with the bot and ask directly</li>
             </ol>
           </div>
@@ -621,7 +621,7 @@ function SlackItem({ projectId }) {
             <p className="text-xs font-medium">After connecting:</p>
             <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
               <li>Invite the bot to any channel</li>
-              <li>Mention <code>@Ragby</code> with your question</li>
+              <li>Mention <code>@Zavo</code> with your question</li>
               <li>Or DM the bot directly</li>
             </ol>
           </div>

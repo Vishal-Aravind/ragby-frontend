@@ -182,7 +182,7 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
         </div>
 
         {/* Right — Ragby wordmark */}
-        <div className="font-semibold text-sm">Ragby</div>
+        <div className="font-semibold text-sm">Zavo</div>
       </div>
 
       {/* Messages */}
