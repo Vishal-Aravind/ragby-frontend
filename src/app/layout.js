@@ -1,4 +1,3 @@
-// app/layout.js
 import "./globals.css";
 import { Toaster } from "sonner";
 import Script from "next/script";
@@ -15,25 +14,25 @@ export default function RootLayout({ children }) {
         {children}
         <Toaster richColors position="top-right" />
 
-        {/* Facebook SDK */}
-        <Script
-          src="https://connect.facebook.net/en_US/sdk.js"
-          strategy="beforeInteractive"
-        />
-
-        {/* Init BEFORE SDK loads */}
+        {/* Init MUST come before SDK */}
         <Script id="fb-init" strategy="beforeInteractive">
           {`
             window.fbAsyncInit = function () {
               FB.init({
-                appId: "2088401315249131",
+                appId: "${process.env.NEXT_PUBLIC_META_APP_ID}",
                 autoLogAppEvents: true,
                 xfbml: true,
-                version: "v24.0"
+                version: "v19.0"
               });
             };
           `}
         </Script>
+
+        {/* Facebook SDK */}
+        <Script
+          src="https://connect.facebook.net/en_US/sdk.js"
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   );

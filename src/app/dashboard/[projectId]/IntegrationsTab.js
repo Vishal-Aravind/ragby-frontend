@@ -48,7 +48,6 @@ function IntegrationItem({ icon, title, badge, children }) {
 // ── Main Component ─────────────────────────────────────────
 export default function IntegrationsTab({ projectId }) {
   const [copied, setCopied] = useState(false);
-  const [loadingWA, setLoadingWA] = useState(false);
 
   const embedCode = `<script\nsrc="https://ragby-backend.onrender.com/static/widget.js"\ndata-project="${projectId}"> </script>`;
 
@@ -61,50 +60,6 @@ export default function IntegrationsTab({ projectId }) {
     } catch {
       toast.error("Failed to copy");
     }
-  };
-
-  useEffect(() => {
-    const handler = async (event) => {
-      if (!event.origin.endsWith("facebook.com")) return;
-      let data;
-      try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data; }
-      catch { return; }
-      if (data?.type === "WA_EMBEDDED_SIGNUP") {
-        if (data.event === "FINISH") {
-          const { phone_number_id, waba_id } = data.data || {};
-          try {
-            await fetch("https://web-production-f2592.up.railway.app/whatsapp/save-metadata", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ projectId, phone_number_id, waba_id }),
-            });
-          } catch (err) { console.error("Metadata save failed", err); }
-          toast.success("WhatsApp connected");
-          setLoadingWA(false);
-        }
-        if (data.event === "CANCEL") { toast.error("WhatsApp setup cancelled"); setLoadingWA(false); }
-        if (data.event === "ERROR") { toast.error("WhatsApp setup error"); setLoadingWA(false); }
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [projectId]);
-
-  const fbLoginCallback = (response) => {
-    if (!response.authResponse) { setLoadingWA(false); return; }
-    fetch("https://web-production-f2592.up.railway.app/whatsapp/onboard", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: response.authResponse.code, projectId }),
-    })
-      .then(async (res) => { if (!res.ok) throw new Error(); toast.success("WhatsApp onboarding started"); setLoadingWA(false); })
-      .catch(() => { toast.error("Failed to connect WhatsApp"); setLoadingWA(false); });
-  };
-
-  const launchWhatsAppSignup = () => {
-    if (!window.FB) { toast.error("Facebook SDK not loaded"); return; }
-    setLoadingWA(true);
-    window.FB.login(fbLoginCallback, { config_id: "947360908465347", response_type: "code", override_default_response_type: true });
   };
 
   return (
@@ -139,20 +94,195 @@ export default function IntegrationsTab({ projectId }) {
       <SlackItem projectId={projectId} />
 
       {/* WhatsApp */}
-      <IntegrationItem
-        icon={
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-          </svg>
-        }
-        title="WhatsApp Integration"
-      >
-        <p className="text-sm text-muted-foreground">Connect a WhatsApp Business number to this project.</p>
-        <Button onClick={launchWhatsAppSignup} disabled={loadingWA} className="w-full">
-          {loadingWA ? "Opening Meta..." : "Connect WhatsApp"}
-        </Button>
-      </IntegrationItem>
+      <WhatsAppItem projectId={projectId} />
     </div>
+  );
+}
+
+// ── WhatsApp Item ──────────────────────────────────────────
+function WhatsAppItem({ projectId }) {
+  const [connected, setConnected] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  const whatsappIcon = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  );
+
+  useEffect(() => {
+    async function checkStatus() {
+      try {
+        const res = await fetch(`/api/whatsapp/status/${projectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setConnected(data.connected);
+          if (data.display_phone_number) setPhoneNumber(data.display_phone_number);
+        }
+      } catch {}
+      setChecking(false);
+    }
+    checkStatus();
+  }, [projectId]);
+
+  // Listen for Meta embedded signup events
+  useEffect(() => {
+    const handler = async (event) => {
+      if (!event.origin.endsWith("facebook.com")) return;
+      let data;
+      try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data; }
+      catch { return; }
+
+      if (data?.type === "WA_EMBEDDED_SIGNUP") {
+        if (data.event === "FINISH") {
+          const { phone_number_id, waba_id } = data.data || {};
+          try {
+            const res = await fetch("/api/whatsapp/connect", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ projectId, phone_number_id, waba_id }),
+            });
+            if (res.ok) {
+              setConnected(true);
+              toast.success("WhatsApp connected successfully!");
+              // Refresh status to get phone number
+              const status = await fetch(`/api/whatsapp/status/${projectId}`);
+              if (status.ok) {
+                const d = await status.json();
+                if (d.display_phone_number) setPhoneNumber(d.display_phone_number);
+              }
+            } else {
+              toast.error("Failed to save WhatsApp connection.");
+            }
+          } catch { toast.error("Failed to save WhatsApp connection."); }
+          setLoading(false);
+        }
+        if (data.event === "CANCEL") {
+          toast.error("WhatsApp setup cancelled.");
+          setLoading(false);
+        }
+        if (data.event === "ERROR") {
+          toast.error("WhatsApp setup error. Please try again.");
+          setLoading(false);
+        }
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [projectId]);
+
+  const launchSignup = () => {
+    if (!window.FB) {
+      toast.error("Facebook SDK not loaded. Please refresh the page.");
+      return;
+    }
+    setLoading(true);
+    window.FB.login(
+      (response) => {
+        if (!response.authResponse) {
+          toast.error("WhatsApp signup cancelled.");
+          setLoading(false);
+          return;
+        }
+        // Exchange code via our backend
+        fetch("/api/whatsapp/onboard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: response.authResponse.code,
+            projectId,
+          }),
+        })
+          .then(async (res) => {
+            if (!res.ok) throw new Error();
+            const d = await res.json();
+            setConnected(true);
+            if (d.display_phone_number) setPhoneNumber(d.display_phone_number);
+            toast.success("WhatsApp connected!");
+            setLoading(false);
+          })
+          .catch(() => {
+            toast.error("Failed to connect WhatsApp.");
+            setLoading(false);
+          });
+      },
+      {
+        config_id: process.env.NEXT_PUBLIC_WA_CONFIG_ID,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: {
+          sessionInfoVersion: 2,
+        },
+      }
+    );
+  };
+
+  const handleDisconnect = async () => {
+    setLoading(true);
+    try {
+      await fetch(`/api/whatsapp/disconnect/${projectId}`, { method: "DELETE" });
+      setConnected(false);
+      setPhoneNumber("");
+      toast.success("WhatsApp disconnected.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <IntegrationItem
+      icon={whatsappIcon}
+      title="WhatsApp Integration"
+      badge={!checking && connected ? "Connected" : undefined}
+    >
+      {checking ? (
+        <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+      ) : connected ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm bg-white border rounded-xl px-4 py-3">
+            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <span>Connected {phoneNumber && <>as <strong>{phoneNumber}</strong></>}</span>
+          </div>
+          <div className="bg-white border rounded-xl px-4 py-3 space-y-2">
+            <p className="text-xs font-medium">How to use:</p>
+            <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
+              <li>Share your WhatsApp Business number with your customers</li>
+              <li>When they send a message, Zavo will reply automatically</li>
+              <li>Conversations are tracked per user with memory</li>
+            </ol>
+          </div>
+          <Button variant="destructive" size="sm" onClick={handleDisconnect} disabled={loading}>
+            {loading ? "Disconnecting..." : "Disconnect"}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Connect your WhatsApp Business number to automatically answer customer messages using your RAG data.
+          </p>
+          <div className="bg-white border rounded-xl px-4 py-3 space-y-1">
+            <p className="text-xs font-medium">What you need:</p>
+            <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
+              <li>A Facebook Business account</li>
+              <li>A WhatsApp Business number (not currently on WhatsApp)</li>
+            </ol>
+          </div>
+          <Button onClick={launchSignup} disabled={loading} className="w-full">
+            {loading
+              ? <><Loader2 size={13} className="animate-spin mr-2" />Opening Meta...</>
+              : <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white" className="mr-2">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                  Connect WhatsApp Business
+                </>
+            }
+          </Button>
+        </div>
+      )}
+    </IntegrationItem>
   );
 }
 
@@ -209,7 +339,6 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
 
   return (
     <div className="space-y-4">
-      {/* Embed code */}
       <div>
         <p className="text-sm text-muted-foreground mb-2">
           Add this script before <code className="bg-gray-100 px-1 rounded text-xs">&lt;/body&gt;</code> on your website.
@@ -224,41 +353,28 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         </div>
       </div>
 
-      {/* Divider */}
       <div className="border-t" />
 
-      {/* Lead Capture */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Lead Capture</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Collect visitor name, email & phone after a few messages
-            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Collect visitor name, email & phone after a few messages</p>
           </div>
           <Switch
             checked={leadConfig.enabled}
-            onCheckedChange={(val) =>
-              setLeadConfig(p => ({ ...p, enabled: val }))
-            }
+            onCheckedChange={(val) => setLeadConfig(p => ({ ...p, enabled: val }))}
           />
         </div>
 
         {leadConfig.enabled && (
           <div className="space-y-3 pl-1">
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">
-                Show form after how many messages
-              </label>
+              <label className="text-xs text-muted-foreground">Show form after how many messages</label>
               <select
                 className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
                 value={leadConfig.triggerAfterMessages}
-                onChange={e =>
-                  setLeadConfig(p => ({
-                    ...p,
-                    triggerAfterMessages: parseInt(e.target.value),
-                  }))
-                }
+                onChange={e => setLeadConfig(p => ({ ...p, triggerAfterMessages: parseInt(e.target.value) }))}
               >
                 <option value={1}>1 message</option>
                 <option value={2}>2 messages</option>
@@ -266,37 +382,18 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
                 <option value={5}>5 messages</option>
               </select>
             </div>
-
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Form title</label>
-              <Input
-                value={leadConfig.formTitle}
-                onChange={e =>
-                  setLeadConfig(p => ({ ...p, formTitle: e.target.value }))
-                }
-                className="bg-white text-sm"
-              />
+              <Input value={leadConfig.formTitle} onChange={e => setLeadConfig(p => ({ ...p, formTitle: e.target.value }))} className="bg-white text-sm" />
             </div>
-
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Form subtitle</label>
-              <Input
-                value={leadConfig.formSubtitle}
-                onChange={e =>
-                  setLeadConfig(p => ({ ...p, formSubtitle: e.target.value }))
-                }
-                className="bg-white text-sm"
-              />
+              <Input value={leadConfig.formSubtitle} onChange={e => setLeadConfig(p => ({ ...p, formSubtitle: e.target.value }))} className="bg-white text-sm" />
             </div>
           </div>
         )}
 
-        <Button
-          onClick={saveLeadConfig}
-          disabled={leadSaving}
-          size="sm"
-          className="w-full"
-        >
+        <Button onClick={saveLeadConfig} disabled={leadSaving} size="sm" className="w-full">
           {leadSaving ? "Saving..." : leadSaved ? "✓ Saved" : "Save Widget Settings"}
         </Button>
       </div>
@@ -470,7 +567,6 @@ function TelegramItem({ projectId }) {
             <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
             <span>Connected as <strong>@{botUsername}</strong></span>
           </div>
-
           <div className="space-y-1">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Private Chat</p>
             <div className="bg-white border rounded-xl px-4 py-3 space-y-1">
@@ -482,24 +578,21 @@ function TelegramItem({ projectId }) {
               </ol>
             </div>
           </div>
-
           <div className="space-y-1">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Group Chat</p>
             <div className="bg-white border rounded-xl px-4 py-3 space-y-2">
-              <p className="text-xs text-muted-foreground">To use the bot in a group:</p>
               <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-                <li>Add <strong>@{botUsername}</strong> to your Telegram group</li>
-                <li>Go to <strong>@BotFather</strong> → <code>/mybots</code> → your bot → <strong>Bot Settings</strong> → <strong>Group Privacy</strong> → <strong>Turn off</strong></li>
-                <li>Remove the bot from the group and re-add it</li>
-                <li>Mention the bot: <code>@{botUsername} your question</code></li>
+                <li>Add <strong>@{botUsername}</strong> to your group</li>
+                <li>Go to <strong>@BotFather</strong> → <code>/mybots</code> → Bot Settings → Group Privacy → Turn off</li>
+                <li>Remove and re-add the bot to the group</li>
+                <li>Mention: <code>@{botUsername} your question</code></li>
               </ol>
-              <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-1">
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                 <span className="text-amber-500 text-xs mt-0.5">⚠</span>
-                <p className="text-xs text-amber-700">Privacy mode must be disabled for group mentions to work. This is a one-time setup per bot.</p>
+                <p className="text-xs text-amber-700">Privacy mode must be disabled for group mentions to work.</p>
               </div>
             </div>
           </div>
-
           <Button variant="destructive" size="sm" onClick={handleDisconnect} disabled={loading}>
             {loading ? "Disconnecting..." : "Disconnect"}
           </Button>
@@ -533,13 +626,13 @@ function TelegramItem({ projectId }) {
   );
 }
 
- 
+// ── Slack Item ─────────────────────────────────────────────
 function SlackItem({ projectId }) {
   const [connected, setConnected] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
- 
+
   useEffect(() => {
     async function checkStatus() {
       const res = await fetch(`/api/slack/status/${projectId}`);
@@ -552,22 +645,19 @@ function SlackItem({ projectId }) {
     }
     checkStatus();
   }, [projectId]);
- 
+
   async function handleConnect() {
     setLoading(true);
     try {
       const res = await fetch(`/api/slack/connect?projectId=${projectId}`);
       const data = await res.json();
-      if (data.url) {
-        // Redirect to Slack OAuth
-        window.location.href = data.url;
-      }
+      if (data.url) window.location.href = data.url;
     } catch {
       toast.error("Something went wrong.");
       setLoading(false);
     }
   }
- 
+
   async function handleDisconnect() {
     setLoading(true);
     try {
@@ -575,17 +665,15 @@ function SlackItem({ projectId }) {
       setConnected(false);
       setTeamName("");
       toast.success("Slack disconnected.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
- 
+
   const slackIcon = (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
       <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#E01E5A"/>
     </svg>
   );
- 
+
   return (
     <IntegrationItem
       icon={slackIcon}
@@ -604,8 +692,8 @@ function SlackItem({ projectId }) {
             <p className="text-xs font-medium">How to use:</p>
             <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
               <li>Invite the bot to a channel: <code>/invite @Zavo</code></li>
-              <li>Mention it with your question: <code>@Zavo what is the pricing?</code></li>
-              <li>For DMs: open a direct message with the bot and ask directly</li>
+              <li>Mention it: <code>@Zavo what is the pricing?</code></li>
+              <li>Or DM the bot directly</li>
             </ol>
           </div>
           <Button variant="destructive" size="sm" onClick={handleDisconnect} disabled={loading}>
@@ -614,9 +702,7 @@ function SlackItem({ projectId }) {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Connect your Slack workspace to answer questions directly in channels and DMs.
-          </p>
+          <p className="text-sm text-muted-foreground">Connect your Slack workspace to answer questions in channels and DMs.</p>
           <div className="bg-white border rounded-xl px-4 py-3 space-y-1">
             <p className="text-xs font-medium">After connecting:</p>
             <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
@@ -626,15 +712,7 @@ function SlackItem({ projectId }) {
             </ol>
           </div>
           <Button onClick={handleConnect} disabled={loading} className="w-full">
-            {loading
-              ? <><Loader2 size={13} className="animate-spin mr-2" />Connecting...</>
-              : <>
-                  <svg width="14" height="14" viewBox="0 0 24 24" className="mr-2" fill="none">
-                    <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="white"/>
-                  </svg>
-                  Connect Slack Workspace
-                </>
-            }
+            {loading ? <><Loader2 size={13} className="animate-spin mr-2" />Connecting...</> : "Connect Slack Workspace"}
           </Button>
         </div>
       )}
