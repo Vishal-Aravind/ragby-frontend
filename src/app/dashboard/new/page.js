@@ -7,19 +7,23 @@ import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Upload, X } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
+const DOMAINS = [
+  "Healthcare",
+  "Insurance",
+  "Sales",
+  "Finance",
+  "Legal",
+  "Education",
+  "Other",
+];
 
 export default function NewProjectPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [intent, setIntent] = useState("general");
+  const [domain, setDomain] = useState("");
+  const [customDomain, setCustomDomain] = useState("");
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -74,12 +78,16 @@ export default function NewProjectPage() {
       logo_url = urlData.publicUrl;
     }
 
+    // Resolve final domain — same logic as SettingsTab
+    const finalDomain = domain === "Other"
+      ? customDomain.trim()
+      : domain;
 
     const { data, error } = await supabase
       .from("projects")
       .insert({
         name,
-        intent,
+        domain: finalDomain || null,
         user_id: user.id,
         logo_url,
       })
@@ -104,6 +112,7 @@ export default function NewProjectPage() {
         <h1 className="text-2xl font-semibold mb-6">Create new project</h1>
 
         <div className="space-y-4">
+          {/* Project name */}
           <Input
             placeholder="Project name"
             value={name}
@@ -147,21 +156,41 @@ export default function NewProjectPage() {
             )}
           </div>
 
-          <Select value={intent} onValueChange={setIntent}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select project intent" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="general">General</SelectItem>
-              <SelectItem value="sales">Sales / Marketing</SelectItem>
-              <SelectItem value="sop">SOP / Internal docs</SelectItem>
-              <SelectItem value="support">Support / Helpdesk</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Domain — identical list to SettingsTab */}
+          <div className="space-y-2">
+            <label className="text-sm text-muted-foreground">
+              Business domain{" "}
+              <span className="text-xs">(optional — helps AI give better answers)</span>
+            </label>
+            <select
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              className="border p-2 rounded-lg w-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
+            >
+              <option value="">Select domain</option>
+              {DOMAINS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+
+            {domain === "Other" && (
+              <input
+                type="text"
+                placeholder="Enter your domain (e.g. Real Estate)"
+                value={customDomain}
+                onChange={(e) => setCustomDomain(e.target.value)}
+                className="border p-2 rounded-lg w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            )}
+          </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
-          <Button onClick={createProject} disabled={loading} className="w-full">
+          <Button
+            onClick={createProject}
+            disabled={loading || !name.trim()}
+            className="w-full"
+          >
             {loading ? "Creating..." : "Create project"}
           </Button>
         </div>
