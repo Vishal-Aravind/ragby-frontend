@@ -5,7 +5,7 @@ import DocumentsTab from "./DocumentsTab";
 import IntegrationsTab from "./IntegrationsTab";
 import LeadsTab from "./LeadsTab";
 import ChatTab from "./ChatTab";
-import SettingsTab from "./SettingsTab";
+
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
 
@@ -276,7 +276,7 @@ export default function ProjectClient({ project }) {
           <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>Chat</TabButton>
           <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>Integrations</TabButton>
           <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>Leads</TabButton>
-          <TabButton active={activeTab === "settings"} onClick={() => setActiveTab("settings")}>Settings</TabButton>
+
         </div>
 
         {/* Domain selector — auto-saves on change */}
@@ -316,18 +316,7 @@ export default function ProjectClient({ project }) {
       {activeTab === "chat" && <ChatTab projectId={project.id} />}
       {activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
       {activeTab === "leads" && <LeadsTab project={project.id} />}
-      {activeTab === "settings" && (
-        <SettingsTab
-          project={project}
-          onUpdate={async (data) => {
-            await fetch(`/api/projects/${project.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(data),
-            });
-          }}
-        />
-      )}
+
 
       <AppAlertDialog
         open={dialogOpen}
