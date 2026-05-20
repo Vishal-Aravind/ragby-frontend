@@ -1,5 +1,3 @@
-//[projectId]/ProjectClient.js
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,6 +16,16 @@ const ALLOWED_TYPES = [
   "text/plain",
 ];
 
+const DOMAINS = [
+  "Healthcare",
+  "Insurance",
+  "Sales",
+  "Finance",
+  "Legal",
+  "Education",
+  "Other",
+];
+
 export default function ProjectClient({ project }) {
   const [activeTab, setActiveTab] = useState("documents");
   const [files, setFiles] = useState([]);
@@ -31,6 +39,11 @@ export default function ProjectClient({ project }) {
 
   const [connecting, setConnecting] = useState(false);
   const [sources, setSources] = useState([]);
+
+  // Domain state
+  const [domain, setDomain] = useState(project.domain || "");
+  const [savingDomain, setSavingDomain] = useState(false);
+  const [domainSaved, setDomainSaved] = useState(false);
 
   // --------------------------------------------------
   // LOAD FILES
@@ -55,18 +68,11 @@ export default function ProjectClient({ project }) {
 
   // --------------------------------------------------
   // LOAD SOURCES
-  // FIX: No manual token — cookies are forwarded automatically by the browser.
-  // The Next.js API route (app/api/sources/route.js) reads the session from
-  // cookies via getSupabase(req), so no Authorization header needed here.
   // --------------------------------------------------
   const fetchSources = async () => {
     const res = await fetch(`/api/sources?project_id=${project.id}`);
-    if (!res.ok) {
-      console.error("Failed to fetch sources:", res.status);
-      return;
-    }
+    if (!res.ok) return;
     const data = await res.json();
-    console.log("sources data:", data);
     setSources(data || []);
   };
 
@@ -74,6 +80,26 @@ export default function ProjectClient({ project }) {
     if (!project?.id) return;
     fetchSources();
   }, [project.id]);
+
+  // --------------------------------------------------
+  // SAVE DOMAIN — auto-saves on change
+  // --------------------------------------------------
+  const handleDomainChange = async (value) => {
+    setDomain(value);
+    setSavingDomain(true);
+    setDomainSaved(false);
+    try {
+      await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: value }),
+      });
+      setDomainSaved(true);
+      setTimeout(() => setDomainSaved(false), 2000);
+    } finally {
+      setSavingDomain(false);
+    }
+  };
 
   // --------------------------------------------------
   // FILE SELECTION
@@ -154,36 +180,25 @@ export default function ProjectClient({ project }) {
 
   // --------------------------------------------------
   // ADD DATA SOURCE
-  // No manual token — cookies handle auth automatically
   // --------------------------------------------------
-
   const handleAddSource = async (sourceData) => {
     setConnecting(true);
     try {
-      // ── Local Excel — multipart upload ──────────────────
       if (sourceData.type === "excel_local") {
         const formData = new FormData();
         formData.append("file", sourceData._file);
         formData.append("projectId", project.id);
         formData.append("label", sourceData.label || sourceData._file.name);
-
-        const res = await fetch("/api/sources/upload-excel", {
-          method: "POST",
-          body: formData,
-          // No Content-Type header — browser sets it with boundary automatically
-        });
-
+        const res = await fetch("/api/sources/upload-excel", { method: "POST", body: formData });
         if (!res.ok) {
           const err = await res.json();
           alert(err.error || "Failed to upload Excel file.");
           return;
         }
-
         await fetchSources();
         return;
       }
 
-      // ── All other sources — JSON POST ────────────────────
       const res = await fetch("/api/sources/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -197,16 +212,12 @@ export default function ProjectClient({ project }) {
       }
 
       const data = await res.json();
-
-      // Show warning if any sheet tabs were skipped
       if (data.skipped_tabs?.length > 0) {
         alert(
-          `Source connected, but these tab(s) were not found and were skipped:\n\n` +
-          data.skipped_tabs.map(t => `• "${t}"`).join("\n") +
-          `\n\nPlease check the tab names and reload the source.`
+          `Source connected, but these tab(s) were skipped:\n\n` +
+          data.skipped_tabs.map(t => `• "${t}"`).join("\n")
         );
       }
-
       await fetchSources();
     } catch (err) {
       console.error("Add source error:", err);
@@ -217,39 +228,24 @@ export default function ProjectClient({ project }) {
   };
 
   // --------------------------------------------------
-  // RELOAD SOURCE
+  // RELOAD / REUPLOAD / DELETE SOURCE
   // --------------------------------------------------
   const handleReloadSource = async (id) => {
     await fetch(`/api/sources/sync/${id}`, { method: "POST" });
     await fetchSources();
   };
 
-  // --------------------------------------------------
-  // REUPLOAD EXCEL
-  // --------------------------------------------------
   const handleReuploadExcel = async (sourceId, label, file) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("projectId", project.id);
     formData.append("label", label);
     formData.append("source_id", sourceId);
-  
-    const res = await fetch("/api/sources/upload-excel", {
-      method: "POST",
-      body: formData,
-    });
-  
-    if (!res.ok) {
-      alert("Re-upload failed.");
-      return;
-    }
-  
+    const res = await fetch("/api/sources/upload-excel", { method: "POST", body: formData });
+    if (!res.ok) { alert("Re-upload failed."); return; }
     await fetchSources();
   };
 
-  // --------------------------------------------------
-  // DELETE SOURCE
-  // --------------------------------------------------
   const handleDeleteSource = async (id) => {
     await fetch(`/api/sources/${id}`, { method: "DELETE" });
     await fetchSources();
@@ -260,6 +256,8 @@ export default function ProjectClient({ project }) {
   // --------------------------------------------------
   return (
     <div className="space-y-6">
+
+      {/* Project header */}
       <div className="flex items-center gap-3">
         {project.logo_url && (
           <img
@@ -271,12 +269,32 @@ export default function ProjectClient({ project }) {
         <h1 className="text-2xl font-semibold">{project.name}</h1>
       </div>
 
-      <div className="flex gap-2 border-b pb-2">
-        <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>Documents</TabButton>
-        <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>Chat</TabButton>
-        <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>Integrations</TabButton>
-        <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>Leads</TabButton>
-        <TabButton active={activeTab === "settings"} onClick={() => setActiveTab("settings")}>Settings</TabButton>
+      {/* Tab bar + domain dropdown on the right */}
+      <div className="flex items-center justify-between border-b pb-2 gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>Documents</TabButton>
+          <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>Chat</TabButton>
+          <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>Integrations</TabButton>
+          <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>Leads</TabButton>
+          <TabButton active={activeTab === "settings"} onClick={() => setActiveTab("settings")}>Settings</TabButton>
+        </div>
+
+        {/* Domain selector — auto-saves on change */}
+        <div className="flex items-center gap-2 shrink-0">
+          <select
+            value={domain}
+            onChange={(e) => handleDomainChange(e.target.value)}
+            disabled={savingDomain}
+            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700 disabled:opacity-60 cursor-pointer"
+          >
+            <option value="">No domain</option>
+            {DOMAINS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+          {savingDomain && <span className="text-xs text-muted-foreground">Saving...</span>}
+          {domainSaved && <span className="text-xs text-emerald-600 font-medium">✓ Saved</span>}
+        </div>
       </div>
 
       {activeTab === "documents" && (
@@ -291,7 +309,7 @@ export default function ProjectClient({ project }) {
           sources={sources}
           onReload={handleReloadSource}
           onDeleteSource={handleDeleteSource}
-          onReuploadExcel={handleReuploadExcel} 
+          onReuploadExcel={handleReuploadExcel}
         />
       )}
 
@@ -341,4 +359,3 @@ function TabButton({ active, children, ...props }) {
     </Button>
   );
 }
-
