@@ -73,3 +73,22 @@ export async function PATCH(req, { params }) {
 
   return NextResponse.json({ success: true });
 }
+
+export async function DELETE(req, { params }) {
+  const { projectId } = await params;
+  const response = NextResponse.next();
+  const supabase = getSupabase(req, response);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { error } = await supabase
+    .from("projects")
+    .delete()
+    .eq("id", projectId)
+    .eq("user_id", user.id);
+
+  if (error) return NextResponse.json({ error: "Delete failed" }, { status: 500 });
+
+  return NextResponse.json({ success: true });
+}

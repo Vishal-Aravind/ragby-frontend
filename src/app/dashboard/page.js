@@ -166,7 +166,11 @@ export default function Dashboard() {
           ) : (
             <div className="grid grid-cols-3 gap-6">
               {projects.map((p) => (
-                <ProjectCard key={p.id} project={p} />
+                <ProjectCard
+                  key={p.id}
+                  project={p}
+                  onDelete={(id) => setProjects(prev => prev.filter(p => p.id !== id))}
+                />
               ))}
             </div>
           )}
