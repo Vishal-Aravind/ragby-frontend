@@ -130,6 +130,14 @@
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js.map
 ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route_client-reference-manifest.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📁 lead-config
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 route
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 app-paths-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 build-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js.map
+┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route_client-reference-manifest.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 leads
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 route
 ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 app-paths-manifest.json
@@ -154,6 +162,24 @@
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js.map
 ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route_client-reference-manifest.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📁 slack
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 connect
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 route
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 app-paths-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 build-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js.map
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route_client-reference-manifest.js
+┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📁 status
+┃   ┃   ┃   ┃   ┃   ┃       ┗━━ 📁 
+┃   ┃   ┃   ┃   ┃   ┃           ┣━━ 📁 route
+┃   ┃   ┃   ┃   ┃   ┃           ┃   ┣━━ 📄 app-paths-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃           ┃   ┣━━ 📄 build-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃           ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃           ┣━━ 📄 route.js
+┃   ┃   ┃   ┃   ┃   ┃           ┣━━ 📄 route.js.map
+┃   ┃   ┃   ┃   ┃   ┃           ┗━━ 📄 route_client-reference-manifest.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 sources
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 
 ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 route
@@ -195,24 +221,32 @@
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js.map
 ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route_client-reference-manifest.js
-┃   ┃   ┃   ┃   ┃   ┗━━ 📁 telegram
-┃   ┃   ┃   ┃   ┃       ┣━━ 📁 connect
-┃   ┃   ┃   ┃   ┃       ┃   ┣━━ 📁 route
-┃   ┃   ┃   ┃   ┃       ┃   ┃   ┣━━ 📄 app-paths-manifest.json
-┃   ┃   ┃   ┃   ┃       ┃   ┃   ┣━━ 📄 build-manifest.json
-┃   ┃   ┃   ┃   ┃       ┃   ┃   ┗━━ 📄 server-reference-manifest.json
-┃   ┃   ┃   ┃   ┃       ┃   ┣━━ 📄 route.js
-┃   ┃   ┃   ┃   ┃       ┃   ┣━━ 📄 route.js.map
-┃   ┃   ┃   ┃   ┃       ┃   ┗━━ 📄 route_client-reference-manifest.js
-┃   ┃   ┃   ┃   ┃       ┗━━ 📁 status
-┃   ┃   ┃   ┃   ┃           ┗━━ 📁 
-┃   ┃   ┃   ┃   ┃               ┣━━ 📁 route
-┃   ┃   ┃   ┃   ┃               ┃   ┣━━ 📄 app-paths-manifest.json
-┃   ┃   ┃   ┃   ┃               ┃   ┣━━ 📄 build-manifest.json
-┃   ┃   ┃   ┃   ┃               ┃   ┗━━ 📄 server-reference-manifest.json
-┃   ┃   ┃   ┃   ┃               ┣━━ 📄 route.js
-┃   ┃   ┃   ┃   ┃               ┣━━ 📄 route.js.map
-┃   ┃   ┃   ┃   ┃               ┗━━ 📄 route_client-reference-manifest.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📁 telegram
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 connect
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 route
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 app-paths-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 build-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 route.js.map
+┃   ┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route_client-reference-manifest.js
+┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📁 status
+┃   ┃   ┃   ┃   ┃   ┃       ┗━━ 📁 
+┃   ┃   ┃   ┃   ┃   ┃           ┣━━ 📁 route
+┃   ┃   ┃   ┃   ┃   ┃           ┃   ┣━━ 📄 app-paths-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃           ┃   ┣━━ 📄 build-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃           ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃           ┣━━ 📄 route.js
+┃   ┃   ┃   ┃   ┃   ┃           ┣━━ 📄 route.js.map
+┃   ┃   ┃   ┃   ┃   ┃           ┗━━ 📄 route_client-reference-manifest.js
+┃   ┃   ┃   ┃   ┃   ┗━━ 📁 usage
+┃   ┃   ┃   ┃   ┃       ┣━━ 📁 route
+┃   ┃   ┃   ┃   ┃       ┃   ┣━━ 📄 app-paths-manifest.json
+┃   ┃   ┃   ┃   ┃       ┃   ┣━━ 📄 build-manifest.json
+┃   ┃   ┃   ┃   ┃       ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┃       ┣━━ 📄 route.js
+┃   ┃   ┃   ┃   ┃       ┣━━ 📄 route.js.map
+┃   ┃   ┃   ┃   ┃       ┗━━ 📄 route_client-reference-manifest.js
 ┃   ┃   ┃   ┃   ┣━━ 📁 chat
 ┃   ┃   ┃   ┃   ┃   ┗━━ 📁 
 ┃   ┃   ┃   ┃   ┃       ┣━━ 📁 page
@@ -270,6 +304,16 @@
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 next-font-manifest.json
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 react-loadable-manifest.json
 ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┣━━ 📁 pricing
+┃   ┃   ┃   ┃   ┃   ┣━━ 📁 page
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 app-paths-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 build-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 next-font-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 react-loadable-manifest.json
+┃   ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 server-reference-manifest.json
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 page.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 page.js.map
+┃   ┃   ┃   ┃   ┃   ┗━━ 📄 page_client-reference-manifest.js
 ┃   ┃   ┃   ┃   ┣━━ 📁 signup
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📁 page
 ┃   ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 app-paths-manifest.json
@@ -313,6 +357,8 @@
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __509ac6f4._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __56cdc206._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __56cdc206._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __59fddd10._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __59fddd10._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __616abd1f._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __616abd1f._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __68242a2d._.js
@@ -333,12 +379,18 @@
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __b48b6a8d._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __b58a661e._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __b58a661e._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __c27bcd4e._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __c27bcd4e._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __c80f7c8f._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __c80f7c8f._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __d37ca508._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __d37ca508._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __d7b55bc1._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __d7b55bc1._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __de2e5fbb._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __de2e5fbb._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __dfb035de._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __dfb035de._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __e6a4d965._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __e6a4d965._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 __e8a2741f._.js
@@ -371,6 +423,8 @@
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_login_page_actions_0e9aafc0.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_page_actions_39d4fc33.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_page_actions_39d4fc33.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_pricing_page_actions_61c195a2.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_pricing_page_actions_61c195a2.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_signup_page_actions_0a2f511f.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_signup_page_actions_0a2f511f.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_verification_page_actions_7d1fe7f2.js
@@ -395,12 +449,18 @@
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_54f0b91d._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_6c7ae6b1._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_6c7ae6b1._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_71980bb8._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_71980bb8._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_72d574d3._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_72d574d3._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_733ddc01._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_733ddc01._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_73ae807a._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_73ae807a._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_8368313e._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_8368313e._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_90bb8d84._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_90bb8d84._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_927fc397._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_927fc397._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_@supabase_auth-js_dist_module_ca04f287._.js
@@ -425,6 +485,10 @@
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_d8e0cb6a._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_e5be5b7e._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_e5be5b7e._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_e862b24e._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_e862b24e._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_f0474fd4._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_f0474fd4._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_f78a6301._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_f78a6301._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_ffe6e3a2._.js
@@ -439,6 +503,8 @@
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_029aaab1._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_32ba5e06._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_32ba5e06._.js.map
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_3764bbc6._.js
+┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_3764bbc6._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_3a203ced._.js
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_3a203ced._.js.map
 ┃   ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dist_5bbed6a4._.js
@@ -507,16 +573,26 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 __5a767294._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 __5bf466d8._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 __5bf466d8._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 __7f6a87c2._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 __7f6a87c2._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 __95e68bcc._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 __95e68bcc._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 __a133f16d._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 __a133f16d._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 __a163f2ce._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 __a163f2ce._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 __a1e4f4e7._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 __a1e4f4e7._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 __b76d5094._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 __b76d5094._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 __b917301b._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 __b917301b._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 __cba46b95._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 __cba46b95._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 __d024b427._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 __d024b427._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 __e97a095e._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 __e97a095e._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 __edcd6c81._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 __edcd6c81._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _runtime.js
@@ -547,12 +623,18 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_files_route_actions_c1531a43.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_files_upload_route_actions_48ba9b50.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_files_upload_route_actions_48ba9b50.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_lead-config_route_actions_334a93f1.js
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_lead-config_route_actions_334a93f1.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_leads_route_actions_8059d9e6.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_leads_route_actions_8059d9e6.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_projects__route_actions_37e3e399.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_projects__route_actions_37e3e399.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_projects_route_actions_38c611ee.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_projects_route_actions_38c611ee.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_slack_connect_route_actions_110343a8.js
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_slack_connect_route_actions_110343a8.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_slack_status__route_actions_80acaeda.js
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_slack_status__route_actions_80acaeda.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_sources__route_actions_2549e4c4.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_sources__route_actions_2549e4c4.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_sources_add_route_actions_c0dfe397.js
@@ -567,18 +649,24 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_telegram_connect_route_actions_268cd142.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_telegram_status__route_actions_d12e1fef.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_telegram_status__route_actions_d12e1fef.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_usage_route_actions_9f13182a.js
+┃   ┃   ┃   ┃   ┣━━ 📄 _next-internal_server_app_api_usage_route_actions_9f13182a.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_3dccb458._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_3dccb458._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_62644f13._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_62644f13._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_@supabase_auth-js_dist_module_02e1b12e._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_@supabase_auth-js_dist_module_02e1b12e._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_03599202._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_03599202._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_0b0026f2._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_0b0026f2._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_20d424f6._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_20d424f6._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_241939c0._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_241939c0._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_327bc529._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_327bc529._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_37f0d29c._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_37f0d29c._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_397db562._.js
@@ -605,10 +693,16 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_9473cd10._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_b5d8597e._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_b5d8597e._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_b7430734._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_b7430734._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_c12c604f._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_c12c604f._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_cbe0a148._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_cbe0a148._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_ce754a5e._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_ce754a5e._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_db34ccc0._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_db34ccc0._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dbac8525._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dbac8525._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_dbbfdf89._.js
@@ -685,6 +779,8 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 _browser_dev_hmr-client_hmr-client_ts_f26f265a._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 _45210fd5._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 _a0ff3932._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 _a62cbc4a._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 _a62cbc4a._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_07b139c0._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_07b139c0._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_163c7022._.js
@@ -699,12 +795,18 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_5294514a._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_690ad13f._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_690ad13f._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_6eacaff3._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_6eacaff3._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_7f09fef0._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_7f09fef0._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_83a0836b._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_83a0836b._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_87f2ef63._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_87f2ef63._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_8ecafa73._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_8ecafa73._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_96937afc._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_96937afc._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_@supabase_auth-js_dist_module_e6c70351._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_@supabase_auth-js_dist_module_e6c70351._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_@supabase_realtime-js_dist_module_65527103._.js
@@ -719,8 +821,12 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_b5c3be2c._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_bd89de32._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_bd89de32._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_c6f98d9e._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_c6f98d9e._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_d2e3ed3e._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_d2e3ed3e._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_fb177be4._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_fb177be4._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_micromark-core-commonmark_dev_lib_fc41dd51._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_micromark-core-commonmark_dev_lib_fc41dd51._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 node_modules_next_app_72f3d36f.js
@@ -771,6 +877,8 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_1695882b._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_1a5ef34e._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_1a5ef34e._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 src_1b0d27eb._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 src_1b0d27eb._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_2b143214._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_2b143214._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_59f12946._.js
@@ -779,6 +887,8 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_6e6c27c0._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_8141c9f6._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_8141c9f6._.js.map
+┃   ┃   ┃   ┃   ┣━━ 📄 src_9f07fd86._.js
+┃   ┃   ┃   ┃   ┣━━ 📄 src_9f07fd86._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_a926f604._.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_a926f604._.js.map
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_app_chat__page_a83146ff.js
@@ -796,6 +906,7 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_app_login_page_a83146ff.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_app_page_991cd9cf.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_app_page_a83146ff.js
+┃   ┃   ┃   ┃   ┣━━ 📄 src_app_pricing_page_a83146ff.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_app_signup_page_a83146ff.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_app_verification_page_a83146ff.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 src_beebce11._.js
@@ -815,7 +926,6 @@
 ┃   ┃   ┃   ┗━━ 📄 routes.d.ts
 ┃   ┃   ┣━━ 📄 build-manifest.json
 ┃   ┃   ┣━━ 📄 fallback-build-manifest.json
-┃   ┃   ┣━━ 📄 lock
 ┃   ┃   ┣━━ 📄 package.json
 ┃   ┃   ┣━━ 📄 prerender-manifest.json
 ┃   ┃   ┣━━ 📄 routes-manifest.json
@@ -1469,8 +1579,17 @@
 ┃   ┗━━ 📄 window.svg
 ┣━━ 📁 src
 ┃   ┣━━ 📁 app
+┃   ┃   ┣━━ 📁 account
+┃   ┃   ┃   ┗━━ 📄 page.js
+┃   ┃   ┣━━ 📁 admin
+┃   ┃   ┃   ┗━━ 📄 page.js
 ┃   ┃   ┣━━ 📁 api
+┃   ┃   ┃   ┣━━ 📁 admin
+┃   ┃   ┃   ┃   ┗━━ 📁 users
+┃   ┃   ┃   ┃       ┗━━ 📄 route.js
 ┃   ┃   ┃   ┣━━ 📁 auth
+┃   ┃   ┃   ┃   ┣━━ 📁 callback
+┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┣━━ 📁 login
 ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┣━━ 📁 logout
@@ -1503,14 +1622,25 @@
 ┃   ┃   ┃   ┃   ┣━━ 📁 upload
 ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┣━━ 📁 lead-config
+┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┣━━ 📁 leads
-┃   ┃   ┃   ┃   ┣━━ 📁 status
-┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┣━━ 📁 projects
 ┃   ┃   ┃   ┃   ┣━━ 📁 
 ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┣━━ 📁 slack
+┃   ┃   ┃   ┃   ┣━━ 📁 callback
+┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┃   ┣━━ 📁 connect
+┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┃   ┣━━ 📁 disconnect
+┃   ┃   ┃   ┃   ┃   ┗━━ 📁 
+┃   ┃   ┃   ┃   ┃       ┗━━ 📄 route.js
+┃   ┃   ┃   ┃   ┗━━ 📁 status
+┃   ┃   ┃   ┃       ┗━━ 📁 
+┃   ┃   ┃   ┃           ┗━━ 📄 route.js
 ┃   ┃   ┃   ┣━━ 📁 sources
 ┃   ┃   ┃   ┃   ┣━━ 📁 
 ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
@@ -1524,12 +1654,32 @@
 ┃   ┃   ┃   ┃   ┣━━ 📁 upload-excel
 ┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
-┃   ┃   ┃   ┗━━ 📁 telegram
+┃   ┃   ┃   ┣━━ 📁 stripe
+┃   ┃   ┃   ┃   ┣━━ 📁 checkout
+┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┃   ┣━━ 📁 plan
+┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┃   ┗━━ 📁 portal
+┃   ┃   ┃   ┃       ┗━━ 📄 route.js
+┃   ┃   ┃   ┣━━ 📁 telegram
+┃   ┃   ┃   ┃   ┣━━ 📁 connect
+┃   ┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┃   ┣━━ 📁 disconnect
+┃   ┃   ┃   ┃   ┃   ┗━━ 📁 
+┃   ┃   ┃   ┃   ┃       ┗━━ 📄 route.js
+┃   ┃   ┃   ┃   ┗━━ 📁 status
+┃   ┃   ┃   ┃       ┗━━ 📁 
+┃   ┃   ┃   ┃           ┗━━ 📄 route.js
+┃   ┃   ┃   ┣━━ 📁 usage
+┃   ┃   ┃   ┃   ┗━━ 📄 route.js
+┃   ┃   ┃   ┗━━ 📁 whatsapp
 ┃   ┃   ┃       ┣━━ 📁 connect
 ┃   ┃   ┃       ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃       ┣━━ 📁 disconnect
 ┃   ┃   ┃       ┃   ┗━━ 📁 
 ┃   ┃   ┃       ┃       ┗━━ 📄 route.js
+┃   ┃   ┃       ┣━━ 📁 onboard
+┃   ┃   ┃       ┃   ┗━━ 📄 route.js
 ┃   ┃   ┃       ┗━━ 📁 status
 ┃   ┃   ┃           ┗━━ 📁 
 ┃   ┃   ┃               ┗━━ 📄 route.js
@@ -1544,12 +1694,15 @@
 ┃   ┃   ┃   ┃   ┣━━ 📄 IntegrationsTab.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 LeadsTab.js
 ┃   ┃   ┃   ┃   ┣━━ 📄 page.js
-┃   ┃   ┃   ┃   ┣━━ 📄 ProjectClient.js
-┃   ┃   ┃   ┃   ┗━━ 📄 SettingsTab.js
+┃   ┃   ┃   ┃   ┗━━ 📄 ProjectClient.js
 ┃   ┃   ┃   ┣━━ 📁 new
 ┃   ┃   ┃   ┃   ┗━━ 📄 page.js
 ┃   ┃   ┃   ┗━━ 📄 page.js
 ┃   ┃   ┣━━ 📁 login
+┃   ┃   ┃   ┗━━ 📄 page.js
+┃   ┃   ┣━━ 📁 pricing
+┃   ┃   ┃   ┗━━ 📄 page.js
+┃   ┃   ┣━━ 📁 privacy
 ┃   ┃   ┃   ┗━━ 📄 page.js
 ┃   ┃   ┣━━ 📁 signup
 ┃   ┃   ┃   ┗━━ 📄 page.js

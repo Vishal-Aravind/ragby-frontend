@@ -12,6 +12,8 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LogOut, User, Zap, CreditCard, Loader2, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import Image from "next/image";
+
 
 const ADMIN_EMAIL = "khavinprakash03@gmail.com";
 
@@ -83,20 +85,13 @@ export default function Navbar() {
         className="group flex items-center gap-2 focus:outline-none"
       >
         <div className="relative w-8 h-8 flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="12" width="24" height="18" rx="6" fill="#111111"/>
-            <path d="M9 30 L5 36 L15 30" fill="#111111"/>
-            <circle cx="10" cy="21" r="2" fill="#4F8EF7" opacity="0.9"/>
-            <circle cx="16" cy="21" r="2" fill="#4F8EF7" opacity="0.6"/>
-            <circle cx="22" cy="21" r="2" fill="#4F8EF7" opacity="0.3"/>
-            <line x1="6" y1="8" x2="18" y2="8" stroke="#4F8EF7" strokeWidth="3.5" strokeLinecap="round"/>
-            <line x1="18" y1="8" x2="6" y2="14" stroke="#4F8EF7" strokeWidth="3.5" strokeLinecap="round"/>
-            <line x1="6" y1="14" x2="18" y2="14" stroke="#4F8EF7" strokeWidth="3.5" strokeLinecap="round"/>
-            <circle cx="9" cy="5" r="2.5" fill="white" stroke="#111" strokeWidth="0.5"/>
-            <circle cx="9" cy="5" r="1.2" fill="#111111"/>
-            <circle cx="15" cy="4" r="2.5" fill="white" stroke="#111" strokeWidth="0.5"/>
-            <circle cx="15" cy="4" r="1.2" fill="#111111"/>
-          </svg>
+          <Image
+            src="/logo.png"
+            alt="Zavo"
+            width={32}
+            height={32}
+            className="object-contain"
+          />
         </div>
         <span className="text-[17px] font-semibold tracking-tight text-gray-900 group-hover:text-black transition-colors">
           zavo
