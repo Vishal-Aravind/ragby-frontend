@@ -1,3 +1,5 @@
+// src/app/dashboard/[projectId]/ProjectClient.js
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -5,6 +7,7 @@ import DocumentsTab from "./DocumentsTab";
 import IntegrationsTab from "./IntegrationsTab";
 import LeadsTab from "./LeadsTab";
 import ChatTab from "./ChatTab";
+import FlowsTab from "./FlowsTab";
 
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
@@ -276,6 +279,7 @@ export default function ProjectClient({ project }) {
           <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>Chat</TabButton>
           <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>Integrations</TabButton>
           <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>Leads</TabButton>
+          <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>Flows</TabButton>
 
         </div>
 
@@ -316,6 +320,7 @@ export default function ProjectClient({ project }) {
       {activeTab === "chat" && <ChatTab projectId={project.id} />}
       {activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
       {activeTab === "leads" && <LeadsTab project={project.id} />}
+      {activeTab === "flows" && <FlowsTab projectId={project.id} />}
 
 
       <AppAlertDialog
