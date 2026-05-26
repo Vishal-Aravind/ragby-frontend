@@ -21,10 +21,11 @@ function getSupabase(req) {
 }
 
 export async function DELETE(req, { params }) {
+  const { edgeId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await supabase.from("flow_edges").delete().eq("id", params.edgeId);
+  await supabase.from("flow_edges").delete().eq("id", edgeId);
   return NextResponse.json({ status: "deleted" });
 }

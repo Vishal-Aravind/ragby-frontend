@@ -21,19 +21,21 @@ function getSupabase(req) {
 }
 
 export async function GET(req, { params }) {
+  const { flowId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const [{ data: nodes }, { data: edges }] = await Promise.all([
-    supabase.from("flow_nodes").select("*").eq("flow_id", params.flowId).order("created_at", { ascending: true }),
-    supabase.from("flow_edges").select("*").eq("flow_id", params.flowId),
+    supabase.from("flow_nodes").select("*").eq("flow_id", flowId).order("created_at", { ascending: true }),
+    supabase.from("flow_edges").select("*").eq("flow_id", flowId),
   ]);
 
   return NextResponse.json({ nodes: nodes || [], edges: edges || [] });
 }
 
 export async function POST(req, { params }) {
+  const { flowId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,7 +44,7 @@ export async function POST(req, { params }) {
   const { data, error } = await supabase
     .from("flow_nodes")
     .insert({
-      flow_id: params.flowId,
+      flow_id: flowId,
       type: body.type,
       content: body.content,
       is_start: body.is_start ?? false,

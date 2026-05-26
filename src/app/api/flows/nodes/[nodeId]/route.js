@@ -21,6 +21,7 @@ function getSupabase(req) {
 }
 
 export async function PUT(req, { params }) {
+  const { nodeId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,16 +32,17 @@ export async function PUT(req, { params }) {
   if ("content" in body) update.content = body.content;
   if ("is_start" in body) update.is_start = body.is_start;
 
-  const { data, error } = await supabase.from("flow_nodes").update(update).eq("id", params.nodeId).select().single();
+  const { data, error } = await supabase.from("flow_nodes").update(update).eq("id", nodeId).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
 
 export async function DELETE(req, { params }) {
+  const { nodeId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  await supabase.from("flow_nodes").delete().eq("id", params.nodeId);
+  await supabase.from("flow_nodes").delete().eq("id", nodeId);
   return NextResponse.json({ status: "deleted" });
 }

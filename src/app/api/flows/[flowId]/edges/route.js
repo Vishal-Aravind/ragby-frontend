@@ -21,6 +21,7 @@ function getSupabase(req) {
 }
 
 export async function POST(req, { params }) {
+  const { flowId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,7 +30,7 @@ export async function POST(req, { params }) {
   const { data, error } = await supabase
     .from("flow_edges")
     .insert({
-      flow_id: params.flowId,
+      flow_id: flowId,
       from_node_id: body.from_node_id,
       trigger: body.trigger,
       to_node_id: body.to_node_id,
