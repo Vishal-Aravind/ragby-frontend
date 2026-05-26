@@ -605,12 +605,10 @@ export default function FlowsTab({ projectId }) {
                                 <Input placeholder="Label" value={btn.title} onChange={e => updateButton(idx, "title", e.target.value)} className="flex-1 text-sm h-8" />
                                 <button onClick={() => removeButton(idx)} className="text-red-400 hover:text-red-600 shrink-0"><Trash2 size={13} /></button>
                               </div>
-                              <Input placeholder="ID (e.g. ask_a_question)" value={btn.id}
-                                onChange={e => updateButton(idx, "id", e.target.value.replace(/\s/g, "_").toLowerCase())}
-                                className="text-xs font-mono h-8" />
-                              {RESERVED_BUTTONS.find(r => r.id === btn.id) && (
-                                <p className="text-xs text-amber-600">✓ {RESERVED_BUTTONS.find(r => r.id === btn.id)?.desc}</p>
-                              )}
+                              <ButtonIdInput
+                                value={btn.id}
+                                onChange={val => updateButton(idx, "id", val)}
+                              />
                             </div>
                           ))}
                           {(editContent.buttons || []).length < 3 && (
@@ -646,7 +644,10 @@ export default function FlowsTab({ projectId }) {
                               <div key={rIdx} className="flex gap-1 items-start">
                                 <div className="flex-1 space-y-1">
                                   <Input placeholder="Row title" value={row.title} onChange={e => updateListRow(sIdx, rIdx, "title", e.target.value)} className="text-sm h-8" />
-                                  <Input placeholder="Row ID" value={row.id} onChange={e => updateListRow(sIdx, rIdx, "id", e.target.value.replace(/\s/g, "_").toLowerCase())} className="text-xs font-mono h-8" />
+                                  <ButtonIdInput
+                                    value={row.id}
+                                    onChange={val => updateListRow(sIdx, rIdx, "id", val)}
+                                  />
                                 </div>
                                 <button onClick={() => removeListRow(sIdx, rIdx)} className="text-red-400 hover:text-red-600 mt-1"><Trash2 size={12} /></button>
                               </div>
@@ -761,6 +762,82 @@ export default function FlowsTab({ projectId }) {
     </div>
   );
 }
+
+function ButtonIdInput({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState(!RESERVED_BUTTONS.find(r => r.id === value));
+  const ref = useRef(null);
+  const reserved = RESERVED_BUTTONS.find(r => r.id === value);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between border rounded px-2 py-1.5 text-xs font-mono bg-white hover:border-blue-300 transition-colors text-left"
+      >
+        <span className={value ? "text-gray-800" : "text-gray-400"}>
+          {value || "Select or type an ID..."}
+        </span>
+        <ChevronDown size={12} className="text-gray-400 shrink-0" />
+      </button>
+
+      {reserved && (
+        <p className="text-xs text-amber-600 mt-0.5">✓ {reserved.desc}</p>
+      )}
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg overflow-hidden">
+          {/* Reserved options */}
+          <div className="px-2 pt-2 pb-1">
+            <p className="text-xs text-muted-foreground font-medium mb-1">Special actions</p>
+            {RESERVED_BUTTONS.map(rb => (
+              <button
+                key={rb.id}
+                type="button"
+                onClick={() => { onChange(rb.id); setCustom(false); setOpen(false); }}
+                className={`w-full flex items-start gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 transition-colors ${value === rb.id ? "bg-amber-50" : ""}`}
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-mono text-blue-600">{rb.id}</p>
+                  <p className="text-xs text-muted-foreground">{rb.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Custom ID */}
+          <div className="border-t px-2 py-2">
+            <p className="text-xs text-muted-foreground font-medium mb-1">Custom ID</p>
+            <input
+              autoFocus={custom}
+              className="w-full border rounded px-2 py-1 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="e.g. browse_products"
+              value={RESERVED_BUTTONS.find(r => r.id === value) ? "" : value}
+              onChange={e => {
+                const v = e.target.value.replace(/\s/g, "_").toLowerCase();
+                onChange(v);
+                setCustom(true);
+              }}
+              onKeyDown={e => { if (e.key === "Enter") setOpen(false); }}
+            />
+            <p className="text-xs text-muted-foreground mt-1">No spaces — use underscore_case</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function NodeBadge({ type }) {
   const colors = NODE_COLORS[type] || { badge: "#f1f5f9", text: "#475569" };
