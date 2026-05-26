@@ -72,7 +72,7 @@ function FlowNode({ data, selected }) {
         minWidth: 180,
         maxWidth: 220,
         boxShadow: selected ? "0 0 0 3px rgba(59,130,246,0.2)" : "0 2px 8px rgba(0,0,0,0.08)",
-        cursor: "pointer",
+        cursor: "grab",
         transition: "box-shadow 0.15s",
       }}
     >
@@ -498,7 +498,7 @@ export default function FlowsTab({ projectId }) {
             </div>
 
             {/* Canvas */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative" style={{ background: "#f1f5f9" }}>
               <ReactFlow
                 nodes={rfNodes}
                 edges={rfEdges}
@@ -510,8 +510,21 @@ export default function FlowsTab({ projectId }) {
                 nodeTypes={nodeTypes}
                 fitView
                 deleteKeyCode="Delete"
+                panOnScroll={true}
+                panOnScrollMode="free"
+                zoomOnPinch={true}
+                zoomOnScroll={false}
+                zoomOnDoubleClick={false}
+                panOnDrag={[1, 2]}
+                selectionOnDrag={false}
+                style={{ cursor: "crosshair" }}
               >
-                <Background color="#e2e8f0" gap={20} />
+                <Background
+                  color="#94a3b8"
+                  gap={24}
+                  size={1.5}
+                  variant="dots"
+                />
                 <Controls />
                 <MiniMap nodeColor={n => NODE_COLORS[n.data?.type]?.border || "#ccc"} />
                 {dbNodes.length === 0 && (
