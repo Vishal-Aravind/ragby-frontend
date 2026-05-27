@@ -455,9 +455,38 @@ function FlowNode({ id, data, selected }) {
         </div>
       )}
 
-      <Handle type="source" position={Position.Bottom}
-        style={{ background: nodeColors.border, width: 10, height: 10, bottom: -6 }}
-      />
+      {/* Per-button/row handles so each can connect to different nodes */}
+      {type === "buttons" && (content.buttons || []).map((btn, idx2) => btn.id ? (
+        <Handle
+          key={`src-${btn.id}`}
+          type="source"
+          position={Position.Bottom}
+          id={btn.id}
+          title={btn.id}
+          style={{
+            background: nodeColors.border, width: 10, height: 10, bottom: -6,
+            left: `${((idx2 + 1) / ((content.buttons || []).length + 1)) * 100}%`,
+          }}
+        />
+      ) : null)}
+      {type === "list" && (content.sections || []).flatMap(s => s.rows || []).map((row, idx2) => row.id ? (
+        <Handle
+          key={`src-${row.id}`}
+          type="source"
+          position={Position.Bottom}
+          id={row.id}
+          title={row.id}
+          style={{
+            background: nodeColors.border, width: 10, height: 10, bottom: -6,
+            left: `${((idx2 + 1) / ((content.sections || []).flatMap(s => s.rows || []).length + 1)) * 100}%`,
+          }}
+        />
+      ) : null)}
+      {type !== "buttons" && type !== "list" && (
+        <Handle type="source" position={Position.Bottom}
+          style={{ background: nodeColors.border, width: 10, height: 10, bottom: -6 }}
+        />
+      )}
     </div>
   );
 }
@@ -532,6 +561,7 @@ export default function FlowsTab({ projectId }) {
       id: e.id,
       source: e.from_node_id,
       target: e.to_node_id,
+      sourceHandle: e.trigger,
       label: e.trigger,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
       style: { stroke: "#94a3b8", strokeWidth: 2 },
@@ -607,8 +637,16 @@ export default function FlowsTab({ projectId }) {
 
   const onConnect = useCallback(async (params) => {
     if (!selectedFlow) return;
-    const trigger = prompt("Enter the button/list ID that triggers this connection:\n(e.g. browse_products or ask_a_question)");
-    if (!trigger) return;
+
+    // If dragged from a named handle (button/list ID), use it directly
+    let trigger = params.sourceHandle;
+
+    // Otherwise ask for the trigger ID
+    if (!trigger) {
+      trigger = prompt("Enter the button/list ID that triggers this connection:");
+      if (!trigger) return;
+    }
+
     const res = await fetch(`/api/flows/${selectedFlow.id}/edges`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
