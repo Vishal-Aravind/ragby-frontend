@@ -626,10 +626,23 @@ export default function FlowsTab({ projectId }) {
 
   const onConnect = useCallback(async (params) => {
     if (!selectedFlow) return;
-    // sourceHandle is the auto-generated ID from the button/list label
-    // For plain message nodes, sourceHandle is undefined — use a default trigger
     const trigger = params.sourceHandle || "next";
 
+    // Add edge to UI immediately — no delay
+    const tempId = `temp_${Date.now()}`;
+    setRfEdges(eds => [...eds, {
+      id: tempId,
+      source: params.source,
+      target: params.target,
+      sourceHandle: trigger,
+      label: trigger,
+      markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+      style: { stroke: "#94a3b8", strokeWidth: 2 },
+      labelStyle: { fontSize: 11, fill: "#64748b" },
+      labelBgStyle: { fill: "#f8fafc", fillOpacity: 0.9 },
+    }]);
+
+    // Save to server in background
     const res = await fetch(`/api/flows/${selectedFlow.id}/edges`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -639,14 +652,18 @@ export default function FlowsTab({ projectId }) {
         to_node_id: params.target,
       }),
     });
+
+    // Replace temp edge with real one from server
     if (res.ok) await fetchNodes(selectedFlow.id);
   }, [selectedFlow]);
 
   const onEdgeClick = useCallback(async (e, edge) => {
     e.stopPropagation();
     if (!confirm(`Delete connection "${edge.label}"?`)) return;
+    // Remove from UI immediately
+    setRfEdges(eds => eds.filter(ed => ed.id !== edge.id));
+    // Delete from server in background
     await fetch(`/api/flows/edges/${edge.id}`, { method: "DELETE" });
-    await fetchNodes(selectedFlow.id);
   }, [selectedFlow]);
 
   const confirmDeleteNode = async () => {
