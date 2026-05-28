@@ -24,7 +24,8 @@ const NODE_TYPES = [
   { value: "message_buttons", label: "Message + Buttons", emoji: "🔘" },
   { value: "message_list",    label: "Message + List",    emoji: "📋" },
   { value: "message_media",   label: "Message + Media",   emoji: "🖼️" },
-  { value: "message_video",   label: "Message + Video",   emoji: "🎥" },
+  { value: "message_video",    label: "Message + Video",    emoji: "🎥" },
+  { value: "message_document", label: "Message + Document", emoji: "📄" },
 ];
 
 const NODE_COLORS = {
@@ -35,7 +36,8 @@ const NODE_COLORS = {
   message_video:   { bg: "#fdf4ff", border: "#e879f9", text: "#86198f", badge: "#fae8ff" },
   ask_a_question:  { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
   back_to_menu:    { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
-  talk_to_human:   { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
+  talk_to_human:    { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
+  message_document: { bg: "#f0f9ff", border: "#7dd3fc", text: "#0c4a6e", badge: "#e0f2fe" },
 };
 
 const NODE_LABELS = {
@@ -52,7 +54,8 @@ const EMPTY_CONTENT = {
   message_buttons: { body: "", buttons: [{ label: "Option 1" }, { label: "Option 2" }] },
   message_list:    { body: "", button_text: "View Options", sections: [{ title: "", rows: [{ label: "Option 1" }, { label: "Option 2" }] }] },
   message_media:   { body: "", media_url: "" },
-  message_video:   { body: "", video_url: "" },
+  message_video:    { body: "", video_url: "" },
+  message_document: { body: "", document_url: "", filename: "" },
   ask_a_question:  { body: "You can now ask me anything!" },
   back_to_menu:    { body: "" },
   talk_to_human:   { body: "Connecting you to our team. Please wait..." },
@@ -336,6 +339,26 @@ function FlowNode({ id, data, selected }) {
                 placeholder="https://example.com/video.mp4" value={content.video_url||""}
                 onChange={e => updateContent("video_url", e.target.value)}
                 onClick={e => e.stopPropagation()} />
+            </div>
+          )}
+
+          {type === "message_document" && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div>
+                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Document URL</p>
+                <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+                  placeholder="https://example.com/file.pdf" value={content.document_url||""}
+                  onChange={e => updateContent("document_url", e.target.value)}
+                  onClick={e => e.stopPropagation()} />
+              </div>
+              <div>
+                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Filename (shown to user)</p>
+                <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box" }}
+                  placeholder="e.g. product_catalog.pdf" value={content.filename||""}
+                  onChange={e => updateContent("filename", e.target.value)}
+                  onClick={e => e.stopPropagation()} />
+              </div>
+              <p style={{ fontSize: 10, color: "#94a3b8" }}>Supports PDF, Word, Excel, PPT, CSV and more</p>
             </div>
           )}
         </div>
