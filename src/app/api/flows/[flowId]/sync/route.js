@@ -50,6 +50,7 @@ export async function POST(req, { params }) {
       type: node.type,
       content: node.content || {},
       is_start: node.is_start || false,
+      position: node.position || { x: 0, y: 0 },
     });
   }
 

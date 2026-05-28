@@ -415,6 +415,7 @@ export default function FlowsTab({ projectId }) {
         type: n.data.type,
         content: n.data.content,
         is_start: n.data.isStart,
+        position: n.position,
       })),
       edges: edges.map(e => ({
         from_node_id: e.source,
@@ -463,7 +464,7 @@ export default function FlowsTab({ projectId }) {
     const rfN = nodes.map((n, i) => ({
       id: n.id,
       type: "flowNode",
-      position: { x: 120 + (i % 4) * 320, y: Math.floor(i / 4) * 180 + 60 },
+      position: n.position || { x: 120 + (i % 4) * 320, y: Math.floor(i / 4) * 180 + 60 },
       dragHandle: ".drag-handle",
       data: buildNodeData(n),
     }));
@@ -760,7 +761,7 @@ export default function FlowsTab({ projectId }) {
               }}>
               <ReactFlow
                 nodes={rfNodes} edges={rfEdges}
-                onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+                onNodesChange={changes => { onNodesChange(changes); if (changes.some(c => c.type === "position" && !c.dragging)) markDirty(); }} onEdgesChange={onEdgesChange}
                 onConnect={onConnect} onEdgeClick={onEdgeClick}
                 onInit={setReactFlowInstance}
                 nodeTypes={nodeTypes} fitView
