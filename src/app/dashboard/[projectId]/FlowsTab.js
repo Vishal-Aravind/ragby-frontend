@@ -658,24 +658,9 @@ export default function FlowsTab({ projectId }) {
 
   const handleAddNode = async (type = "message", position = null) => {
     if (!selectedFlow) return;
-
-    // Add to canvas immediately with temp ID
-    const tempId = `temp_${Date.now()}`;
     const pos = position || { x: 200 + rfNodes.length * 50, y: 100 + rfNodes.length * 30 };
-    setRfNodes(nds => [...nds, {
-      id: tempId,
-      type: "flowNode",
-      position: pos,
-      dragHandle: ".drag-handle",
-      data: {
-        type,
-        content: EMPTY_CONTENT[type] || {},
-        isStart: rfNodes.length === 0,
-        onSave: async () => {},
-        onDelete: () => {},
-      },
-    }]);
 
+    // Save to server first, get real ID
     const res = await fetch(`/api/flows/${selectedFlow.id}/nodes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -685,7 +670,35 @@ export default function FlowsTab({ projectId }) {
         is_start: dbNodes.length === 0,
       }),
     });
-    if (res.ok) await fetchNodes(selectedFlow.id);
+
+    if (!res.ok) return;
+    const node = await res.json();
+
+    // Add to canvas immediately with real ID and callbacks
+    setDbNodes(prev => [...prev, node]);
+    setRfNodes(nds => [...nds, {
+      id: node.id,
+      type: "flowNode",
+      position: pos,
+      dragHandle: ".drag-handle",
+      data: {
+        type: node.type,
+        content: node.content,
+        isStart: node.is_start,
+        onSave: async (nodeId, updates) => {
+          await fetch(`/api/flows/nodes/${nodeId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updates),
+          });
+          await fetchNodes(selectedFlow.id);
+        },
+        onDelete: (nodeId) => {
+          setDeleteNodeId(nodeId);
+          setDeleteNodeOpen(true);
+        },
+      },
+    }]);
   };
 
   const onConnect = useCallback(async (params) => {
@@ -869,11 +882,9 @@ export default function FlowsTab({ projectId }) {
               const type = e.dataTransfer.getData("nodeType");
               if (!type || !selectedFlow || !reactFlowInstance) return;
 
-              // Convert screen coords to canvas coords
-              const bounds = reactFlowWrapper.current.getBoundingClientRect();
               const position = reactFlowInstance.screenToFlowPosition({
-                x: e.clientX - bounds.left,
-                y: e.clientY - bounds.top,
+                x: e.clientX,
+                y: e.clientY,
               });
 
               await handleAddNode(type, position);
