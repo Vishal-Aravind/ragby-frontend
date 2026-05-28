@@ -543,6 +543,9 @@ export default function FlowsTab({ projectId }) {
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
 
+  const reactFlowWrapper = useRef(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState(null);
+
   const fetchFlows = async () => {
     setLoading(true);
     const res = await fetch(`/api/flows?project_id=${projectId}`);
@@ -653,8 +656,26 @@ export default function FlowsTab({ projectId }) {
       setSelectedFlow(f => ({ ...f, is_active: !f.is_active }));
   };
 
-  const handleAddNode = async (type = "message") => {
+  const handleAddNode = async (type = "message", position = null) => {
     if (!selectedFlow) return;
+
+    // Add to canvas immediately with temp ID
+    const tempId = `temp_${Date.now()}`;
+    const pos = position || { x: 200 + rfNodes.length * 50, y: 100 + rfNodes.length * 30 };
+    setRfNodes(nds => [...nds, {
+      id: tempId,
+      type: "flowNode",
+      position: pos,
+      dragHandle: ".drag-handle",
+      data: {
+        type,
+        content: EMPTY_CONTENT[type] || {},
+        isStart: rfNodes.length === 0,
+        onSave: async () => {},
+        onDelete: () => {},
+      },
+    }]);
+
     const res = await fetch(`/api/flows/${selectedFlow.id}/nodes`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -839,12 +860,23 @@ export default function FlowsTab({ projectId }) {
             </div>
 
           {/* Canvas */}
-          <div style={{ flex: 1, background: "#f1f5f9" }}
+          <div
+            ref={reactFlowWrapper}
+            style={{ flex: 1, background: "#f1f5f9" }}
             onDragOver={e => e.preventDefault()}
             onDrop={async e => {
+              e.preventDefault();
               const type = e.dataTransfer.getData("nodeType");
-              if (!type || !selectedFlow) return;
-              await handleAddNode(type);
+              if (!type || !selectedFlow || !reactFlowInstance) return;
+
+              // Convert screen coords to canvas coords
+              const bounds = reactFlowWrapper.current.getBoundingClientRect();
+              const position = reactFlowInstance.screenToFlowPosition({
+                x: e.clientX - bounds.left,
+                y: e.clientY - bounds.top,
+              });
+
+              await handleAddNode(type, position);
             }}
           >
             <ReactFlow
@@ -854,6 +886,7 @@ export default function FlowsTab({ projectId }) {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onEdgeClick={onEdgeClick}
+              onInit={setReactFlowInstance}
               nodeTypes={nodeTypes}
               fitView
               panOnScroll panOnScrollMode="free"
