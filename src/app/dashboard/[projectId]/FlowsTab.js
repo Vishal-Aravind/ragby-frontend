@@ -128,8 +128,8 @@ function FlowNode({ id, data, selected }) {
       }}
       onClick={e => e.stopPropagation()}
     >
-      <Handle type="target" position={Position.Top}
-        style={{ background: colors.border, width: 10, height: 10, top: -6 }} />
+      <Handle type="target" position={Position.Left}
+        style={{ background: colors.border, width: 10, height: 10, left: -6 }} />
 
       {/* Header */}
       <div style={{ padding: "8px 10px", cursor: "pointer" }} className="drag-handle"
@@ -230,8 +230,8 @@ function FlowNode({ id, data, selected }) {
         )}
 
         {type !== "message_buttons" && type !== "message_list" && (
-          <Handle type="source" position={Position.Bottom}
-            style={{ background: colors.border, width: 10, height: 10, bottom: -6 }} />
+          <Handle type="source" position={Position.Right}
+            style={{ background: colors.border, width: 10, height: 10, right: -6 }} />
         )}
       </div>
 
@@ -463,7 +463,7 @@ export default function FlowsTab({ projectId }) {
     const rfN = nodes.map((n, i) => ({
       id: n.id,
       type: "flowNode",
-      position: { x: 120 + (i % 3) * 300, y: Math.floor(i / 3) * 220 + 60 },
+      position: { x: 120 + (i % 4) * 320, y: Math.floor(i / 4) * 180 + 60 },
       dragHandle: ".drag-handle",
       data: buildNodeData(n),
     }));
@@ -472,6 +472,7 @@ export default function FlowsTab({ projectId }) {
       source: e.from_node_id,
       target: e.to_node_id,
       sourceHandle: e.trigger,
+      type: "smoothstep",
       label: e.trigger,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
       style: { stroke: "#94a3b8", strokeWidth: 2 },
@@ -588,6 +589,7 @@ export default function FlowsTab({ projectId }) {
       source: params.source,
       target: params.target,
       sourceHandle: trigger,
+      type: "smoothstep",
       label: trigger,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
       style: { stroke: "#94a3b8", strokeWidth: 2 },
