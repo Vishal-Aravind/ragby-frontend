@@ -23,7 +23,7 @@ const NODE_TYPES = [
   { value: "message",         label: "Message",           emoji: "💬" },
   { value: "message_buttons", label: "Message + Buttons", emoji: "🔘" },
   { value: "message_list",    label: "Message + List",    emoji: "📋" },
-  { value: "message_media",   label: "Message + Media",   emoji: "🖼️" },
+  { value: "message_media", label: "Message + Image", emoji: "🖼️" },
   { value: "message_video",    label: "Message + Video",    emoji: "🎥" },
   { value: "message_document", label: "Message + Document", emoji: "📄" },
 ];
@@ -42,7 +42,7 @@ const NODE_COLORS = {
 
 const NODE_LABELS = {
   message: "Message", message_buttons: "Buttons", message_list: "List",
-  message_media: "Media", message_video: "Video",
+  message_media: "Image", message_video: "Video",
   ask_a_question: "Ask AI", back_to_menu: "Back to Menu", talk_to_human: "Handoff",
 };
 
