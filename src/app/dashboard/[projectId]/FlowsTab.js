@@ -574,6 +574,17 @@ export default function FlowsTab({ projectId }) {
         content: n.content,
         isStart: n.is_start,
         onSave: async (nodeId, updates) => {
+          // If setting as start, unset all other start nodes first
+          if (updates.is_start) {
+            const others = dbNodes.filter(n => n.id !== nodeId && n.is_start);
+            await Promise.all(others.map(n =>
+              fetch(`/api/flows/nodes/${n.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_start: false }),
+              })
+            ));
+          }
           await fetch(`/api/flows/nodes/${nodeId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -686,6 +697,16 @@ export default function FlowsTab({ projectId }) {
         content: node.content,
         isStart: node.is_start,
         onSave: async (nodeId, updates) => {
+          if (updates.is_start) {
+            const others = dbNodes.filter(n => n.id !== nodeId && n.is_start);
+            await Promise.all(others.map(n =>
+              fetch(`/api/flows/nodes/${n.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ is_start: false }),
+              })
+            ));
+          }
           await fetch(`/api/flows/nodes/${nodeId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
