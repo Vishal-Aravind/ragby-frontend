@@ -70,6 +70,109 @@ const SPECIAL_NODES = [
 // ─────────────────────────────────────────────────────────
 // FLOW NODE — all changes are local, no API on edit
 // ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+// MEDIA UPLOAD COMPONENT
+// ─────────────────────────────────────────────────────────
+const MEDIA_CONFIG = {
+  message_media:    { accept: "image/*",                                          label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
+  message_video:    { accept: "video/mp4,video/3gpp",                             label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
+  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt",  label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
+};
+
+function MediaUpload({ nodeType, urlKey, value, onChange }) {
+  const [mode, setMode]         = useState(value ? "upload" : "url");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError]       = useState("");
+  const fileRef = useRef(null);
+  const cfg = MEDIA_CONFIG[nodeType] || MEDIA_CONFIG.message_media;
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError("");
+    if (file.size > cfg.maxMB * 1024 * 1024) {
+      setError(`Max ${cfg.maxMB}MB allowed.`);
+      return;
+    }
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("bucket", "flow-media");
+      formData.append("folder", nodeType);
+      const res = await fetch("/api/storage/upload", { method: "POST", body: formData });
+      if (!res.ok) { setError((await res.json()).error || "Upload failed"); return; }
+      const { url } = await res.json();
+      onChange(urlKey, url);
+      setMode("upload");
+    } catch { setError("Upload failed. Try again."); }
+    finally { setUploading(false); }
+  };
+
+  const handleClear = () => { onChange(urlKey, ""); setMode("url"); setError(""); if (fileRef.current) fileRef.current.value = ""; };
+
+  const isUploaded = value && mode === "upload";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }} onClick={e => e.stopPropagation()}>
+      {/* Toggle */}
+      <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+        {["url", "upload"].map(m => (
+          <button key={m} type="button"
+            onClick={() => { if (m === "url" && isUploaded) handleClear(); else setMode(m); }}
+            style={{
+              flex: 1, padding: "4px 0", fontSize: 11, border: "none", cursor: "pointer",
+              background: mode === m ? "#1e40af" : "white",
+              color: mode === m ? "white" : "#6b7280",
+              fontWeight: mode === m ? 600 : 400,
+            }}>
+            {m === "url" ? "🔗 URL" : "⬆ Upload"}
+          </button>
+        ))}
+      </div>
+
+      {/* URL input */}
+      {mode === "url" && (
+        <input
+          style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
+          placeholder={`https://example.com/file`}
+          value={value || ""}
+          onChange={e => onChange(urlKey, e.target.value)}
+          onClick={e => e.stopPropagation()}
+        />
+      )}
+
+      {/* Upload */}
+      {mode === "upload" && (
+        <>
+          {isUploaded ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "6px 8px" }}>
+              <span style={{ fontSize: 11, color: "#166534", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                ✓ {value.split("/").pop()}
+              </span>
+              <button type="button" onClick={handleClear} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13 }}>✕</button>
+            </div>
+          ) : (
+            <div onClick={() => fileRef.current?.click()}
+              style={{ border: "2px dashed #cbd5e1", borderRadius: 6, padding: "14px 8px", textAlign: "center", cursor: "pointer", background: "#f8fafc" }}>
+              {uploading
+                ? <p style={{ fontSize: 11, color: "#6b7280", margin: 0 }}>Uploading...</p>
+                : <>
+                    <p style={{ fontSize: 12, color: "#374151", margin: "0 0 2px", fontWeight: 500 }}>Click to upload {cfg.label}</p>
+                    <p style={{ fontSize: 10, color: "#94a3b8", margin: 0 }}>{cfg.exts} · Max {cfg.maxMB}MB</p>
+                  </>
+              }
+            </div>
+          )}
+          <input ref={fileRef} type="file" accept={cfg.accept} style={{ display: "none" }} onChange={handleFile} />
+        </>
+      )}
+
+      {error && <p style={{ fontSize: 11, color: "#dc2626", margin: 0 }}>{error}</p>}
+    </div>
+  );
+}
+
 function FlowNode({ id, data, selected }) {
   const [expanded, setExpanded]     = useState(false);
   const [showTypeDD, setShowTypeDD] = useState(false);
@@ -324,32 +427,23 @@ function FlowNode({ id, data, selected }) {
 
           {type === "message_media" && (
             <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Image URL</p>
-              <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
-                placeholder="https://example.com/image.jpg" value={content.media_url||""}
-                onChange={e => updateContent("media_url", e.target.value)}
-                onClick={e => e.stopPropagation()} />
+              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Image</p>
+              <MediaUpload nodeType="message_media" urlKey="media_url" value={content.media_url||""} onChange={updateContent} />
             </div>
           )}
 
           {type === "message_video" && (
             <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Video URL</p>
-              <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
-                placeholder="https://example.com/video.mp4" value={content.video_url||""}
-                onChange={e => updateContent("video_url", e.target.value)}
-                onClick={e => e.stopPropagation()} />
+              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Video</p>
+              <MediaUpload nodeType="message_video" urlKey="video_url" value={content.video_url||""} onChange={updateContent} />
             </div>
           )}
 
           {type === "message_document" && (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
               <div>
-                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Document URL</p>
-                <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
-                  placeholder="https://example.com/file.pdf" value={content.document_url||""}
-                  onChange={e => updateContent("document_url", e.target.value)}
-                  onClick={e => e.stopPropagation()} />
+                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Document</p>
+                <MediaUpload nodeType="message_document" urlKey="document_url" value={content.document_url||""} onChange={updateContent} />
               </div>
               <div>
                 <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Filename (shown to user)</p>
@@ -358,7 +452,6 @@ function FlowNode({ id, data, selected }) {
                   onChange={e => updateContent("filename", e.target.value)}
                   onClick={e => e.stopPropagation()} />
               </div>
-              <p style={{ fontSize: 10, color: "#94a3b8" }}>Supports PDF, Word, Excel, PPT, CSV and more</p>
             </div>
           )}
         </div>
