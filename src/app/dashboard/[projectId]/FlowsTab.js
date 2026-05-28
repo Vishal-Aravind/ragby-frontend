@@ -34,6 +34,9 @@ const NODE_COLORS = {
   message_list:    { bg: "#faf5ff", border: "#c4b5fd", text: "#5b21b6", badge: "#ede9fe" },
   message_media:   { bg: "#fff7ed", border: "#fdba74", text: "#9a3412", badge: "#ffedd5" },
   message_video:   { bg: "#fdf4ff", border: "#e879f9", text: "#86198f", badge: "#fae8ff" },
+  ask_a_question:  { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
+  back_to_menu:    { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
+  talk_to_human:   { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
 };
 
 // Auto-generate ID from label
@@ -46,7 +49,35 @@ const EMPTY_CONTENT = {
   message_list:    { body: "", button_text: "View Options", sections: [{ title: "", rows: [{ label: "Option 1" }, { label: "Option 2" }] }] },
   message_media:   { body: "", media_url: "" },
   message_video:   { body: "", video_url: "" },
+  ask_a_question:  { body: "You can now ask me anything about our products and services!" },
+  back_to_menu:    { body: "" }, // no message needed — just restarts flow
+  talk_to_human:   { body: "Connecting you to our team. Please wait..." },
 };
+
+// Special nodes — pre-configured, drag onto canvas
+const SPECIAL_NODES = [
+  {
+    type: "ask_a_question",
+    label: "Ask a Question",
+    emoji: "🤖",
+    desc: "User enters AI mode",
+    color: { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
+  },
+  {
+    type: "back_to_menu",
+    label: "Back to Menu",
+    emoji: "↩️",
+    desc: "Restarts flow",
+    color: { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
+  },
+  {
+    type: "talk_to_human",
+    label: "Talk to Human",
+    emoji: "👤",
+    desc: "Human handoff",
+    color: { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
+  },
+];
 
 // ─────────────────────────────────────────────────────────
 // CUSTOM NODE COMPONENT
@@ -73,8 +104,10 @@ function FlowNode({ id, data, selected }) {
   }, []);
 
   const colors = NODE_COLORS[type] || NODE_COLORS.message;
-  const typeLabel = NODE_TYPES.find(t => t.value === type)?.label || "Message";
-  const typeEmoji = NODE_TYPES.find(t => t.value === type)?.emoji || "💬";
+  const isSpecial = ["ask_a_question", "back_to_menu", "talk_to_human"].includes(type);
+  const specialNode = SPECIAL_NODES.find(s => s.type === type);
+  const typeLabel = specialNode?.label || NODE_TYPES.find(t => t.value === type)?.label || "Message";
+  const typeEmoji = specialNode?.emoji || NODE_TYPES.find(t => t.value === type)?.emoji || "💬";
 
   const updateContent = (key, val) => setContent(prev => ({ ...prev, [key]: val }));
 
@@ -175,18 +208,18 @@ function FlowNode({ id, data, selected }) {
         onClick={() => setExpanded(e => !e)}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
 
-          {/* Type dropdown trigger */}
+          {/* Type dropdown trigger — disabled for special nodes */}
           <div ref={typeRef} style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
             <button
-              onClick={() => setShowTypeDD(p => !p)}
+              onClick={() => !isSpecial && setShowTypeDD(p => !p)}
               style={{
                 display: "flex", alignItems: "center", gap: 4,
                 fontSize: 11, fontWeight: 600, padding: "2px 8px",
                 borderRadius: 20, background: colors.badge, color: colors.text,
-                border: "none", cursor: "pointer",
+                border: "none", cursor: isSpecial ? "default" : "pointer",
               }}
             >
-              {typeEmoji} {typeLabel} <ChevronDown size={10} />
+              {typeEmoji} {typeLabel} {!isSpecial && <ChevronDown size={10} />}
             </button>
 
             {showTypeDD && (
@@ -312,20 +345,30 @@ function FlowNode({ id, data, selected }) {
             Set as start node
           </label>
 
-          {/* Message */}
-          <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Message</p>
-          <textarea
-            style={{
-              width: "100%", border: "1px solid #e2e8f0", borderRadius: 6,
-              padding: "6px 8px", fontSize: 12, resize: "none", outline: "none",
-              fontFamily: "inherit", boxSizing: "border-box",
-            }}
-            rows={3}
-            value={content.body || ""}
-            onChange={e => updateContent("body", e.target.value)}
-            placeholder="Type your message..."
-            onClick={e => e.stopPropagation()}
-          />
+          {/* ── Special node info ── */}
+          {isSpecial && (
+            <div style={{ marginTop: 6 }}>
+              <p style={{ fontSize: 11, color: colors.text, background: colors.badge, borderRadius: 6, padding: "4px 8px" }}>
+                {specialNode?.desc}
+              </p>
+            </div>
+          )}
+
+          {/* Message body — hidden for back_to_menu */}
+          {type !== "back_to_menu" && (
+            <textarea
+              style={{
+                width: "100%", border: "1px solid #e2e8f0", borderRadius: 6,
+                padding: "6px 8px", fontSize: 12, resize: "none", outline: "none",
+                fontFamily: "inherit", boxSizing: "border-box",
+              }}
+              rows={3}
+              value={content.body || ""}
+              onChange={e => updateContent("body", e.target.value)}
+              placeholder="Type your message..."
+              onClick={e => e.stopPropagation()}
+            />
+          )}
 
           {/* Buttons editor */}
           {type === "message_buttons" && (
@@ -754,8 +797,56 @@ export default function FlowsTab({ projectId }) {
             </div>
           </div>
 
+          {/* Body: sidebar + canvas */}
+          <div style={{ display: "flex", height: "calc(85vh - 45px)" }}>
+
+            {/* Left panel — special nodes */}
+            <div style={{
+              width: 160, borderRight: "1px solid #e2e8f0",
+              background: "#fafafa", padding: "12px 10px",
+              display: "flex", flexDirection: "column", gap: 6, overflowY: "auto",
+              shrink: 0,
+            }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+                Special nodes
+              </p>
+              {SPECIAL_NODES.map(sn => (
+                <div
+                  key={sn.type}
+                  draggable
+                  onDragStart={e => e.dataTransfer.setData("nodeType", sn.type)}
+                  style={{
+                    background: sn.color.bg,
+                    border: `1.5px solid ${sn.color.border}`,
+                    borderRadius: 8, padding: "8px 10px",
+                    cursor: "grab", userSelect: "none",
+                  }}
+                >
+                  <p style={{ fontSize: 12, fontWeight: 600, color: sn.color.text, margin: 0 }}>
+                    {sn.emoji} {sn.label}
+                  </p>
+                  <p style={{ fontSize: 10, color: "#94a3b8", margin: "2px 0 0" }}>{sn.desc}</p>
+                </div>
+              ))}
+              <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 6, paddingTop: 8 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                  Tip
+                </p>
+                <p style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5 }}>
+                  Drag special nodes onto the canvas. Connect button/list handles → to any node.
+                </p>
+              </div>
+            </div>
+
           {/* Canvas */}
-          <div style={{ height: "calc(85vh - 45px)", background: "#f1f5f9" }}>
+          <div style={{ flex: 1, background: "#f1f5f9" }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={async e => {
+              const type = e.dataTransfer.getData("nodeType");
+              if (!type || !selectedFlow) return;
+              await handleAddNode(type);
+            }}
+          >
             <ReactFlow
               nodes={rfNodes}
               edges={rfEdges}
@@ -782,6 +873,7 @@ export default function FlowsTab({ projectId }) {
               )}
             </ReactFlow>
           </div>
+          </div> {/* end sidebar+canvas */}
 
           {/* Settings modal */}
           {settingsOpen && (
