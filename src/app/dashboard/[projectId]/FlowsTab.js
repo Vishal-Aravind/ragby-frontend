@@ -529,6 +529,7 @@ export default function FlowsTab({ projectId }) {
   const [loading, setLoading]           = useState(true);
   const [selectedFlow, setSelectedFlow] = useState(null);
   const [dbNodes, setDbNodes]           = useState([]);
+  const dbNodesRef = useRef([]);
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
   const [creatingFlow, setCreatingFlow] = useState(false);
@@ -559,6 +560,7 @@ export default function FlowsTab({ projectId }) {
     const res = await fetch(`/api/flows/${flowId}/nodes`);
     if (!res.ok) return;
     const data = await res.json();
+    dbNodesRef.current = data.nodes || [];
     setDbNodes(data.nodes || []);
     buildGraph(data.nodes || [], data.edges || [], flowId);
   }, []);
@@ -576,7 +578,7 @@ export default function FlowsTab({ projectId }) {
         onSave: async (nodeId, updates) => {
           // If setting as start, unset all other start nodes first
           if (updates.is_start) {
-            const others = dbNodes.filter(n => n.id !== nodeId && n.is_start);
+            const others = dbNodesRef.current.filter(n => n.id !== nodeId && n.is_start);
             await Promise.all(others.map(n =>
               fetch(`/api/flows/nodes/${n.id}`, {
                 method: "PUT",
@@ -686,7 +688,8 @@ export default function FlowsTab({ projectId }) {
     const node = await res.json();
 
     // Add to canvas immediately with real ID and callbacks
-    setDbNodes(prev => [...prev, node]);
+    dbNodesRef.current = [...dbNodesRef.current, node];
+    setDbNodes(dbNodesRef.current);
     setRfNodes(nds => [...nds, {
       id: node.id,
       type: "flowNode",
@@ -698,7 +701,7 @@ export default function FlowsTab({ projectId }) {
         isStart: node.is_start,
         onSave: async (nodeId, updates) => {
           if (updates.is_start) {
-            const others = dbNodes.filter(n => n.id !== nodeId && n.is_start);
+            const others = dbNodesRef.current.filter(n => n.id !== nodeId && n.is_start);
             await Promise.all(others.map(n =>
               fetch(`/api/flows/nodes/${n.id}`, {
                 method: "PUT",
