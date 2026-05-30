@@ -881,10 +881,11 @@ export default function FlowsTab({ projectId }) {
                 onConnect={onConnect} onEdgeClick={onEdgeClick}
                 onInit={setReactFlowInstance}
                 nodeTypes={nodeTypes} fitView
-                panOnScroll={false}
+                panOnScroll={true}
+                panOnScrollMode="free"
                 panOnDrag={true}
                 zoomOnPinch={true}
-                zoomOnScroll={true}
+                zoomOnScroll={false}
                 zoomOnDoubleClick={false}
                 selectionOnDrag={false}
                 style={{ cursor: "grab" }}
