@@ -323,6 +323,8 @@ export default function ProjectClient({ project }) {
       {activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
       {activeTab === "leads" && <LeadsTab project={project.id} />}
       {activeTab === "flows" && <FlowsTab projectId={project.id} />}
+      {activeTab === "conversations" && <ConversationsTab projectId={project.id} />}
+
 
 
       <AppAlertDialog
