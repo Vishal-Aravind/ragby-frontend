@@ -496,22 +496,20 @@ function FlowNode({ id, data, selected }) {
 
           {type === "message_location" && (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details</p>
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
-                placeholder="Location name (e.g. Our Office)" value={content.name||""}
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details <span style={{ color: "#ef4444" }}>— lat & lng required</span></p>
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box" }}
+                placeholder="Location name * e.g. Our Office" value={content.name||""}
                 onChange={e => updateContent("name", e.target.value)} onClick={e => e.stopPropagation()} />
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace", width: "100%", boxSizing: "border-box" }}
+                placeholder="Latitude * e.g. 13.0827" value={content.latitude||""}
+                onChange={e => updateContent("latitude", e.target.value)} onClick={e => e.stopPropagation()} />
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace", width: "100%", boxSizing: "border-box" }}
+                placeholder="Longitude * e.g. 80.2707" value={content.longitude||""}
+                onChange={e => updateContent("longitude", e.target.value)} onClick={e => e.stopPropagation()} />
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box" }}
                 placeholder="Address (optional)" value={content.address||""}
                 onChange={e => updateContent("address", e.target.value)} onClick={e => e.stopPropagation()} />
-              <div style={{ display: "flex", gap: 6 }}>
-                <input style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace" }}
-                  placeholder="Latitude (e.g. 13.0827)" value={content.latitude||""}
-                  onChange={e => updateContent("latitude", e.target.value)} onClick={e => e.stopPropagation()} />
-                <input style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace" }}
-                  placeholder="Longitude (e.g. 80.2707)" value={content.longitude||""}
-                  onChange={e => updateContent("longitude", e.target.value)} onClick={e => e.stopPropagation()} />
-              </div>
-              <p style={{ fontSize: 10, color: "#94a3b8" }}>💡 Right click on Google Maps → copy coordinates</p>
+              <p style={{ fontSize: 10, color: "#94a3b8" }}>💡 Google Maps → right click → first line is lat, lng</p>
             </div>
           )}
 
