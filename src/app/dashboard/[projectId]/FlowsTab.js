@@ -146,11 +146,31 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
       {mode === "upload" && (
         <>
           {isUploaded ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "6px 8px" }}>
-              <span style={{ fontSize: 11, color: "#166534", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                ✓ {value.split("/").pop()}
-              </span>
-              <button type="button" onClick={handleClear} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13 }}>✕</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {/* Image preview */}
+              {nodeType === "message_media" && (
+                <div style={{ position: "relative", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                  <img src={value} alt="preview"
+                    style={{ width: "100%", maxHeight: 140, objectFit: "cover", display: "block" }} />
+                  <button type="button" onClick={handleClear}
+                    style={{
+                      position: "absolute", top: 6, right: 6,
+                      background: "rgba(0,0,0,0.5)", border: "none", borderRadius: "50%",
+                      width: 22, height: 22, cursor: "pointer", color: "white",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+                    }}>✕</button>
+                </div>
+              )}
+              {/* Video/Document preview */}
+              {nodeType !== "message_media" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "6px 8px" }}>
+                  <span style={{ fontSize: 16 }}>{nodeType === "message_video" ? "🎥" : "📄"}</span>
+                  <span style={{ fontSize: 11, color: "#166534", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {value.split("/").pop()}
+                  </span>
+                  <button type="button" onClick={handleClear} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13 }}>✕</button>
+                </div>
+              )}
             </div>
           ) : (
             <div onClick={() => fileRef.current?.click()}
