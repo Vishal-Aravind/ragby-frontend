@@ -496,7 +496,7 @@ function FlowNode({ id, data, selected }) {
 
           {type === "message_location" && (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details <span style={{ color: "#ef4444" }}>— lat & lng required</span></p>
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details <span style={{ color: "#ef4444" }}>- lat & lng required</span></p>
               <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box" }}
                 placeholder="Location name * e.g. Our Office" value={content.name||""}
                 onChange={e => updateContent("name", e.target.value)} onClick={e => e.stopPropagation()} />
