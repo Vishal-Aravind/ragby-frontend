@@ -68,12 +68,14 @@ const EMPTY_CONTENT = {
   ask_a_question:  { body: "You can now ask me anything!" },
   back_to_menu:    { body: "" },
   talk_to_human:   { body: "Connecting you to our team. Please wait..." },
+  time_delay:      { delay_seconds: 60, delay_unit: "seconds" },
 };
 
 const SPECIAL_NODES = [
   { type: "ask_a_question", label: "Ask a Question", emoji: "🤖", desc: "User enters AI mode" },
   { type: "back_to_menu",   label: "Back to Menu",   emoji: "↩️", desc: "Restarts flow" },
   { type: "talk_to_human",  label: "Talk to Human",  emoji: "👤", desc: "Human handoff" },
+  { type: "time_delay",     label: "Time Delay",     emoji: "⏱️", desc: "Wait before next message" },
 ];
 
 // ─────────────────────────────────────────────────────────
@@ -215,7 +217,7 @@ function FlowNode({ id, data, selected }) {
   const content = data.content || {};
   const isStart = data.isStart || false;
 
-  const isSpecial = ["ask_a_question", "back_to_menu", "talk_to_human"].includes(type);
+  const isSpecial = ["ask_a_question", "back_to_menu", "talk_to_human", "time_delay"].includes(type);
   const special   = SPECIAL_NODES.find(s => s.type === type);
   const colors    = NODE_COLORS[type] || NODE_COLORS.message;
   const label     = special?.label || NODE_TYPES.find(t => t.value === type)?.label || "Message";
@@ -325,7 +327,9 @@ function FlowNode({ id, data, selected }) {
           overflow: "hidden", textOverflow: "ellipsis",
           display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4,
         }}>
-          {content.body || (isSpecial ? special?.desc : "Click to edit...")}
+          {content.body || (type === "time_delay"
+            ? `⏱️ Wait ${content.delay_seconds || 60} ${content.delay_unit || "seconds"}`
+            : isSpecial ? special?.desc : "Click to edit...")}
         </p>
 
         {/* Button pills + handles */}
@@ -496,7 +500,7 @@ function FlowNode({ id, data, selected }) {
 
           {type === "message_location" && (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details <span style={{ color: "#ef4444" }}>- lat & lng required</span></p>
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details <span style={{ color: "#ef4444" }}>— lat & lng required</span></p>
               <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box" }}
                 placeholder="Location name * e.g. Our Office" value={content.name||""}
                 onChange={e => updateContent("name", e.target.value)} onClick={e => e.stopPropagation()} />
@@ -523,6 +527,34 @@ function FlowNode({ id, data, selected }) {
                 placeholder="+91 98765 43210" value={content.contact_phone||""}
                 onChange={e => updateContent("contact_phone", e.target.value)} onClick={e => e.stopPropagation()} />
               <p style={{ fontSize: 10, color: "#94a3b8" }}>Sends as a WhatsApp contact card</p>
+            </div>
+          )}
+
+          {type === "time_delay" && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Wait duration</p>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  type="number" min="1"
+                  style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 14, outline: "none", fontWeight: 600 }}
+                  value={content.delay_seconds || 60}
+                  onChange={e => updateContent("delay_seconds", parseInt(e.target.value) || 1)}
+                  onClick={e => e.stopPropagation()}
+                />
+                <select
+                  style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", background: "white" }}
+                  value={content.delay_unit || "seconds"}
+                  onChange={e => updateContent("delay_unit", e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <option value="seconds">Seconds</option>
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                </select>
+              </div>
+              <p style={{ fontSize: 10, color: "#94a3b8", background: "#f8fafc", borderRadius: 6, padding: "6px 8px" }}>
+                ⏱️ Flow pauses here for the set duration, then continues to the next connected node.
+              </p>
             </div>
           )}
         </div>
