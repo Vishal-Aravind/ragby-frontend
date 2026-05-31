@@ -32,24 +32,39 @@ const NODE_TYPES = [
 ];
 
 const NODE_COLORS = {
-  message:         { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
-  message_buttons: { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af", badge: "#dbeafe" },
-  message_list:    { bg: "#faf5ff", border: "#c4b5fd", text: "#5b21b6", badge: "#ede9fe" },
-  message_media:   { bg: "#fff7ed", border: "#fdba74", text: "#9a3412", badge: "#ffedd5" },
-  message_video:   { bg: "#fdf4ff", border: "#e879f9", text: "#86198f", badge: "#fae8ff" },
-  ask_a_question:  { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
-  back_to_menu:    { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
-  talk_to_human:    { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
+  // Current types
+  message:          { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
+  message_buttons:  { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af", badge: "#dbeafe" },
+  message_list:     { bg: "#faf5ff", border: "#c4b5fd", text: "#5b21b6", badge: "#ede9fe" },
+  message_media:    { bg: "#fff7ed", border: "#fdba74", text: "#9a3412", badge: "#ffedd5" },
+  message_video:    { bg: "#fdf4ff", border: "#e879f9", text: "#86198f", badge: "#fae8ff" },
   message_document: { bg: "#f0f9ff", border: "#7dd3fc", text: "#0c4a6e", badge: "#e0f2fe" },
   message_audio:    { bg: "#fdf4ff", border: "#d946ef", text: "#701a75", badge: "#fae8ff" },
   message_location: { bg: "#f0fdf4", border: "#4ade80", text: "#14532d", badge: "#dcfce7" },
   message_contact:  { bg: "#fafafa", border: "#a1a1aa", text: "#18181b", badge: "#f4f4f5" },
+  // Special nodes
+  ask_a_question:   { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
+  back_to_menu:     { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
+  talk_to_human:    { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
+  time_delay:       { bg: "#f8fafc", border: "#94a3b8", text: "#334155", badge: "#f1f5f9" },
+  // Legacy types (old nodes saved in DB before rename)
+  text:             { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
+  buttons:          { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af", badge: "#dbeafe" },
+  list:             { bg: "#faf5ff", border: "#c4b5fd", text: "#5b21b6", badge: "#ede9fe" },
+  rag:              { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
+  handoff:          { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
+  cta_url:          { bg: "#fff7ed", border: "#fdba74", text: "#9a3412", badge: "#ffedd5" },
 };
 
 const NODE_LABELS = {
   message: "Message", message_buttons: "Buttons", message_list: "List",
-  message_media: "Image", message_video: "Video",
+  message_media: "Image", message_video: "Video", message_document: "Document",
+  message_audio: "Audio", message_location: "Location", message_contact: "Contact",
   ask_a_question: "Ask AI", back_to_menu: "Back to Menu", talk_to_human: "Handoff",
+  time_delay: "Time Delay",
+  // Legacy
+  text: "Text", buttons: "Buttons", list: "List", rag: "AI Answer",
+  handoff: "Handoff", cta_url: "Send Link",
 };
 
 const toId = (label) =>
