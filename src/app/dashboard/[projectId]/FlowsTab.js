@@ -26,6 +26,9 @@ const NODE_TYPES = [
   { value: "message_media", label: "Message + Image", emoji: "🖼️" },
   { value: "message_video",    label: "Message + Video",    emoji: "🎥" },
   { value: "message_document", label: "Message + Document", emoji: "📄" },
+  { value: "message_audio",    label: "Message + Audio",    emoji: "🎵" },
+  { value: "message_location", label: "Message + Location", emoji: "📍" },
+  { value: "message_contact",  label: "Message + Contact",  emoji: "👤" },
 ];
 
 const NODE_COLORS = {
@@ -38,6 +41,9 @@ const NODE_COLORS = {
   back_to_menu:    { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
   talk_to_human:    { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
   message_document: { bg: "#f0f9ff", border: "#7dd3fc", text: "#0c4a6e", badge: "#e0f2fe" },
+  message_audio:    { bg: "#fdf4ff", border: "#d946ef", text: "#701a75", badge: "#fae8ff" },
+  message_location: { bg: "#f0fdf4", border: "#4ade80", text: "#14532d", badge: "#dcfce7" },
+  message_contact:  { bg: "#fafafa", border: "#a1a1aa", text: "#18181b", badge: "#f4f4f5" },
 };
 
 const NODE_LABELS = {
@@ -56,6 +62,9 @@ const EMPTY_CONTENT = {
   message_media:   { body: "", media_url: "" },
   message_video:    { body: "", video_url: "" },
   message_document: { body: "", document_url: "", filename: "" },
+  message_audio:    { body: "", audio_url: "" },
+  message_location: { body: "", latitude: "", longitude: "", name: "", address: "" },
+  message_contact:  { body: "", contact_name: "", contact_phone: "" },
   ask_a_question:  { body: "You can now ask me anything!" },
   back_to_menu:    { body: "" },
   talk_to_human:   { body: "Connecting you to our team. Please wait..." },
@@ -77,6 +86,7 @@ const MEDIA_CONFIG = {
   message_media:    { accept: "image/*",                                          label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
   message_video:    { accept: "video/mp4,video/3gpp",                             label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
   message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt",  label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
+  message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",             label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
 };
 
 function MediaUpload({ nodeType, urlKey, value, onChange }) {
@@ -164,7 +174,9 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
               {/* Video/Document preview */}
               {nodeType !== "message_media" && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "6px 8px" }}>
-                  <span style={{ fontSize: 16 }}>{nodeType === "message_video" ? "🎥" : "📄"}</span>
+                  <span style={{ fontSize: 16 }}>
+                    {nodeType === "message_video" ? "🎥" : nodeType === "message_audio" ? "🎵" : "📄"}
+                  </span>
                   <span style={{ fontSize: 11, color: "#166534", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {value.split("/").pop()}
                   </span>
@@ -472,6 +484,47 @@ function FlowNode({ id, data, selected }) {
                   onChange={e => updateContent("filename", e.target.value)}
                   onClick={e => e.stopPropagation()} />
               </div>
+            </div>
+          )}
+
+          {type === "message_audio" && (
+            <div style={{ marginTop: 8 }}>
+              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Audio</p>
+              <MediaUpload nodeType="message_audio" urlKey="audio_url" value={content.audio_url||""} onChange={updateContent} />
+            </div>
+          )}
+
+          {type === "message_location" && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details</p>
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
+                placeholder="Location name (e.g. Our Office)" value={content.name||""}
+                onChange={e => updateContent("name", e.target.value)} onClick={e => e.stopPropagation()} />
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
+                placeholder="Address (optional)" value={content.address||""}
+                onChange={e => updateContent("address", e.target.value)} onClick={e => e.stopPropagation()} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <input style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace" }}
+                  placeholder="Latitude (e.g. 13.0827)" value={content.latitude||""}
+                  onChange={e => updateContent("latitude", e.target.value)} onClick={e => e.stopPropagation()} />
+                <input style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace" }}
+                  placeholder="Longitude (e.g. 80.2707)" value={content.longitude||""}
+                  onChange={e => updateContent("longitude", e.target.value)} onClick={e => e.stopPropagation()} />
+              </div>
+              <p style={{ fontSize: 10, color: "#94a3b8" }}>💡 Right click on Google Maps → copy coordinates</p>
+            </div>
+          )}
+
+          {type === "message_contact" && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Contact details</p>
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
+                placeholder="Contact name" value={content.contact_name||""}
+                onChange={e => updateContent("contact_name", e.target.value)} onClick={e => e.stopPropagation()} />
+              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace" }}
+                placeholder="+91 98765 43210" value={content.contact_phone||""}
+                onChange={e => updateContent("contact_phone", e.target.value)} onClick={e => e.stopPropagation()} />
+              <p style={{ fontSize: 10, color: "#94a3b8" }}>Sends as a WhatsApp contact card</p>
             </div>
           )}
         </div>
