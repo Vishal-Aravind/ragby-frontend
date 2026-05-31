@@ -9,6 +9,8 @@ import LeadsTab from "./LeadsTab";
 import ChatTab from "./ChatTab";
 import FlowsTab from "./FlowsTab";
 import ConversationsTab from "./ConversationsTab";
+import AnalyticsTab from "./AnalyticsTab";
+
 
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
@@ -282,6 +284,7 @@ export default function ProjectClient({ project }) {
           <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>Leads</TabButton>
           <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>Flows</TabButton>
           <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>Conversations</TabButton>
+          <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>Analytics</TabButton>
 
         </div>
 
@@ -324,7 +327,7 @@ export default function ProjectClient({ project }) {
       {activeTab === "leads" && <LeadsTab project={project.id} />}
       {activeTab === "flows" && <FlowsTab projectId={project.id} />}
       {activeTab === "conversations" && <ConversationsTab projectId={project.id} />}
-
+      {activeTab === "analytics" && <AnalyticsTab project={project.id} />}
 
 
       <AppAlertDialog
