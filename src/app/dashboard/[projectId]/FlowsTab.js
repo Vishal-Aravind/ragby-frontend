@@ -551,24 +551,35 @@ function FlowNode({ id, data, selected }) {
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <input
                   type="number" min="1"
+                  max={content.delay_unit === "hours" ? 22 : content.delay_unit === "minutes" ? 1320 : 79200}
                   style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 14, outline: "none", fontWeight: 600 }}
                   value={content.delay_seconds || 60}
-                  onChange={e => updateContent("delay_seconds", parseInt(e.target.value) || 1)}
+                  onChange={e => {
+                    const unit = content.delay_unit || "seconds";
+                    const max = unit === "hours" ? 22 : unit === "minutes" ? 1320 : 79200;
+                    const val = Math.min(parseInt(e.target.value) || 1, max);
+                    updateContent("delay_seconds", val);
+                  }}
                   onClick={e => e.stopPropagation()}
                 />
                 <select
                   style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", background: "white" }}
                   value={content.delay_unit || "seconds"}
-                  onChange={e => updateContent("delay_unit", e.target.value)}
+                  onChange={e => {
+                    updateContent("delay_unit", e.target.value);
+                    // Reset value to safe max if needed
+                    const max = e.target.value === "hours" ? 22 : e.target.value === "minutes" ? 1320 : 79200;
+                    if ((content.delay_seconds || 60) > max) updateContent("delay_seconds", max);
+                  }}
                   onClick={e => e.stopPropagation()}
                 >
                   <option value="seconds">Seconds</option>
                   <option value="minutes">Minutes</option>
-                  <option value="hours">Hours</option>
+                  <option value="hours">Hours (max 22)</option>
                 </select>
               </div>
-              <p style={{ fontSize: 10, color: "#94a3b8", background: "#f8fafc", borderRadius: 6, padding: "6px 8px" }}>
-                ⏱️ Flow pauses here for the set duration, then continues to the next connected node.
+              <p style={{ fontSize: 10, color: "#f59e0b", background: "#fffbeb", borderRadius: 6, padding: "6px 8px", border: "1px solid #fcd34d" }}>
+                ⚠️ Max 22 hours — keeps a safe 2hr buffer before WhatsApp's 24h window closes
               </p>
             </div>
           )}
