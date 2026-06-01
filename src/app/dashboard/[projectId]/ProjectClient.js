@@ -10,6 +10,7 @@ import ChatTab from "./ChatTab";
 import FlowsTab from "./FlowsTab";
 import ConversationsTab from "./ConversationsTab";
 import AnalyticsTab from "./AnalyticsTab";
+import ApiKeysTab from "./ApiKeysTab";
 
 
 import { Button } from "@/components/ui/button";
@@ -285,6 +286,7 @@ export default function ProjectClient({ project }) {
           <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>Flows</TabButton>
           <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>Conversations</TabButton>
           <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>Analytics</TabButton>
+          <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>API</TabButton>
 
         </div>
 
@@ -328,6 +330,8 @@ export default function ProjectClient({ project }) {
       {activeTab === "flows" && <FlowsTab projectId={project.id} />}
       {activeTab === "conversations" && <ConversationsTab projectId={project.id} />}
       {activeTab === "analytics" && <AnalyticsTab project={project.id} />}
+      {activeTab === "api" && <ApiKeysTab project={project} />}
+
 
 
       <AppAlertDialog
