@@ -29,6 +29,7 @@ const NODE_TYPES = [
   { value: "message_audio",    label: "Message + Audio",    emoji: "🎵" },
   { value: "message_location", label: "Message + Location", emoji: "📍" },
   { value: "message_contact",  label: "Message + Contact",  emoji: "👤" },
+  { value: "call_us",          label: "Message + Call Us",  emoji: "📞" },
 ];
 
 const NODE_COLORS = {
@@ -84,6 +85,7 @@ const EMPTY_CONTENT = {
   back_to_menu:    { body: "" },
   talk_to_human:   { body: "Connecting you to our team. Please wait..." },
   time_delay:      { delay_seconds: 60, delay_unit: "seconds" },
+  call_us:         { body: "Need help? Call us directly!", phone: "" },
 };
 
 const SPECIAL_NODES = [
@@ -580,6 +582,31 @@ function FlowNode({ id, data, selected }) {
               </div>
               <p style={{ fontSize: 10, color: "#f59e0b", background: "#fffbeb", borderRadius: 6, padding: "6px 8px", border: "1px solid #fcd34d" }}>
                 ⚠️ Max 22 hours — keeps a safe 2hr buffer before WhatsApp's 24h window closes
+              </p>
+            </div>
+          )}
+
+          {type === "call_us" && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Message</p>
+              <textarea
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                rows={2}
+                value={content.body || ""}
+                onChange={e => updateContent("body", e.target.value)}
+                placeholder="Need help? Call us directly!"
+                onClick={e => e.stopPropagation()}
+              />
+              <p style={{ fontSize: 11, color: "#6b7280" }}>Phone number</p>
+              <input
+                style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace", width: "100%", boxSizing: "border-box" }}
+                placeholder="+91 98765 43210"
+                value={content.phone || ""}
+                onChange={e => updateContent("phone", e.target.value)}
+                onClick={e => e.stopPropagation()}
+              />
+              <p style={{ fontSize: 10, color: "#94a3b8" }}>
+                📞 Tapping the button opens the phone dialer with your number pre-filled
               </p>
             </div>
           )}
