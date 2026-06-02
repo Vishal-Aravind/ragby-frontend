@@ -27,8 +27,14 @@ export default function CampaignsTab({ project }) {
         fetch(`/api/campaigns?projectId=${projectId}`),
         fetch(`/api/campaigns/templates?projectId=${projectId}`),
       ])
-      if (campRes.ok) setCampaigns(await campRes.json())
-      if (tmplRes.ok) setTemplates(await tmplRes.json())
+      if (campRes.ok) {
+        const campData = await campRes.json()
+        setCampaigns(Array.isArray(campData) ? campData : [])
+      }
+      if (tmplRes.ok) {
+        const tmplData = await tmplRes.json()
+        setTemplates(Array.isArray(tmplData) ? tmplData : [])
+      }
     } catch (err) {
       console.error('CampaignsTab fetch error:', err)
     }
