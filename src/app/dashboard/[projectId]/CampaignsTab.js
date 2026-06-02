@@ -22,12 +22,16 @@ export default function CampaignsTab({ project }) {
 
   const fetchData = async () => {
     setLoading(true)
-    const [campRes, tmplRes] = await Promise.all([
-      fetch(`/api/campaigns?projectId=${projectId}`),
-      fetch(`/api/campaigns/templates?projectId=${projectId}`),
-    ])
-    if (campRes.ok) setCampaigns(await campRes.ok ? campRes.json() : [])
-    if (tmplRes.ok) setTemplates(await tmplRes.json())
+    try {
+      const [campRes, tmplRes] = await Promise.all([
+        fetch(`/api/campaigns?projectId=${projectId}`),
+        fetch(`/api/campaigns/templates?projectId=${projectId}`),
+      ])
+      if (campRes.ok) setCampaigns(await campRes.json())
+      if (tmplRes.ok) setTemplates(await tmplRes.json())
+    } catch (err) {
+      console.error('CampaignsTab fetch error:', err)
+    }
     setLoading(false)
   }
 
