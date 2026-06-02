@@ -1,0 +1,259 @@
+'use client'
+import { useEffect, useState } from 'react'
+import { Plus, Send, Users, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://ragby-backend.onrender.com'
+
+export default function CampaignsTab({ project }) {
+  const projectId = project?.id || project
+  const [campaigns, setCampaigns]     = useState([])
+  const [templates, setTemplates]     = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [showCreate, setShowCreate]   = useState(false)
+  const [sending, setSending]         = useState(false)
+  const [error, setError]             = useState(null)
+
+  // Form state
+  const [name, setName]               = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState(null)
+  const [variables, setVariables]     = useState([])
+  const [recipientFilter, setRecipientFilter] = useState('whatsapp')
+  const [tagFilter, setTagFilter]     = useState('')
+
+  const fetchData = async () => {
+    setLoading(true)
+    const [campRes, tmplRes] = await Promise.all([
+      fetch(`/api/campaigns?projectId=${projectId}`),
+      fetch(`/api/campaigns/templates?projectId=${projectId}`),
+    ])
+    if (campRes.ok) setCampaigns(await campRes.ok ? campRes.json() : [])
+    if (tmplRes.ok) setTemplates(await tmplRes.json())
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchData() }, [projectId])
+
+  const selectTemplate = (t) => {
+    setSelectedTemplate(t)
+    // Count variables in body component
+    const body = t.components?.find(c => c.type === "BODY")
+    const text = body?.text || ""
+    const count = (text.match(/\{\{\d+\}\}/g) || []).length
+    setVariables(Array(count).fill(""))
+  }
+
+  const handleSend = async () => {
+    if (!name.trim()) return setError("Campaign name is required")
+    if (!selectedTemplate) return setError("Select a template")
+
+    setSending(true)
+    setError(null)
+
+    const res = await fetch('/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId,
+        name,
+        template_name: selectedTemplate.name,
+        template_language: selectedTemplate.language || 'en_US',
+        variables,
+        recipient_filter: recipientFilter,
+        tag_filter: tagFilter || null,
+      })
+    })
+
+    if (res.ok) {
+      setShowCreate(false)
+      setName('')
+      setSelectedTemplate(null)
+      setVariables([])
+      setTimeout(fetchData, 2000)
+    } else {
+      const data = await res.json()
+      setError(data.error || 'Failed to send campaign')
+    }
+    setSending(false)
+  }
+
+  const statusBadge = (status) => {
+    const map = {
+      draft:   { color: 'bg-gray-100 text-gray-600',   icon: <Clock size={11} />,        label: 'Draft' },
+      sending: { color: 'bg-blue-100 text-blue-600',   icon: <Send size={11} />,         label: 'Sending...' },
+      sent:    { color: 'bg-green-100 text-green-700', icon: <CheckCircle size={11} />,  label: 'Sent' },
+      failed:  { color: 'bg-red-100 text-red-600',     icon: <XCircle size={11} />,      label: 'Failed' },
+    }
+    const s = map[status] || map.draft
+    return (
+      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${s.color}`}>
+        {s.icon} {s.label}
+      </span>
+    )
+  }
+
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading campaigns...</div>
+
+  return (
+    <div className="p-6 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Campaigns</h2>
+          <p className="text-sm text-muted-foreground">Send WhatsApp template messages to your contacts</p>
+        </div>
+        <button onClick={() => setShowCreate(v => !v)}
+          className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">
+          <Plus size={14} /> New Campaign
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showCreate && (
+        <div className="border rounded-xl p-5 space-y-4 bg-blue-50/30">
+          <h3 className="font-medium text-sm">Create Campaign</h3>
+
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
+
+          {/* Name */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Campaign name</label>
+            <input className="mt-1 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="e.g. Diwali Offer 2026"
+              value={name} onChange={e => setName(e.target.value)} />
+          </div>
+
+          {/* Template selection */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Select template</label>
+            {templates.length === 0 ? (
+              <div className="mt-1 border rounded-lg p-4 text-sm text-muted-foreground text-center">
+                No approved templates found. Create and get templates approved in your
+                <a href="https://business.facebook.com" target="_blank" className="text-blue-600 ml-1">WhatsApp Manager</a>.
+              </div>
+            ) : (
+              <div className="mt-1 space-y-2 max-h-48 overflow-y-auto">
+                {templates.map(t => {
+                  const body = t.components?.find(c => c.type === "BODY")
+                  return (
+                    <div key={t.name}
+                      onClick={() => selectTemplate(t)}
+                      className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                        selectedTemplate?.name === t.name
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'hover:bg-muted/50'
+                      }`}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">{t.name}</p>
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                          {t.status}
+                        </span>
+                      </div>
+                      {body && <p className="text-xs text-muted-foreground mt-1">{body.text}</p>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Variables */}
+          {selectedTemplate && variables.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Template variables</label>
+              <div className="mt-1 space-y-2">
+                {variables.map((v, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-16 shrink-0">{`{{${i + 1}}}`}</span>
+                    <input
+                      className="flex-1 border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder={`Value for {{${i + 1}}}`}
+                      value={v}
+                      onChange={e => {
+                        const newVars = [...variables]
+                        newVars[i] = e.target.value
+                        setVariables(newVars)
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recipients */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Send to</label>
+            <div className="mt-1 grid grid-cols-3 gap-2">
+              {[
+                { value: 'all', label: 'All contacts' },
+                { value: 'whatsapp', label: 'WhatsApp only' },
+                { value: 'web', label: 'Web leads only' },
+              ].map(opt => (
+                <button key={opt.value}
+                  onClick={() => setRecipientFilter(opt.value)}
+                  className={`text-xs border rounded-lg px-3 py-2 transition-colors ${
+                    recipientFilter === opt.value
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'hover:bg-muted/50'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-2">
+            <button onClick={() => setShowCreate(false)}
+              className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-muted">
+              Cancel
+            </button>
+            <button onClick={handleSend} disabled={sending}
+              className="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
+              {sending ? 'Sending...' : <><Send size={13} /> Send Campaign</>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Campaigns list */}
+      {campaigns.length === 0 ? (
+        <div className="text-center py-12 text-sm text-muted-foreground border rounded-xl">
+          No campaigns yet. Create your first campaign to reach your contacts.
+        </div>
+      ) : (
+        <div className="border rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium">Name</th>
+                <th className="text-left px-4 py-3 font-medium">Template</th>
+                <th className="text-left px-4 py-3 font-medium">Status</th>
+                <th className="text-left px-4 py-3 font-medium">Sent</th>
+                <th className="text-left px-4 py-3 font-medium">Failed</th>
+                <th className="text-left px-4 py-3 font-medium">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {campaigns.map((c, i) => (
+                <tr key={c.id} className={i % 2 === 0 ? 'bg-white' : 'bg-muted/20'}>
+                  <td className="px-4 py-3 font-medium">{c.name}</td>
+                  <td className="px-4 py-3 font-mono text-xs">{c.template_name}</td>
+                  <td className="px-4 py-3">{statusBadge(c.status)}</td>
+                  <td className="px-4 py-3">
+                    <span className="text-green-700 font-medium">{c.sent_count}</span>
+                    <span className="text-muted-foreground">/{c.total_count}</span>
+                  </td>
+                  <td className="px-4 py-3 text-red-600">{c.failed_count}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {new Date(c.created_at).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
