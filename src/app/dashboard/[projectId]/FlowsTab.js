@@ -681,6 +681,26 @@ export default function FlowsTab({ projectId }) {
 
     setSaveStatus("saving");
 
+    const toIdFn = (label) =>
+      (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "next";
+
+    // Build map of nodeId → { oldHandleId: newHandleId } from current button labels
+    const handleRemap = {};
+    nodes.forEach(n => {
+      if (n.data.type === "message_buttons") {
+        handleRemap[n.id] = {};
+        (n.data.content?.buttons || []).forEach(btn => {
+          if (btn.label) handleRemap[n.id][toIdFn(btn.label)] = toIdFn(btn.label);
+        });
+      }
+      if (n.data.type === "message_list") {
+        handleRemap[n.id] = {};
+        (n.data.content?.sections || []).flatMap(s => s.rows || []).forEach(row => {
+          if (row.label) handleRemap[n.id][toIdFn(row.label)] = toIdFn(row.label);
+        });
+      }
+    });
+
     const payload = {
       nodes: nodes.map(n => ({
         id: n.id,
@@ -689,11 +709,15 @@ export default function FlowsTab({ projectId }) {
         is_start: n.data.isStart,
         position: n.position,
       })),
-      edges: edges.map(e => ({
-        from_node_id: e.source,
-        trigger: e.sourceHandle || "next",
-        to_node_id: e.target,
-      })),
+      edges: edges.map(e => {
+        // Use current button label ID if available, fallback to sourceHandle
+        const sourceHandle = e.sourceHandle || "next";
+        return {
+          from_node_id: e.source,
+          trigger: sourceHandle,
+          to_node_id: e.target,
+        };
+      }),
     };
 
     const res = await fetch(`/api/flows/${flow.id}/sync`, {
@@ -762,9 +786,39 @@ export default function FlowsTab({ projectId }) {
     content: n.content,
     isStart: n.is_start,
     onChange: (nodeId, patch) => {
-      setRfNodes(nds => nds.map(nd =>
-        nd.id === nodeId ? { ...nd, data: { ...nd.data, ...patch } } : nd
-      ));
+      // Get old buttons before update
+      setRfNodes(nds => {
+        const oldNode = nds.find(nd => nd.id === nodeId);
+        const oldButtons = oldNode?.data?.content?.buttons || [];
+        const newButtons = patch?.content?.buttons || oldButtons;
+
+        // If buttons changed, remap edge sourceHandles
+        if (patch?.content?.buttons && oldButtons.length === newButtons.length) {
+          const toIdFn = (label) =>
+            (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "next";
+
+          // Build old→new handle map
+          const handleMap = {};
+          oldButtons.forEach((oldBtn, idx) => {
+            const oldHandle = toIdFn(oldBtn.label);
+            const newHandle = toIdFn(newButtons[idx]?.label || "");
+            if (oldHandle !== newHandle) handleMap[oldHandle] = newHandle;
+          });
+
+          // Update edges with remapped sourceHandles
+          if (Object.keys(handleMap).length > 0) {
+            setRfEdges(eds => eds.map(e =>
+              e.source === nodeId && handleMap[e.sourceHandle]
+                ? { ...e, sourceHandle: handleMap[e.sourceHandle], label: handleMap[e.sourceHandle] }
+                : e
+            ));
+          }
+        }
+
+        return nds.map(nd =>
+          nd.id === nodeId ? { ...nd, data: { ...nd.data, ...patch } } : nd
+        );
+      });
       markDirty();
     },
     onSetStart: (nodeId, val) => {

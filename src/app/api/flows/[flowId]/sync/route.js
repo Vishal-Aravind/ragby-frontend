@@ -16,9 +16,11 @@ function getSupabase(req) {
         },
       }
     ),
-    response,
   };
 }
+
+const toId = (label) =>
+  (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `id_${Date.now()}`;
 
 export async function POST(req, { params }) {
   const { flowId } = await params;
@@ -40,16 +42,42 @@ export async function POST(req, { params }) {
   // Build ID map: local ID → new DB ID
   const idMap = {};
 
+  // Build button ID map per node: sourceHandle → correct button ID from current labels
+  // This fixes the issue where button labels are renamed but edge triggers still have old IDs
+  const buttonIdMap = {}; // { nodeLocalId: { oldTriggerId: newTriggerId } }
+
   for (const node of nodes) {
     const newId = crypto.randomUUID();
     idMap[node.id] = newId;
 
+    // Build button label → ID mapping for buttons/list nodes
+    if (node.data?.type === "message_buttons" && node.data?.content?.buttons) {
+      buttonIdMap[node.id] = {};
+      node.data.content.buttons.forEach(btn => {
+        if (btn.label) {
+          const currentId = toId(btn.label);
+          buttonIdMap[node.id][currentId] = currentId;
+        }
+      });
+    }
+    if (node.data?.type === "message_list" && node.data?.content?.sections) {
+      buttonIdMap[node.id] = {};
+      node.data.content.sections.forEach(section => {
+        (section.rows || []).forEach(row => {
+          if (row.label) {
+            const currentId = toId(row.label);
+            buttonIdMap[node.id][currentId] = currentId;
+          }
+        });
+      });
+    }
+
     await supabase.from("flow_nodes").insert({
       id: newId,
       flow_id: flowId,
-      type: node.type,
-      content: node.content || {},
-      is_start: node.is_start || false,
+      type: node.data?.type || node.type,
+      content: node.data?.content || node.content || {},
+      is_start: node.data?.isStart || node.is_start || false,
       position: node.position || { x: 0, y: 0 },
     });
   }
@@ -57,15 +85,18 @@ export async function POST(req, { params }) {
   // Insert edges with remapped IDs
   let edgesInserted = 0;
   for (const edge of edges) {
-    const fromId = idMap[edge.from_node_id] || edge.from_node_id;
-    const toId   = idMap[edge.to_node_id]   || edge.to_node_id;
-    if (!fromId || !toId) continue;
+    const fromId = idMap[edge.source || edge.from_node_id] || edge.source || edge.from_node_id;
+    const toId_  = idMap[edge.target || edge.to_node_id]   || edge.target || edge.to_node_id;
+    if (!fromId || !toId_) continue;
+
+    // Get the trigger — use sourceHandle which is the current button ID
+    let trigger = edge.sourceHandle || edge.trigger || "next";
 
     await supabase.from("flow_edges").insert({
       flow_id: flowId,
       from_node_id: fromId,
-      trigger: edge.trigger,
-      to_node_id: toId,
+      trigger,
+      to_node_id: toId_,
     });
     edgesInserted++;
   }
