@@ -642,6 +642,7 @@ export default function FlowsTab({ projectId }) {
   // Save state
   const [saveStatus, setSaveStatus] = useState("saved"); // "saved" | "unsaved" | "saving"
   const autoSaveTimer = useRef(null);
+  const isLoadingFlow = useRef(false);
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
@@ -665,6 +666,7 @@ export default function FlowsTab({ projectId }) {
 
   // ── Mark dirty and schedule auto-save ────────────────
   const markDirty = useCallback(() => {
+    if (isLoadingFlow.current) return; // Don't mark dirty during load
     setSaveStatus("unsaved");
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => {
@@ -749,11 +751,14 @@ export default function FlowsTab({ projectId }) {
 
   // ── Load flow nodes from server ───────────────────────
   const loadFlow = async (flow) => {
+    isLoadingFlow.current = true;
+    setSaveStatus("saved");
     const res = await fetch(`/api/flows/${flow.id}/nodes`);
-    if (!res.ok) return;
+    if (!res.ok) { isLoadingFlow.current = false; return; }
     const data = await res.json();
     buildGraph(data.nodes || [], data.edges || []);
     setSaveStatus("saved");
+    setTimeout(() => { isLoadingFlow.current = false; }, 500); // Small buffer after load
   };
 
   const buildGraph = (nodes, edges) => {
@@ -835,8 +840,13 @@ export default function FlowsTab({ projectId }) {
   });
 
   const selectFlow = async (flow) => {
-    // Save current flow before switching
-    if (selectedFlowRef.current && saveStatus !== "saved") await doSave();
+    // Save current flow before switching (only if dirty and not loading)
+    if (selectedFlowRef.current && saveStatus === "unsaved" && !isLoadingFlow.current) {
+      await doSave();
+    }
+    // Clear canvas before loading new flow
+    setRfNodes([]);
+    setRfEdges([]);
     setSelectedFlow(flow);
     selectedFlowRef.current = flow;
     setEditKeywords((flow.trigger_keywords || []).join(", "));
