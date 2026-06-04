@@ -19,6 +19,51 @@ export default function CampaignsTab({ project }) {
   const [variables, setVariables]     = useState([])
   const [recipientFilter, setRecipientFilter] = useState('whatsapp')
   const [tagFilter, setTagFilter]     = useState('')
+  const [csvContacts, setCsvContacts] = useState([])
+
+  const handleCsvUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+
+    if (isExcel) {
+      // Use SheetJS for Excel
+      const XLSX = await import('xlsx')
+      const buffer = await file.arrayBuffer()
+      const wb = XLSX.read(buffer)
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
+      parseRows(rows)
+    } else {
+      // Parse CSV manually
+      const text = await file.text()
+      const rows = text.split('\n').map(r => r.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
+      parseRows(rows)
+    }
+  }
+
+  const parseRows = (rows) => {
+    if (rows.length < 2) return
+    const headers = rows[0].map(h => h.toLowerCase().trim())
+    const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('number'))
+    const nameIdx  = headers.findIndex(h => h.includes('name'))
+
+    if (phoneIdx === -1) {
+      setError('No phone column found. Make sure your file has a "phone" column.')
+      return
+    }
+
+    const contacts = rows.slice(1)
+      .map(row => ({
+        phone: String(row[phoneIdx] || '').trim().replace(/\s|-/g, ''),
+        name:  nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '',
+      }))
+      .filter(c => c.phone && c.phone.length >= 7)
+
+    setCsvContacts(contacts)
+    setError(null)
+  }
 
   const fetchData = async () => {
     setLoading(true)
@@ -55,6 +100,7 @@ export default function CampaignsTab({ project }) {
   const handleSend = async () => {
     if (!name.trim()) return setError("Campaign name is required")
     if (!selectedTemplate) return setError("Select a template")
+    if (recipientFilter === 'csv' && csvContacts.length === 0) return setError("Upload a CSV file first")
 
     setSending(true)
     setError(null)
@@ -70,6 +116,7 @@ export default function CampaignsTab({ project }) {
         variables,
         recipient_filter: recipientFilter,
         tag_filter: tagFilter || null,
+        csv_contacts: recipientFilter === 'csv' ? csvContacts : null,
       })
     })
 
@@ -78,6 +125,8 @@ export default function CampaignsTab({ project }) {
       setName('')
       setSelectedTemplate(null)
       setVariables([])
+      setCsvContacts([])
+      setRecipientFilter('whatsapp')
       setTimeout(fetchData, 2000)
     } else {
       const data = await res.json()
@@ -193,11 +242,12 @@ export default function CampaignsTab({ project }) {
           {/* Recipients */}
           <div>
             <label className="text-xs font-medium text-muted-foreground">Send to</label>
-            <div className="mt-1 grid grid-cols-3 gap-2">
+            <div className="mt-1 grid grid-cols-2 gap-2">
               {[
                 { value: 'all', label: 'All contacts' },
                 { value: 'whatsapp', label: 'WhatsApp only' },
                 { value: 'web', label: 'Web leads only' },
+                { value: 'csv', label: '📂 Upload CSV/Excel' },
               ].map(opt => (
                 <button key={opt.value}
                   onClick={() => setRecipientFilter(opt.value)}
@@ -210,6 +260,42 @@ export default function CampaignsTab({ project }) {
                 </button>
               ))}
             </div>
+
+            {/* CSV Upload */}
+            {recipientFilter === 'csv' && (
+              <div className="mt-3 space-y-2">
+                <div
+                  className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-muted/30"
+                  onClick={() => document.getElementById('csv-upload').click()}
+                >
+                  <input
+                    id="csv-upload"
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    className="hidden"
+                    onChange={handleCsvUpload}
+                  />
+                  {csvContacts.length > 0 ? (
+                    <p className="text-sm text-green-700 font-medium">
+                      ✅ {csvContacts.length} contacts loaded
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">Click to upload CSV or Excel file</p>
+                      <p className="text-xs text-muted-foreground mt-1">Required column: phone — Optional: name</p>
+                    </>
+                  )}
+                </div>
+                {csvContacts.length > 0 && (
+                  <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2 max-h-24 overflow-y-auto">
+                    {csvContacts.slice(0, 5).map((c, i) => (
+                      <p key={i}>{c.phone} {c.name ? `— ${c.name}` : ''}</p>
+                    ))}
+                    {csvContacts.length > 5 && <p>...and {csvContacts.length - 5} more</p>}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Actions */}

@@ -58,6 +58,7 @@ export async function POST(req) {
       variables: body.variables,
       recipient_filter: body.recipient_filter,
       tag_filter: body.tag_filter,
+      csv_contacts: body.csv_contacts || null,
     }),
   });
 
