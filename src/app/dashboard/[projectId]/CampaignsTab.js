@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Plus, Send, Users, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Send, Users, CheckCircle, XCircle, Clock } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://ragby-backend.onrender.com'
 
@@ -28,15 +29,12 @@ export default function CampaignsTab({ project }) {
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
 
     if (isExcel) {
-      // Use SheetJS for Excel
-      const XLSX = await import('xlsx')
       const buffer = await file.arrayBuffer()
       const wb = XLSX.read(buffer)
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
       parseRows(rows)
     } else {
-      // Parse CSV manually
       const text = await file.text()
       const rows = text.split('\n').map(r => r.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
       parseRows(rows)
@@ -282,7 +280,8 @@ export default function CampaignsTab({ project }) {
                   ) : (
                     <>
                       <p className="text-sm text-muted-foreground">Click to upload CSV or Excel file</p>
-                      <p className="text-xs text-muted-foreground mt-1">Required column: phone — Optional: name</p>
+                      <p className="text-xs text-muted-foreground mt-1">Required column: phone — Optional: name
+                      <p className="text-xs text-muted-foreground">Export contacts from Excel as CSV first</p></p>
                     </>
                   )}
                 </div>
