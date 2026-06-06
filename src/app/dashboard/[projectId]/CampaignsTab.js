@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Plus, Send, Users, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import TemplateLibrary from './TemplateLibrary'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://ragby-backend.onrender.com'
 
@@ -11,6 +12,7 @@ export default function CampaignsTab({ project }) {
   const [templates, setTemplates]     = useState([])
   const [loading, setLoading]         = useState(true)
   const [showCreate, setShowCreate]   = useState(false)
+  const [showLibrary, setShowLibrary] = useState(false)
   const [sending, setSending]         = useState(false)
   const [error, setError]             = useState(null)
 
@@ -150,6 +152,8 @@ export default function CampaignsTab({ project }) {
 
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading campaigns...</div>
 
+  if (showLibrary) return <TemplateLibrary projectId={projectId} onBack={() => setShowLibrary(false)} />
+
   return (
     <div className="p-6 space-y-4">
       {/* Header */}
@@ -158,10 +162,16 @@ export default function CampaignsTab({ project }) {
           <h2 className="text-lg font-semibold">Campaigns</h2>
           <p className="text-sm text-muted-foreground">Send WhatsApp template messages to your contacts</p>
         </div>
-        <button onClick={() => setShowCreate(v => !v)}
-          className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">
-          <Plus size={14} /> New Campaign
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowLibrary(true)}
+            className="flex items-center gap-1.5 border text-sm px-4 py-2 rounded-lg hover:bg-muted">
+            <Sparkles size={14} className="text-yellow-500" /> Template Library
+          </button>
+          <button onClick={() => setShowCreate(v => !v)}
+            className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">
+            <Plus size={14} /> New Campaign
+          </button>
+        </div>
       </div>
 
       {/* Create form */}
