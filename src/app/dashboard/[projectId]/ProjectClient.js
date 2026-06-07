@@ -16,6 +16,10 @@ import CampaignsTab from "./CampaignsTab";
 
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
+import {
+  FileText, MessageCircle, Plug, Users, GitBranch,
+  Inbox, BarChart2, Key, Megaphone
+} from "lucide-react";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -280,16 +284,33 @@ export default function ProjectClient({ project }) {
       {/* Tab bar + domain dropdown on the right */}
       <div className="flex items-center justify-between border-b pb-2 gap-2 flex-wrap">
         <div className="flex gap-2 flex-wrap">
-          <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>Documents</TabButton>
-          <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>Chat</TabButton>
-          <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>Integrations</TabButton>
-          <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>Leads</TabButton>
-          <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>Flows</TabButton>
-          <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>Conversations</TabButton>
-          <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>Analytics</TabButton>
-          <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>API</TabButton>
-          <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>Campaigns</TabButton>
-
+          <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
+            <FileText size={13} />Documents
+          </TabButton>
+          <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>
+            <MessageCircle size={13} />Chat
+          </TabButton>
+          <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
+            <Plug size={13} />Integrations
+          </TabButton>
+          <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>
+            <Users size={13} />Leads
+          </TabButton>
+          <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
+            <GitBranch size={13} />Flows
+          </TabButton>
+          <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>
+            <Inbox size={13} />Conversations
+          </TabButton>
+          <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
+            <BarChart2 size={13} />Analytics
+          </TabButton>
+          <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>
+            <Key size={13} />API
+          </TabButton>
+          <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>
+            <Megaphone size={13} />Campaigns
+          </TabButton>
         </div>
 
         {/* Domain selector — auto-saves on change */}
@@ -361,7 +382,7 @@ export default function ProjectClient({ project }) {
 
 function TabButton({ active, children, ...props }) {
   return (
-    <Button variant={active ? "default" : "ghost"} size="sm" {...props}>
+    <Button variant={active ? "default" : "ghost"} size="sm" className="flex items-center gap-1.5" {...props}>
       {children}
     </Button>
   );
