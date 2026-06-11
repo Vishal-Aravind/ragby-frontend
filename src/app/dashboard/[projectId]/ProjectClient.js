@@ -12,13 +12,15 @@ import ConversationsTab from "./ConversationsTab";
 import AnalyticsTab from "./AnalyticsTab";
 import ApiKeysTab from "./ApiKeysTab";
 import CampaignsTab from "./CampaignsTab";
+import ShopTab from "./ShopTab";
+
 
 
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
 import {
   FileText, MessageCircle, Plug, Users, GitBranch,
-  Inbox, BarChart2, Key, Megaphone
+  Inbox, BarChart2, Key, Megaphone, ShoppingBag
 } from "lucide-react";
 
 const ALLOWED_TYPES = [
@@ -311,6 +313,9 @@ export default function ProjectClient({ project }) {
           <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>
             <Megaphone size={13} />Campaigns
           </TabButton>
+          <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
+            <ShoppingBag size={13} />Shop
+          </TabButton>
         </div>
 
         {/* Domain selector — auto-saves on change */}
@@ -355,6 +360,8 @@ export default function ProjectClient({ project }) {
       {activeTab === "analytics" && <AnalyticsTab project={project} />}
       {activeTab === "api" && <ApiKeysTab project={project} />}
       {activeTab === "campaigns" && <CampaignsTab project={project} />}
+      {activeTab === "shop" && <ShopTab project={project} />}
+
 
 
       <AppAlertDialog

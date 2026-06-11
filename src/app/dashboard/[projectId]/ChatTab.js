@@ -400,7 +400,7 @@ return (
           {loading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="animate-spin" size={14} />
-              AI is thinking…
+              Thinking…
             </div>
           )}
 
