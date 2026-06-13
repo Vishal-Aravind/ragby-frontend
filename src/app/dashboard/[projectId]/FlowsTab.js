@@ -1074,9 +1074,12 @@ export default function FlowsTab({ projectId }) {
                 edges={rfEdges}
                 onNodesChange={changes => {
                   onNodesChange(changes);
-                  if (changes.some(c => c.type === "position" && !c.dragging)) markDirty();
+                  if (changes.some(c => (c.type === "position" && !c.dragging) || c.type === "remove")) markDirty();
                 }}
-                onEdgesChange={onEdgesChange}
+                onEdgesChange={changes => {
+                  onEdgesChange(changes);
+                  if (changes.some(c => c.type === "remove")) markDirty();
+                }}
                 onConnect={onConnect}
                 onEdgeClick={onEdgeClick}
                 onInit={setReactFlowInstance}
