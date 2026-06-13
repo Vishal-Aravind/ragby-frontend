@@ -32,74 +32,65 @@ export async function POST(req, { params }) {
   const nodes = body.nodes || [];
   const edges = body.edges || [];
 
-  // Delete all existing nodes (cascade deletes edges)
+  // Delete edges first, then nodes (avoid FK constraint issues)
+  await supabase.from("flow_edges").delete().eq("flow_id", flowId);
   await supabase.from("flow_nodes").delete().eq("flow_id", flowId);
 
   if (nodes.length === 0) {
-    return NextResponse.json({ status: "synced", nodes: 0, edges: 0 });
+    return NextResponse.json({ status: "synced", nodes: 0, edges: 0, idMap: {} });
   }
 
-  // Build ID map: local ID → new DB ID
+  // Build ID map: local ID → new DB UUID
   const idMap = {};
-
-  // Build button ID map per node: sourceHandle → correct button ID from current labels
-  // This fixes the issue where button labels are renamed but edge triggers still have old IDs
-  const buttonIdMap = {}; // { nodeLocalId: { oldTriggerId: newTriggerId } }
-
-  for (const node of nodes) {
+  const nodeRows = nodes.map((node) => {
     const newId = crypto.randomUUID();
     idMap[node.id] = newId;
-
-    // Build button label → ID mapping for buttons/list nodes
-    if (node.data?.type === "message_buttons" && node.data?.content?.buttons) {
-      buttonIdMap[node.id] = {};
-      node.data.content.buttons.forEach(btn => {
-        if (btn.label) {
-          const currentId = toId(btn.label);
-          buttonIdMap[node.id][currentId] = currentId;
-        }
-      });
-    }
-    if (node.data?.type === "message_list" && node.data?.content?.sections) {
-      buttonIdMap[node.id] = {};
-      node.data.content.sections.forEach(section => {
-        (section.rows || []).forEach(row => {
-          if (row.label) {
-            const currentId = toId(row.label);
-            buttonIdMap[node.id][currentId] = currentId;
-          }
-        });
-      });
-    }
-
-    await supabase.from("flow_nodes").insert({
+    return {
       id: newId,
       flow_id: flowId,
       type: node.data?.type || node.type,
       content: node.data?.content || node.content || {},
       is_start: node.data?.isStart || node.is_start || false,
       position: node.position || { x: 0, y: 0 },
-    });
+    };
+  });
+
+  // Bulk insert all nodes in one query
+  const { error: nodesError } = await supabase.from("flow_nodes").insert(nodeRows);
+  if (nodesError) {
+    console.error("nodes insert error:", nodesError);
+    return NextResponse.json({ error: nodesError.message }, { status: 500 });
   }
 
-  // Insert edges with remapped IDs
-  let edgesInserted = 0;
+  // Build edge rows with remapped IDs
+  const edgeRows = [];
   for (const edge of edges) {
     const fromId = idMap[edge.source || edge.from_node_id] || edge.source || edge.from_node_id;
-    const toId_  = idMap[edge.target || edge.to_node_id]   || edge.target || edge.to_node_id;
-    if (!fromId || !toId_) continue;
+    const toNodeId = idMap[edge.target || edge.to_node_id] || edge.target || edge.to_node_id;
+    if (!fromId || !toNodeId) continue;
 
-    // Get the trigger — use sourceHandle which is the current button ID
-    let trigger = edge.sourceHandle || edge.trigger || "next";
-
-    await supabase.from("flow_edges").insert({
+    const trigger = edge.sourceHandle || edge.trigger || "next";
+    edgeRows.push({
       flow_id: flowId,
       from_node_id: fromId,
       trigger,
-      to_node_id: toId_,
+      to_node_id: toNodeId,
     });
-    edgesInserted++;
   }
 
-  return NextResponse.json({ status: "synced", nodes: nodes.length, edges: edgesInserted, idMap });
+  // Bulk insert all edges in one query
+  if (edgeRows.length > 0) {
+    const { error: edgesError } = await supabase.from("flow_edges").insert(edgeRows);
+    if (edgesError) {
+      console.error("edges insert error:", edgesError);
+      return NextResponse.json({ error: edgesError.message }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({
+    status: "synced",
+    nodes: nodes.length,
+    edges: edgeRows.length,
+    idMap,
+  });
 }
