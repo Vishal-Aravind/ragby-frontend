@@ -24,20 +24,16 @@ export async function GET(req) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
   const { searchParams } = new URL(req.url);
   const project_id = searchParams.get("project_id");
   const catalog_id = searchParams.get("catalog_id");
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-  let url = `${backendUrl}/products?project_id=${project_id}`;
-  if (catalog_id) url += `&catalog_id=${catalog_id}`;
+  let query = supabase.from("products").select("*").eq("project_id", project_id).order("sort_order", { ascending: true });
+  if (catalog_id) query = query.eq("catalog_id", catalog_id);
 
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  const { data, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data || []);
 }
 
 export async function POST(req) {
@@ -45,18 +41,24 @@ export async function POST(req) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   const body = await req.json();
+  const { data, error } = await supabase
+    .from("products")
+    .insert({
+      project_id: body.project_id,
+      catalog_id: body.catalog_id,
+      name: body.name,
+      description: body.description || null,
+      price: body.price,
+      image_url: body.image_url || null,
+      category: body.category || null,
+      gst_percent: body.gst_percent ?? 0,
+      is_available: body.is_available ?? true,
+      sort_order: body.sort_order ?? 0,
+    })
+    .select()
+    .single();
 
-  const res = await fetch(`${backendUrl}/products`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
 }

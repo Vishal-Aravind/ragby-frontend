@@ -25,18 +25,19 @@ export async function PUT(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   const body = await req.json();
+  const update = {};
+  if ("status" in body) update.status = body.status;
+  if ("payment_status" in body) update.payment_status = body.payment_status;
+  if ("special_request" in body) update.special_request = body.special_request;
 
-  const res = await fetch(`${backendUrl}/orders/${orderId}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  const { data, error } = await supabase
+    .from("orders")
+    .update(update)
+    .eq("id", orderId)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
 }

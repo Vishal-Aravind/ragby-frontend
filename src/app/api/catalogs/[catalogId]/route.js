@@ -25,20 +25,21 @@ export async function PUT(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   const body = await req.json();
+  const update = {};
+  if ("name" in body) update.name = body.name;
+  if ("description" in body) update.description = body.description;
+  if ("is_active" in body) update.is_active = body.is_active;
 
-  const res = await fetch(`${backendUrl}/catalogs/${catalogId}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  const { data, error } = await supabase
+    .from("catalogs")
+    .update(update)
+    .eq("id", catalogId)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
 }
 
 export async function DELETE(req, { params }) {
@@ -47,13 +48,7 @@ export async function DELETE(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-
-  const res = await fetch(`${backendUrl}/catalogs/${catalogId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  await supabase.from("products").delete().eq("catalog_id", catalogId);
+  await supabase.from("catalogs").delete().eq("id", catalogId);
+  return NextResponse.json({ status: "deleted" });
 }

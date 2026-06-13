@@ -25,20 +25,26 @@ export async function PUT(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   const body = await req.json();
+  const update = {};
+  if ("name" in body) update.name = body.name;
+  if ("description" in body) update.description = body.description;
+  if ("price" in body) update.price = body.price;
+  if ("image_url" in body) update.image_url = body.image_url;
+  if ("category" in body) update.category = body.category;
+  if ("gst_percent" in body) update.gst_percent = body.gst_percent;
+  if ("is_available" in body) update.is_available = body.is_available;
+  if ("sort_order" in body) update.sort_order = body.sort_order;
 
-  const res = await fetch(`${backendUrl}/products/${productId}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  const { data, error } = await supabase
+    .from("products")
+    .update(update)
+    .eq("id", productId)
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
 }
 
 export async function DELETE(req, { params }) {
@@ -47,13 +53,6 @@ export async function DELETE(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-
-  const res = await fetch(`${backendUrl}/products/${productId}`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  await supabase.from("products").delete().eq("id", productId);
+  return NextResponse.json({ status: "deleted" });
 }
