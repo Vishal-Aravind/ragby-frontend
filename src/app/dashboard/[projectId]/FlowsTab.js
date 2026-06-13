@@ -11,6 +11,7 @@ import ReactFlow, {
   Handle,
   Position,
   Panel,
+  SelectionMode,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ const NODE_TYPES = [
   { value: "message",         label: "Message",           emoji: "💬" },
   { value: "message_buttons", label: "Message + Buttons", emoji: "🔘" },
   { value: "message_list",    label: "Message + List",    emoji: "📋" },
-  { value: "message_media", label: "Message + Image", emoji: "🖼️" },
+  { value: "message_media",   label: "Message + Image",   emoji: "🖼️" },
   { value: "message_video",    label: "Message + Video",    emoji: "🎥" },
   { value: "message_document", label: "Message + Document", emoji: "📄" },
   { value: "message_audio",    label: "Message + Audio",    emoji: "🎵" },
@@ -96,22 +97,19 @@ const SPECIAL_NODES = [
 ];
 
 // ─────────────────────────────────────────────────────────
-// FLOW NODE — all changes are local, no API on edit
-// ─────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────
 // MEDIA UPLOAD COMPONENT
 // ─────────────────────────────────────────────────────────
 const MEDIA_CONFIG = {
-  message_media:    { accept: "image/*",                                          label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
-  message_video:    { accept: "video/mp4,video/3gpp",                             label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
-  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt",  label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
-  message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",             label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
+  message_media:    { accept: "image/*",                                         label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
+  message_video:    { accept: "video/mp4,video/3gpp",                            label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
+  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
+  message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",        label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
 };
 
 function MediaUpload({ nodeType, urlKey, value, onChange }) {
-  const [mode, setMode]         = useState(value ? "upload" : "url");
+  const [mode, setMode]           = useState(value ? "upload" : "url");
   const [uploading, setUploading] = useState(false);
-  const [error, setError]       = useState("");
+  const [error, setError]         = useState("");
   const fileRef = useRef(null);
   const cfg = MEDIA_CONFIG[nodeType] || MEDIA_CONFIG.message_media;
 
@@ -139,12 +137,10 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
   };
 
   const handleClear = () => { onChange(urlKey, ""); setMode("url"); setError(""); if (fileRef.current) fileRef.current.value = ""; };
-
   const isUploaded = value && mode === "upload";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }} onClick={e => e.stopPropagation()}>
-      {/* Toggle */}
       <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
         {["url", "upload"].map(m => (
           <button key={m} type="button"
@@ -160,23 +156,20 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
         ))}
       </div>
 
-      {/* URL input */}
       {mode === "url" && (
         <input
           style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
-          placeholder={`https://example.com/file`}
+          placeholder="https://example.com/file"
           value={value || ""}
           onChange={e => onChange(urlKey, e.target.value)}
           onClick={e => e.stopPropagation()}
         />
       )}
 
-      {/* Upload */}
       {mode === "upload" && (
         <>
           {isUploaded ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {/* Image preview */}
               {nodeType === "message_media" && (
                 <div style={{ position: "relative", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                   <img src={value} alt="preview"
@@ -190,7 +183,6 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
                     }}>✕</button>
                 </div>
               )}
-              {/* Video/Document preview */}
               {nodeType !== "message_media" && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "6px 8px" }}>
                   <span style={{ fontSize: 16 }}>
@@ -224,12 +216,14 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────
+// FLOW NODE
+// ─────────────────────────────────────────────────────────
 function FlowNode({ id, data, selected }) {
   const [expanded, setExpanded]     = useState(false);
   const [showTypeDD, setShowTypeDD] = useState(false);
   const typeRef = useRef(null);
 
-  // Local state mirrors data — changes go up via data.onChange
   const type    = data.type    || "message";
   const content = data.content || {};
   const isStart = data.isStart || false;
@@ -401,10 +395,7 @@ function FlowNode({ id, data, selected }) {
 
           <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, cursor: "pointer", fontSize: 12, color: "#374151" }}>
             <input type="checkbox" checked={isStart}
-              onChange={e => {
-                // Unset all other start nodes via onSetStart
-                data.onSetStart(id, e.target.checked);
-              }} />
+              onChange={e => { data.onSetStart(id, e.target.checked); }} />
             Set as start node
           </label>
 
@@ -569,7 +560,6 @@ function FlowNode({ id, data, selected }) {
                   value={content.delay_unit || "seconds"}
                   onChange={e => {
                     updateContent("delay_unit", e.target.value);
-                    // Reset value to safe max if needed
                     const max = e.target.value === "hours" ? 22 : e.target.value === "minutes" ? 1320 : 79200;
                     if ((content.delay_seconds || 60) > max) updateContent("delay_seconds", max);
                   }}
@@ -640,15 +630,15 @@ export default function FlowsTab({ projectId }) {
   const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
 
   // Save state
-  const [saveStatus, setSaveStatus] = useState("saved"); // "saved" | "unsaved" | "saving"
-  const autoSaveTimer = useRef(null);
-  const isLoadingFlow = useRef(false);
+  const [saveStatus, setSaveStatus] = useState("saved");
+  const autoSaveTimer   = useRef(null);
+  const isLoadingFlow   = useRef(false);
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
   // Refs for save function to access latest state
-  const rfNodesRef = useRef([]);
-  const rfEdgesRef = useRef([]);
+  const rfNodesRef      = useRef([]);
+  const rfEdgesRef      = useRef([]);
   const selectedFlowRef = useRef(null);
 
   useEffect(() => { rfNodesRef.current = rfNodes; }, [rfNodes]);
@@ -666,12 +656,10 @@ export default function FlowsTab({ projectId }) {
 
   // ── Mark dirty and schedule auto-save ────────────────
   const markDirty = useCallback(() => {
-    if (isLoadingFlow.current) return; // Don't mark dirty during load
+    if (isLoadingFlow.current) return;
     setSaveStatus("unsaved");
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-    autoSaveTimer.current = setTimeout(() => {
-      doSave();
-    }, 30000);
+    autoSaveTimer.current = setTimeout(() => { doSave(); }, 30000);
   }, []);
 
   // ── Core save function ────────────────────────────────
@@ -686,7 +674,6 @@ export default function FlowsTab({ projectId }) {
     const toIdFn = (label) =>
       (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "next";
 
-    // Build map of nodeId → { oldHandleId: newHandleId } from current button labels
     const handleRemap = {};
     nodes.forEach(n => {
       if (n.data.type === "message_buttons") {
@@ -711,15 +698,11 @@ export default function FlowsTab({ projectId }) {
         is_start: n.data.isStart,
         position: n.position,
       })),
-      edges: edges.map(e => {
-        // Use current button label ID if available, fallback to sourceHandle
-        const sourceHandle = e.sourceHandle || "next";
-        return {
-          from_node_id: e.source,
-          trigger: sourceHandle,
-          to_node_id: e.target,
-        };
-      }),
+      edges: edges.map(e => ({
+        from_node_id: e.source,
+        trigger: e.sourceHandle || "next",
+        to_node_id: e.target,
+      })),
     };
 
     const res = await fetch(`/api/flows/${flow.id}/sync`, {
@@ -730,12 +713,8 @@ export default function FlowsTab({ projectId }) {
 
     if (res.ok) {
       const result = await res.json();
-      // Remap node IDs if server returned new ones
       if (result.idMap) {
-        setRfNodes(nds => nds.map(n => ({
-          ...n,
-          id: result.idMap[n.id] || n.id,
-        })));
+        setRfNodes(nds => nds.map(n => ({ ...n, id: result.idMap[n.id] || n.id })));
         setRfEdges(eds => eds.map(e => ({
           ...e,
           source: result.idMap[e.source] || e.source,
@@ -751,6 +730,7 @@ export default function FlowsTab({ projectId }) {
 
   // ── Load flow nodes from server ───────────────────────
   const loadFlow = async (flow) => {
+    if (isLoadingFlow.current) return;
     isLoadingFlow.current = true;
     setSaveStatus("saved");
     const res = await fetch(`/api/flows/${flow.id}/nodes`);
@@ -758,10 +738,12 @@ export default function FlowsTab({ projectId }) {
     const data = await res.json();
     buildGraph(data.nodes || [], data.edges || []);
     setSaveStatus("saved");
-    setTimeout(() => { isLoadingFlow.current = false; }, 500); // Small buffer after load
+    setTimeout(() => { isLoadingFlow.current = false; }, 500);
   };
 
   const buildGraph = (nodes, edges) => {
+    setRfNodes([]);
+    setRfEdges([]);
     const rfN = nodes.map((n, i) => ({
       id: n.id,
       type: "flowNode",
@@ -791,26 +773,20 @@ export default function FlowsTab({ projectId }) {
     content: n.content,
     isStart: n.is_start,
     onChange: (nodeId, patch) => {
-      // Get old buttons before update
       setRfNodes(nds => {
         const oldNode = nds.find(nd => nd.id === nodeId);
         const oldButtons = oldNode?.data?.content?.buttons || [];
         const newButtons = patch?.content?.buttons || oldButtons;
 
-        // If buttons changed, remap edge sourceHandles
         if (patch?.content?.buttons && oldButtons.length === newButtons.length) {
           const toIdFn = (label) =>
             (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "next";
-
-          // Build old→new handle map
           const handleMap = {};
           oldButtons.forEach((oldBtn, idx) => {
             const oldHandle = toIdFn(oldBtn.label);
             const newHandle = toIdFn(newButtons[idx]?.label || "");
             if (oldHandle !== newHandle) handleMap[oldHandle] = newHandle;
           });
-
-          // Update edges with remapped sourceHandles
           if (Object.keys(handleMap).length > 0) {
             setRfEdges(eds => eds.map(e =>
               e.source === nodeId && handleMap[e.sourceHandle]
@@ -840,11 +816,9 @@ export default function FlowsTab({ projectId }) {
   });
 
   const selectFlow = async (flow) => {
-    // Save current flow before switching (only if dirty and not loading)
     if (selectedFlowRef.current && saveStatus === "unsaved" && !isLoadingFlow.current) {
       await doSave();
     }
-    // Clear canvas before loading new flow
     setRfNodes([]);
     setRfEdges([]);
     setSelectedFlow(flow);
@@ -965,7 +939,6 @@ export default function FlowsTab({ projectId }) {
     setShowFlowList(true);
   };
 
-  // Cleanup timer on unmount
   useEffect(() => {
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, []);
@@ -981,9 +954,7 @@ export default function FlowsTab({ projectId }) {
         <AlertCircle size={12} /> Unsaved changes
       </span>
     );
-    return (
-      <span style={{ fontSize: 12, color: "#10b981" }}>✓ Saved</span>
-    );
+    return <span style={{ fontSize: 12, color: "#10b981" }}>✓ Saved</span>;
   };
 
   return (
@@ -1082,6 +1053,9 @@ export default function FlowsTab({ projectId }) {
                 <p style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5 }}>
                   Drag onto canvas. Changes auto-save every 30s.
                 </p>
+                <p style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5, marginTop: 4 }}>
+                  Hold <strong>Shift</strong> + drag to select multiple nodes.
+                </p>
               </div>
             </div>
 
@@ -1096,19 +1070,32 @@ export default function FlowsTab({ projectId }) {
                 handleAddNode(type, position);
               }}>
               <ReactFlow
-                nodes={rfNodes} edges={rfEdges}
-                onNodesChange={changes => { onNodesChange(changes); if (changes.some(c => c.type === "position" && !c.dragging)) markDirty(); }} onEdgesChange={onEdgesChange}
-                onConnect={onConnect} onEdgeClick={onEdgeClick}
+                nodes={rfNodes}
+                edges={rfEdges}
+                onNodesChange={changes => {
+                  onNodesChange(changes);
+                  if (changes.some(c => c.type === "position" && !c.dragging)) markDirty();
+                }}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onEdgeClick={onEdgeClick}
                 onInit={setReactFlowInstance}
-                nodeTypes={nodeTypes} fitView
+                nodeTypes={nodeTypes}
+                fitView
+                // ── Pan & zoom ──────────────────────────────
                 panOnScroll={true}
                 panOnScrollMode="free"
-                panOnDrag={true}
+                panOnDrag={[1, 2]}          // middle-click or right-click drags canvas
                 zoomOnPinch={true}
                 zoomOnScroll={false}
                 zoomOnDoubleClick={false}
-                selectionOnDrag={false}
-                style={{ cursor: "grab" }}
+                // ── Selection ───────────────────────────────
+                selectionOnDrag={true}       // drag on empty space = rubber-band select
+                selectionMode={SelectionMode.Partial}  // touch nodes partially to select
+                multiSelectionKeyCode="Shift"          // hold Shift to add to selection
+                selectionKeyCode="Shift"               // Shift+drag = selection box
+                deleteKeyCode="Delete"                 // Delete key removes selected nodes/edges
+                style={{ cursor: "default" }}
               >
                 <Background color="#94a3b8" gap={24} size={1.5} variant="dots" />
                 <Controls />
