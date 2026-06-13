@@ -32,7 +32,23 @@ export async function POST(req, { params }) {
   const nodes = body.nodes || [];
   const edges = body.edges || [];
 
-  // Delete edges first, then nodes (avoid FK constraint issues)
+  // Step 1: Get all node IDs for this flow
+  const { data: existingNodes } = await supabase
+    .from("flow_nodes")
+    .select("id")
+    .eq("flow_id", flowId);
+
+  const existingNodeIds = (existingNodes || []).map(n => n.id);
+
+  // Step 2: Clear sessions that reference these nodes (fixes FK constraint)
+  if (existingNodeIds.length > 0) {
+    await supabase
+      .from("whatsapp_sessions")
+      .update({ current_node_id: null })
+      .in("current_node_id", existingNodeIds);
+  }
+
+  // Step 3: Delete edges then nodes
   await supabase.from("flow_edges").delete().eq("flow_id", flowId);
   await supabase.from("flow_nodes").delete().eq("flow_id", flowId);
 
@@ -40,7 +56,7 @@ export async function POST(req, { params }) {
     return NextResponse.json({ status: "synced", nodes: 0, edges: 0, idMap: {} });
   }
 
-  // Build ID map: local ID → new DB UUID
+  // Step 4: Build ID map and bulk insert nodes
   const idMap = {};
   const nodeRows = nodes.map((node) => {
     const newId = crypto.randomUUID();
@@ -55,30 +71,26 @@ export async function POST(req, { params }) {
     };
   });
 
-  // Bulk insert all nodes in one query
   const { error: nodesError } = await supabase.from("flow_nodes").insert(nodeRows);
   if (nodesError) {
     console.error("nodes insert error:", nodesError);
     return NextResponse.json({ error: nodesError.message }, { status: 500 });
   }
 
-  // Build edge rows with remapped IDs
+  // Step 5: Bulk insert edges
   const edgeRows = [];
   for (const edge of edges) {
     const fromId = idMap[edge.source || edge.from_node_id] || edge.source || edge.from_node_id;
     const toNodeId = idMap[edge.target || edge.to_node_id] || edge.target || edge.to_node_id;
     if (!fromId || !toNodeId) continue;
-
-    const trigger = edge.sourceHandle || edge.trigger || "next";
     edgeRows.push({
       flow_id: flowId,
       from_node_id: fromId,
-      trigger,
+      trigger: edge.sourceHandle || edge.trigger || "next",
       to_node_id: toNodeId,
     });
   }
 
-  // Bulk insert all edges in one query
   if (edgeRows.length > 0) {
     const { error: edgesError } = await supabase.from("flow_edges").insert(edgeRows);
     if (edgesError) {
