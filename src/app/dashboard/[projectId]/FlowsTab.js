@@ -49,6 +49,7 @@ const NODE_COLORS = {
   back_to_menu:     { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
   talk_to_human:    { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
   time_delay:       { bg: "#f8fafc", border: "#94a3b8", text: "#334155", badge: "#f1f5f9" },
+  message_shop:     { bg: "#f0fdf4", border: "#4ade80", text: "#14532d", badge: "#dcfce7" },
   // Legacy types (old nodes saved in DB before rename)
   text:             { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
   buttons:          { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af", badge: "#dbeafe" },
@@ -63,7 +64,7 @@ const NODE_LABELS = {
   message_media: "Image", message_video: "Video", message_document: "Document",
   message_audio: "Audio", message_location: "Location", message_contact: "Contact",
   ask_a_question: "Ask AI", back_to_menu: "Back to Menu", talk_to_human: "Handoff",
-  time_delay: "Time Delay",
+  time_delay: "Time Delay", message_shop: "Shop",
   // Legacy
   text: "Text", buttons: "Buttons", list: "List", rag: "AI Answer",
   handoff: "Handoff", cta_url: "Send Link",
@@ -87,6 +88,7 @@ const EMPTY_CONTENT = {
   talk_to_human:   { body: "Connecting you to our team. Please wait..." },
   time_delay:      { delay_seconds: 60, delay_unit: "seconds" },
   call_us:         { body: "Need help? Call us directly!", phone: "" },
+  message_shop:    { body: "Browse our menu and add items to your cart 🛒\nSelect multiple items at once", button_text: "View Menu", catalog_id: "" },
 };
 
 const SPECIAL_NODES = [
@@ -94,16 +96,17 @@ const SPECIAL_NODES = [
   { type: "back_to_menu",   label: "Back to Menu",   emoji: "↩️", desc: "Restarts flow" },
   { type: "talk_to_human",  label: "Talk to Human",  emoji: "👤", desc: "Human handoff" },
   { type: "time_delay",     label: "Time Delay",     emoji: "⏱️", desc: "Wait before next message" },
+  { type: "message_shop",   label: "Shop",           emoji: "🛒", desc: "Opens product catalog" },
 ];
 
 // ─────────────────────────────────────────────────────────
 // MEDIA UPLOAD COMPONENT
 // ─────────────────────────────────────────────────────────
 const MEDIA_CONFIG = {
-  message_media:    { accept: "image/*",                                         label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
-  message_video:    { accept: "video/mp4,video/3gpp",                            label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
-  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
-  message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",        label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
+  message_media:    { accept: "image/*",                                          label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
+  message_video:    { accept: "video/mp4,video/3gpp",                             label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
+  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt",  label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
+  message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",         label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
 };
 
 function MediaUpload({ nodeType, urlKey, value, onChange }) {
@@ -141,6 +144,7 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }} onClick={e => e.stopPropagation()}>
+      {/* Toggle */}
       <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
         {["url", "upload"].map(m => (
           <button key={m} type="button"
@@ -156,6 +160,7 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
         ))}
       </div>
 
+      {/* URL input */}
       {mode === "url" && (
         <input
           style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
@@ -166,10 +171,12 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
         />
       )}
 
+      {/* Upload */}
       {mode === "upload" && (
         <>
           {isUploaded ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {/* Image preview */}
               {nodeType === "message_media" && (
                 <div style={{ position: "relative", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
                   <img src={value} alt="preview"
@@ -183,6 +190,7 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
                     }}>✕</button>
                 </div>
               )}
+              {/* Video/Document preview */}
               {nodeType !== "message_media" && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "6px 8px" }}>
                   <span style={{ fontSize: 16 }}>
@@ -228,7 +236,7 @@ function FlowNode({ id, data, selected }) {
   const content = data.content || {};
   const isStart = data.isStart || false;
 
-  const isSpecial = ["ask_a_question", "back_to_menu", "talk_to_human", "time_delay"].includes(type);
+  const isSpecial = ["ask_a_question", "back_to_menu", "talk_to_human", "time_delay", "message_shop"].includes(type);
   const special   = SPECIAL_NODES.find(s => s.type === type);
   const colors    = NODE_COLORS[type] || NODE_COLORS.message;
   const label     = special?.label || NODE_TYPES.find(t => t.value === type)?.label || "Message";
@@ -340,6 +348,8 @@ function FlowNode({ id, data, selected }) {
         }}>
           {content.body || (type === "time_delay"
             ? `⏱️ Wait ${content.delay_seconds || 60} ${content.delay_unit || "seconds"}`
+            : type === "message_shop"
+            ? `🛒 ${content.catalog_id ? "Catalog linked ✓" : "No catalog selected"}`
             : isSpecial ? special?.desc : "Click to edit...")}
         </p>
 
@@ -399,13 +409,13 @@ function FlowNode({ id, data, selected }) {
             Set as start node
           </label>
 
-          {isSpecial && (
+          {isSpecial && type !== "message_shop" && (
             <p style={{ fontSize: 11, color: colors.text, background: colors.badge, borderRadius: 6, padding: "4px 8px", marginBottom: 8 }}>
               {special?.desc}
             </p>
           )}
 
-          {type !== "back_to_menu" && (
+          {type !== "back_to_menu" && type !== "time_delay" && type !== "message_shop" && (
             <>
               <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Message</p>
               <textarea
@@ -600,6 +610,49 @@ function FlowNode({ id, data, selected }) {
               </p>
             </div>
           )}
+
+          {type === "message_shop" && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              <p style={{ fontSize: 11, color: colors.text, background: colors.badge, borderRadius: 6, padding: "4px 8px" }}>
+                🛒 Sends a "View Menu" link to customer. They browse, add items, then return to WhatsApp to confirm and pay.
+              </p>
+              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Message</p>
+              <textarea
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                rows={3}
+                value={content.body || ""}
+                onChange={e => updateContent("body", e.target.value)}
+                placeholder="Browse our menu and add items to your cart 🛒"
+                onClick={e => e.stopPropagation()}
+              />
+              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Button Text</p>
+              <input
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box" }}
+                placeholder="View Menu"
+                value={content.button_text || "View Menu"}
+                onChange={e => updateContent("button_text", e.target.value)}
+                onClick={e => e.stopPropagation()}
+              />
+              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Select Catalog</p>
+              <select
+                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", background: "white", boxSizing: "border-box" }}
+                value={content.catalog_id || ""}
+                onChange={e => updateContent("catalog_id", e.target.value)}
+                onClick={e => e.stopPropagation()}
+              >
+                <option value="">— Select a catalog —</option>
+                {(data.catalogs || []).map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}{!cat.is_active ? " (inactive)" : ""}</option>
+                ))}
+              </select>
+              {!content.catalog_id && (
+                <p style={{ fontSize: 10, color: "#f59e0b" }}>⚠️ Select a catalog to link this node to a menu</p>
+              )}
+              <p style={{ fontSize: 10, color: "#94a3b8" }}>
+                💡 Connect a node after this — it runs after payment is confirmed
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -613,6 +666,7 @@ const nodeTypes = { flowNode: FlowNode };
 // ─────────────────────────────────────────────────────────
 export default function FlowsTab({ projectId }) {
   const [flows, setFlows]               = useState([]);
+  const [catalogs, setCatalogs]         = useState([]);
   const [loading, setLoading]           = useState(true);
   const [selectedFlow, setSelectedFlow] = useState(null);
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
@@ -631,8 +685,8 @@ export default function FlowsTab({ projectId }) {
 
   // Save state
   const [saveStatus, setSaveStatus] = useState("saved");
-  const autoSaveTimer   = useRef(null);
-  const isLoadingFlow   = useRef(false);
+  const autoSaveTimer    = useRef(null);
+  const isLoadingFlow    = useRef(false);
   const reactFlowWrapper = useRef(null);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
@@ -640,10 +694,12 @@ export default function FlowsTab({ projectId }) {
   const rfNodesRef      = useRef([]);
   const rfEdgesRef      = useRef([]);
   const selectedFlowRef = useRef(null);
+  const catalogsRef     = useRef([]);
 
   useEffect(() => { rfNodesRef.current = rfNodes; }, [rfNodes]);
   useEffect(() => { rfEdgesRef.current = rfEdges; }, [rfEdges]);
   useEffect(() => { selectedFlowRef.current = selectedFlow; }, [selectedFlow]);
+  useEffect(() => { catalogsRef.current = catalogs; }, [catalogs]);
 
   const fetchFlows = async () => {
     setLoading(true);
@@ -653,6 +709,13 @@ export default function FlowsTab({ projectId }) {
   };
 
   useEffect(() => { fetchFlows(); }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/catalogs?project_id=${projectId}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setCatalogs(data || []));
+  }, [projectId]);
 
   // ── Mark dirty and schedule auto-save ────────────────
   const markDirty = useCallback(() => {
@@ -769,6 +832,7 @@ export default function FlowsTab({ projectId }) {
 
   // Build node data with callbacks
   const buildNodeData = (n) => ({
+    catalogs: catalogsRef.current,
     type: n.type,
     content: n.content,
     isStart: n.is_start,
@@ -954,7 +1018,9 @@ export default function FlowsTab({ projectId }) {
         <AlertCircle size={12} /> Unsaved changes
       </span>
     );
-    return <span style={{ fontSize: 12, color: "#10b981" }}>✓ Saved</span>;
+    return (
+      <span style={{ fontSize: 12, color: "#10b981" }}>✓ Saved</span>
+    );
   };
 
   return (
@@ -1085,19 +1151,17 @@ export default function FlowsTab({ projectId }) {
                 onInit={setReactFlowInstance}
                 nodeTypes={nodeTypes}
                 fitView
-                // ── Pan & zoom ──────────────────────────────
                 panOnScroll={true}
                 panOnScrollMode="free"
-                panOnDrag={[1, 2]}          // middle-click or right-click drags canvas
+                panOnDrag={[1, 2]}
                 zoomOnPinch={true}
                 zoomOnScroll={false}
                 zoomOnDoubleClick={false}
-                // ── Selection ───────────────────────────────
-                selectionOnDrag={true}       // drag on empty space = rubber-band select
-                selectionMode={SelectionMode.Partial}  // touch nodes partially to select
-                multiSelectionKeyCode="Shift"          // hold Shift to add to selection
-                selectionKeyCode="Shift"               // Shift+drag = selection box
-                deleteKeyCode="Delete"                 // Delete key removes selected nodes/edges
+                selectionOnDrag={true}
+                selectionMode={SelectionMode.Partial}
+                multiSelectionKeyCode="Shift"
+                selectionKeyCode="Shift"
+                deleteKeyCode="Delete"
                 style={{ cursor: "default" }}
               >
                 <Background color="#94a3b8" gap={24} size={1.5} variant="dots" />
