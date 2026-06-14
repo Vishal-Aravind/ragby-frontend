@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ShoppingCart, Search, X, Plus, Minus, ChevronRight, Check } from "lucide-react";
 
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "https://ragby-backend.onrender.com";
-
 export default function ShopPage() {
   const { projectId } = useParams();
   const searchParams = useSearchParams();
@@ -18,7 +16,7 @@ export default function ShopPage() {
   const [loading, setLoading] = useState(true);
 
   // ── Cart ──────────────────────────────────────────────
-  const [cart, setCart] = useState({});  // { productId: quantity }
+  const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
 
   // ── UI ────────────────────────────────────────────────
@@ -28,9 +26,8 @@ export default function ShopPage() {
   const [submitted, setSubmitted] = useState(false);
   const [deliveryType, setDeliveryType] = useState("");
   const [deliverySelected, setDeliverySelected] = useState(false);
-  const [orderId, setOrderId] = useState(null);
 
-  // ── Load config + products ────────────────────────────
+  // ── Load config + products via Next.js API (Supabase direct) ─
   useEffect(() => {
     if (!projectId) return;
 
@@ -38,8 +35,8 @@ export default function ShopPage() {
       setLoading(true);
       try {
         const [configRes, productsRes] = await Promise.all([
-          fetch(`${BACKEND}/public/shop/${projectId}/config`),
-          fetch(`${BACKEND}/public/shop/${projectId}/products${catalogId ? `?catalog_id=${catalogId}` : ""}`),
+          fetch(`/api/public/shop/${projectId}?type=config`),
+          fetch(`/api/public/shop/${projectId}?type=products${catalogId ? `&catalog_id=${catalogId}` : ""}`),
         ]);
 
         const configData = configRes.ok ? await configRes.json() : {};
@@ -48,12 +45,13 @@ export default function ShopPage() {
         setConfig(configData);
         setProducts(productsData);
 
-        // Set default delivery type
         const types = configData.delivery_types || ["Takeaway"];
         setDeliveryType(types[0]);
         if (types.length === 1) setDeliverySelected(true);
       } catch (e) {
         console.error("Load error:", e);
+        setConfig({});
+        setProducts([]);
       }
       setLoading(false);
     };
@@ -61,7 +59,6 @@ export default function ShopPage() {
     loadData();
   }, [projectId, catalogId]);
 
-  // ── Accent color from config ──────────────────────────
   const accent = config?.accent_color || "#16a34a";
   const currency = config?.currency || "₹";
   const deliveryTypes = config?.delivery_types || ["Takeaway"];
@@ -106,7 +103,6 @@ export default function ShopPage() {
     .map(p => ({ ...p, quantity: cart[p.id] }));
 
   const cartCount = Object.values(cart).reduce((a, b) => a + b, 0);
-
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const gstPct = config?.gst_percent || 0;
   const gstAmount = Math.round(subtotal * gstPct) / 100;
@@ -117,7 +113,7 @@ export default function ShopPage() {
     if (!phone || cartItems.length === 0) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`${BACKEND}/public/shop/submit-cart`, {
+      const res = await fetch("/api/public/shop/submit-cart", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -136,8 +132,6 @@ export default function ShopPage() {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setOrderId(data.order_id);
         setSubmitted(true);
         setCartOpen(false);
       }
@@ -149,16 +143,16 @@ export default function ShopPage() {
 
   // ── Open WhatsApp ─────────────────────────────────────
   const openWhatsApp = () => {
-    const waPhone = phone.startsWith("+") ? phone : `+${phone}`;
-    window.location.href = `https://wa.me/${waPhone.replace("+", "")}`;
+    const waPhone = phone.startsWith("+") ? phone.replace("+", "") : phone;
+    window.location.href = `https://wa.me/${waPhone}`;
   };
 
   // ── Loading state ─────────────────────────────────────
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f8faf8" }}>
       <div className="text-center space-y-3">
-        <div className="w-10 h-10 border-3 border-gray-200 rounded-full animate-spin mx-auto"
-          style={{ borderTopColor: accent, borderWidth: 3 }} />
+        <div className="w-10 h-10 rounded-full animate-spin mx-auto"
+          style={{ border: `3px solid #e5e7eb`, borderTopColor: "#16a34a" }} />
         <p className="text-sm text-gray-400">Loading menu...</p>
       </div>
     </div>
@@ -257,7 +251,7 @@ export default function ShopPage() {
 
       {/* ── Category tabs ── */}
       {categories.length > 1 && (
-        <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide">
+        <div className="flex gap-2 px-4 py-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           {categories.map(cat => (
             <button key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -277,7 +271,6 @@ export default function ShopPage() {
       <div className="px-4 space-y-6">
         {Object.entries(grouped).map(([category, items]) => (
           <div key={category}>
-            {/* Category header */}
             {(activeCategory === "All" || Object.keys(grouped).length > 1) && (
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="font-bold text-gray-900">{category}</h2>
@@ -291,19 +284,16 @@ export default function ShopPage() {
                 const qty = cart[product.id] || 0;
                 return (
                   <div key={product.id}
-                    className="bg-white rounded-xl p-3 flex gap-3 shadow-sm border border-gray-100"
-                    style={qty > 0 ? { borderColor: accent, borderWidth: 1.5 } : {}}>
+                    className="bg-white rounded-xl p-3 flex gap-3 shadow-sm border"
+                    style={{ borderColor: qty > 0 ? accent : "#f3f4f6", borderWidth: qty > 0 ? 1.5 : 1 }}>
 
-                    {/* Product image */}
                     {product.image_url && (
                       <img src={product.image_url} alt={product.name}
                         className="w-20 h-20 object-cover rounded-lg shrink-0" />
                     )}
 
-                    {/* Product info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start gap-1">
-                        {/* Veg/Non-veg indicator */}
                         <div className="w-4 h-4 border-2 rounded shrink-0 mt-0.5 flex items-center justify-center"
                           style={{ borderColor: accent }}>
                           <div className="w-2 h-2 rounded-full" style={{ background: accent }} />
@@ -318,7 +308,6 @@ export default function ShopPage() {
                       </p>
                     </div>
 
-                    {/* Add/remove button */}
                     <div className="shrink-0 flex items-end">
                       {qty === 0 ? (
                         <button
@@ -380,12 +369,9 @@ export default function ShopPage() {
       {/* ── Cart modal ── */}
       {cartOpen && (
         <div className="fixed inset-0 z-40 flex flex-col justify-end">
-          {/* Backdrop */}
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setCartOpen(false)} />
 
-          {/* Sheet */}
           <div className="relative bg-white rounded-t-2xl max-h-[85vh] flex flex-col">
-            {/* Cart header */}
             <div className="flex items-center justify-between px-5 py-4 border-b">
               <h2 className="font-bold text-gray-900 flex items-center gap-2">
                 <ShoppingCart size={18} /> Your Cart
@@ -396,7 +382,6 @@ export default function ShopPage() {
               </button>
             </div>
 
-            {/* Cart items */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {cartItems.map(item => (
                 <div key={item.id} className="flex items-center gap-3">
@@ -430,7 +415,6 @@ export default function ShopPage() {
               ))}
             </div>
 
-            {/* Cart summary */}
             <div className="px-5 py-4 border-t space-y-2">
               <div className="flex justify-between text-sm text-gray-600">
                 <span>Subtotal</span>
