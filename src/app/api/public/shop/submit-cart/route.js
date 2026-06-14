@@ -16,6 +16,9 @@ export async function POST(req) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Normalize phone — strip leading +
+    const phoneNormalized = phone.replace(/^\+/, "");
+
     // Get shop config for GST
     const { data: config } = await supabase
       .from("shop_config")
@@ -27,15 +30,15 @@ export async function POST(req) {
 
     // Calculate totals
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const gst_amount = Math.round(subtotal * gst_percent) / 100;
-    const total = subtotal + gst_amount;
+    const gst_amount = parseFloat((subtotal * gst_percent / 100).toFixed(2));
+    const total = parseFloat((subtotal + gst_amount).toFixed(2));
 
-    // Create order
-    const { data: order, error } = await supabase
+    // Create order — no catalog_id column in orders table
+    const { data: order, error: orderError } = await supabase
       .from("orders")
       .insert({
         project_id,
-        phone_number: phone.replace("+", ""),
+        phone_number: phoneNormalized,
         items,
         subtotal,
         gst_amount,
@@ -43,39 +46,32 @@ export async function POST(req) {
         status: "pending",
         payment_status: "unpaid",
         delivery_type: delivery_type || "Takeaway",
-        catalog_id: catalog_id || null,
       })
       .select()
       .single();
 
-    if (error) {
-      console.error("Order insert error:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (orderError) {
+      console.error("Order insert error:", orderError);
+      return NextResponse.json({ error: orderError.message }, { status: 500 });
     }
 
-    // Update whatsapp session to awaiting_cart_confirm
-    await supabase
+    // Upsert session so it works even if no session exists yet
+    const { error: sessionError } = await supabase
       .from("whatsapp_sessions")
-      .update({
+      .upsert({
+        project_id,
+        phone_number: phoneNormalized,
         mode: "awaiting_cart_confirm",
         metadata: { order_id: order.id, catalog_id: catalog_id || "" },
-      })
-      .eq("project_id", project_id)
-      .eq("phone_number", phone.replace("+", ""));
+      }, { onConflict: "project_id,phone_number" });
 
-    // Send WhatsApp message via backend (fire and forget)
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-    if (backendUrl) {
-      fetch(`${backendUrl}/public/shop/notify-cart`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_id, phone, order_id: order.id }),
-      }).catch(e => console.log("notify-cart fire-and-forget failed:", e));
+    if (sessionError) {
+      console.error("Session upsert error:", sessionError);
     }
 
     return NextResponse.json({ status: "ok", order_id: order.id });
   } catch (e) {
     console.error("submit-cart error:", e);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Internal error" }, { status: 500 });
   }
 }
