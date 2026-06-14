@@ -142,9 +142,12 @@ export default function ShopPage() {
   };
 
   // ── Open WhatsApp ─────────────────────────────────────
+  // const openWhatsApp = () => {
+  //   const waPhone = phone.startsWith("+") ? phone.replace("+", "") : phone;
+  //   window.location.href = `https://wa.me/${waPhone}`;
+  // };
   const openWhatsApp = () => {
-    const waPhone = phone.startsWith("+") ? phone.replace("+", "") : phone;
-    window.location.href = `https://wa.me/${waPhone}`;
+    window.location.href = `https://wa.me/15556458639`;
   };
 
   // ── Loading state ─────────────────────────────────────
