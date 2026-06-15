@@ -142,13 +142,12 @@ export default function ShopPage() {
   };
 
   // ── Open WhatsApp ─────────────────────────────────────
-  // const openWhatsApp = () => {
-  //   const waPhone = phone.startsWith("+") ? phone.replace("+", "") : phone;
-  //   window.location.href = `https://wa.me/${waPhone}`;
-  // };
   const openWhatsApp = () => {
-    window.location.href = `https://wa.me/15556458639`;
+    const bizPhone = (config?.store_phone || "").replace(/\D/g, "");
+    const target = bizPhone || "15556458639"; // fallback to test number
+    window.location.href = `https://wa.me/${target}`;
   };
+
 
   // ── Loading state ─────────────────────────────────────
   if (loading) return (
