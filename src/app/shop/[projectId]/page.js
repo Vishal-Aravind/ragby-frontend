@@ -9,6 +9,7 @@ export default function ShopPage() {
   const searchParams = useSearchParams();
   const phone = searchParams.get("phone") || "";
   const catalogId = searchParams.get("catalog") || "";
+  const orderId = searchParams.get("order_id") || "";
 
   const [config, setConfig] = useState(null);
   const [products, setProducts] = useState([]);
@@ -27,17 +28,41 @@ export default function ShopPage() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const [configRes, productsRes] = await Promise.all([
+        const promises = [
           fetch(`/api/public/shop/${projectId}?type=config`),
           fetch(`/api/public/shop/${projectId}?type=products${catalogId ? `&catalog_id=${catalogId}` : ""}`),
-        ]);
-        const configData = configRes.ok ? await configRes.json() : {};
-        const productsData = productsRes.ok ? await productsRes.json() : [];
+        ];
+        if (orderId) {
+          promises.push(fetch(`/api/public/shop/order/${orderId}`));
+        }
+
+        const results = await Promise.all(promises);
+        const configData = results[0].ok ? await results[0].json() : {};
+        const productsData = results[1].ok ? await results[1].json() : [];
+
         setConfig(configData);
         setProducts(productsData);
+
         const types = configData.delivery_types || ["Takeaway"];
         setDeliveryType(types[0]);
         if (types.length === 1) setDeliverySelected(true);
+
+        // Pre-populate cart from existing order (Add More flow)
+        if (orderId && results[2]?.ok) {
+          const orderData = await results[2].json();
+          const existingItems = orderData.items || [];
+          if (existingItems.length > 0) {
+            const cartMap = {};
+            existingItems.forEach(item => {
+              cartMap[item.product_id] = item.quantity;
+            });
+            setCart(cartMap);
+          }
+          if (orderData.delivery_type) {
+            setDeliveryType(orderData.delivery_type);
+            setDeliverySelected(true);
+          }
+        }
       } catch (e) {
         console.error("Load error:", e);
         setConfig({});
@@ -46,7 +71,7 @@ export default function ShopPage() {
       setLoading(false);
     };
     loadData();
-  }, [projectId, catalogId]);
+  }, [projectId, catalogId, orderId]);
 
   const accent = config?.accent_color || "#16a34a";
   const currency = config?.currency || "₹";
@@ -91,6 +116,7 @@ export default function ShopPage() {
           phone,
           project_id: projectId,
           catalog_id: catalogId,
+          order_id: orderId || undefined, // if present, backend updates instead of creating new
           items: cartItems.map(item => ({
             product_id: item.id,
             name: item.name,
@@ -107,10 +133,9 @@ export default function ShopPage() {
     setSubmitting(false);
   };
 
-  // Opens the existing chat with the business WhatsApp number
   const openWhatsApp = () => {
     const bizPhone = (config?.store_phone || "").replace(/\D/g, "");
-    const target = bizPhone || "15556458639"; // fallback to test number
+    const target = bizPhone || "15556458639";
     window.location.href = `https://wa.me/${target}`;
   };
 
@@ -171,7 +196,6 @@ export default function ShopPage() {
   return (
     <div className="min-h-screen pb-24" style={{ background: "#f8faf8", fontFamily: "system-ui, -apple-system, sans-serif" }}>
 
-      {/* Header */}
       <div className="sticky top-0 z-20 px-4 pt-4 pb-3 shadow-sm" style={{ background: accent }}>
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -196,9 +220,11 @@ export default function ShopPage() {
             </button>
           )}
         </div>
+        {orderId && cartCount > 0 && (
+          <p className="text-white text-xs opacity-80 mt-2">✓ Your previous cart has been restored</p>
+        )}
       </div>
 
-      {/* Category tabs */}
       {categories.length > 1 && (
         <div className="flex gap-2 px-4 py-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           {categories.map(cat => (
@@ -215,7 +241,6 @@ export default function ShopPage() {
         </div>
       )}
 
-      {/* Products */}
       <div className="px-4 space-y-6">
         {Object.entries(grouped).map(([category, items]) => (
           <div key={category}>
@@ -286,7 +311,6 @@ export default function ShopPage() {
         )}
       </div>
 
-      {/* Cart bar */}
       {cartCount > 0 && !cartOpen && (
         <div className="fixed bottom-0 left-0 right-0 px-4 pb-4 z-30">
           <button onClick={() => setCartOpen(true)}
@@ -299,7 +323,6 @@ export default function ShopPage() {
         </div>
       )}
 
-      {/* Cart modal */}
       {cartOpen && (
         <div className="fixed inset-0 z-40 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black bg-opacity-40" onClick={() => setCartOpen(false)} />
