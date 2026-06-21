@@ -127,7 +127,13 @@ function WhatsAppItem({ projectId }) {
     checkStatus();
   }, [projectId]);
 
-  // Listen for Meta embedded signup events
+  // NOTE: We intentionally do NOT call /api/whatsapp/connect from the
+  // postMessage "FINISH" event anymore. That event from Meta's embedded
+  // signup popup does not reliably include phone_number_id/waba_id in
+  // data.data, which was causing an empty row to overwrite the correct
+  // one saved by /api/whatsapp/onboard (which fetches the real IDs via
+  // the Graph API using the OAuth code). We only use this listener now
+  // to detect CANCEL / ERROR and to stop the loading spinner.
   useEffect(() => {
     const handler = async (event) => {
       if (!event.origin.endsWith("facebook.com")) return;
@@ -136,29 +142,6 @@ function WhatsAppItem({ projectId }) {
       catch { return; }
 
       if (data?.type === "WA_EMBEDDED_SIGNUP") {
-        if (data.event === "FINISH") {
-          const { phone_number_id, waba_id } = data.data || {};
-          try {
-            const res = await fetch("/api/whatsapp/connect", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ projectId, phone_number_id, waba_id }),
-            });
-            if (res.ok) {
-              setConnected(true);
-              toast.success("WhatsApp connected successfully!");
-              // Refresh status to get phone number
-              const status = await fetch(`/api/whatsapp/status/${projectId}`);
-              if (status.ok) {
-                const d = await status.json();
-                if (d.display_phone_number) setPhoneNumber(d.display_phone_number);
-              }
-            } else {
-              toast.error("Failed to save WhatsApp connection.");
-            }
-          } catch { toast.error("Failed to save WhatsApp connection."); }
-          setLoading(false);
-        }
         if (data.event === "CANCEL") {
           toast.error("WhatsApp setup cancelled.");
           setLoading(false);
@@ -167,6 +150,9 @@ function WhatsAppItem({ projectId }) {
           toast.error("WhatsApp setup error. Please try again.");
           setLoading(false);
         }
+        // FINISH is intentionally ignored here — /api/whatsapp/onboard
+        // (triggered from the FB.login callback below) is the single
+        // source of truth for saving phone_number_id / waba_id.
       }
     };
     window.addEventListener("message", handler);
@@ -186,7 +172,9 @@ function WhatsAppItem({ projectId }) {
           setLoading(false);
           return;
         }
-        // Exchange code via our backend
+        // Exchange code via our backend — this is the ONLY path that
+        // saves phone_number_id / waba_id, fetched directly from the
+        // Graph API (reliable, not dependent on postMessage payload).
         fetch("/api/whatsapp/onboard", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -198,6 +186,11 @@ function WhatsAppItem({ projectId }) {
           .then(async (res) => {
             if (!res.ok) throw new Error();
             const d = await res.json();
+            if (!d.phone_number_id) {
+              toast.error("Connected, but no phone number was returned. Please try again or check your WhatsApp Business Account.");
+              setLoading(false);
+              return;
+            }
             setConnected(true);
             if (d.display_phone_number) setPhoneNumber(d.display_phone_number);
             toast.success("WhatsApp connected!");
