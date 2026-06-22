@@ -13,14 +13,13 @@ import AnalyticsTab from "./AnalyticsTab";
 import ApiKeysTab from "./ApiKeysTab";
 import CampaignsTab from "./CampaignsTab";
 import ShopTab from "./ShopTab";
-
-
+import AppointmentsTab from "./AppointmentsTab";
 
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
 import {
   FileText, MessageCircle, Plug, Users, GitBranch,
-  Inbox, BarChart2, Key, Megaphone, ShoppingBag
+  Inbox, BarChart2, Key, Megaphone, ShoppingBag, CalendarDays
 } from "lucide-react";
 
 const ALLOWED_TYPES = [
@@ -316,6 +315,9 @@ export default function ProjectClient({ project }) {
           <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
             <ShoppingBag size={13} />Shop
           </TabButton>
+          <TabButton active={activeTab === "appointments"} onClick={() => setActiveTab("appointments")}>
+            <CalendarDays size={13} />Appointments
+          </TabButton>
         </div>
 
         {/* Domain selector — auto-saves on change */}
@@ -361,8 +363,7 @@ export default function ProjectClient({ project }) {
       {activeTab === "api" && <ApiKeysTab project={project} />}
       {activeTab === "campaigns" && <CampaignsTab project={project} />}
       {activeTab === "shop" && <ShopTab project={project} />}
-
-
+      {activeTab === "appointments" && <AppointmentsTab project={project} />}
 
       <AppAlertDialog
         open={dialogOpen}
