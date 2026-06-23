@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 export async function POST(req) {
   const body = await req.json();
   const res = await fetch(`${BACKEND}/public/appointments/book`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
