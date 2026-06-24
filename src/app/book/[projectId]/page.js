@@ -8,6 +8,7 @@ export default function BookingPage() {
   const { projectId } = useParams();
   const searchParams = useSearchParams();
   const phone = searchParams.get("phone") || "";
+  const rescheduleId = searchParams.get("reschedule") || "";
 
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +50,7 @@ export default function BookingPage() {
   }, [selectedDate]);
 
   const accent = settings?.accent_color || "#6366f1";
+  const isReschedule = !!rescheduleId;
   const service = settings?.service_name || "Appointment";
   const duration = settings?.duration_minutes || 30;
   const advanceDays = settings?.advance_booking_days || 30;
@@ -101,7 +103,9 @@ export default function BookingPage() {
   };
 
   const handleSlotSelect = (slot) => {
-    setSelectedSlot(slot);
+    // Strip capacity label e.g. "10:00 (2 left)" → "10:00"
+    const cleanSlot = slot.split(" (")[0];
+    setSelectedSlot(cleanSlot);
     setStep(3);
   };
 
@@ -119,6 +123,7 @@ export default function BookingPage() {
           appointment_date: formatDate(selectedDate),
           start_time: selectedSlot,
           notes: notes.trim() || null,
+          reschedule_id: rescheduleId || null,
         }),
       });
       if (!res.ok) throw new Error("Booking failed");
@@ -199,6 +204,11 @@ export default function BookingPage() {
 
       {/* Header */}
       <div className="px-4 pt-6 pb-4" style={{ background: accent }}>
+        {isReschedule && (
+          <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1.5 mb-2 text-white text-xs font-medium">
+            🔄 Rescheduling your appointment — pick a new time below
+          </div>
+        )}
         <h1 className="text-white font-bold text-lg">{service}</h1>
         <div className="flex items-center gap-3 mt-1">
           <span className="text-white text-xs opacity-80 flex items-center gap-1">
@@ -367,7 +377,7 @@ export default function BookingPage() {
                 style={{ background: accent }}>
                 {submitting
                   ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Booking...</>
-                  : "Confirm Booking ✓"
+                  : isReschedule ? "Confirm Reschedule ✓" : "Confirm Booking ✓"
                 }
               </button>
             </div>

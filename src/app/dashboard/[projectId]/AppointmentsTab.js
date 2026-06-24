@@ -302,6 +302,17 @@ export default function AppointmentsTab({ project }) {
                 </select>
               </div>
               <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Capacity per slot</label>
+                <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                  value={settings.slot_capacity || 1}
+                  onChange={e => setSettings(s => ({ ...s, slot_capacity: parseInt(e.target.value) }))}>
+                  {[1,2,3,4,5,6,7,8,9,10,15,20].map(n => (
+                    <option key={n} value={n}>{n} {n === 1 ? "person (exclusive)" : `people per slot`}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">How many bookings can happen at the same time slot</p>
+              </div>
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Accent color</label>
                 <div className="flex items-center gap-2">
                   <input type="color" value={settings.accent_color || '#6366f1'}
