@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles } from 'lucide-react'
+import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles, RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import TemplateLibrary from './TemplateLibrary'
 
@@ -14,6 +14,7 @@ export default function CampaignsTab({ project }) {
   const [showCreate, setShowCreate]   = useState(false)
   const [showLibrary, setShowLibrary] = useState(false)
   const [sending, setSending]         = useState(false)
+  const [syncing, setSyncing]         = useState(false)
   const [error, setError]             = useState(null)
 
   // Form state
@@ -27,9 +28,7 @@ export default function CampaignsTab({ project }) {
   const handleCsvUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
-
     if (isExcel) {
       const buffer = await file.arrayBuffer()
       const wb = XLSX.read(buffer)
@@ -48,19 +47,13 @@ export default function CampaignsTab({ project }) {
     const headers = rows[0].map(h => h.toLowerCase().trim())
     const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('number'))
     const nameIdx  = headers.findIndex(h => h.includes('name'))
-
-    if (phoneIdx === -1) {
-      setError('No phone column found. Make sure your file has a "phone" column.')
-      return
-    }
-
+    if (phoneIdx === -1) { setError('No phone column found.'); return }
     const contacts = rows.slice(1)
       .map(row => ({
         phone: String(row[phoneIdx] || '').trim().replace(/\s|-/g, ''),
         name:  nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '',
       }))
       .filter(c => c.phone && c.phone.length >= 7)
-
     setCsvContacts(contacts)
     setError(null)
   }
@@ -86,11 +79,29 @@ export default function CampaignsTab({ project }) {
     setLoading(false)
   }
 
+  // Sync templates from Meta — fetches live approval status
+  const syncTemplates = async () => {
+    setSyncing(true)
+    try {
+      const res = await fetch(`/api/template-library/sync/${projectId}`)
+      if (res.ok) {
+        const data = await res.json()
+        // Filter only APPROVED templates for campaign use
+        const approved = (data.templates || []).filter(t => t.status === 'APPROVED')
+        setTemplates(approved)
+      } else {
+        setError('Failed to sync templates from Meta')
+      }
+    } catch (e) {
+      setError('Sync failed')
+    }
+    setSyncing(false)
+  }
+
   useEffect(() => { fetchData() }, [projectId])
 
   const selectTemplate = (t) => {
     setSelectedTemplate(t)
-    // Count variables in body component
     const body = t.components?.find(c => c.type === "BODY")
     const text = body?.text || ""
     const count = (text.match(/\{\{\d+\}\}/g) || []).length
@@ -101,10 +112,8 @@ export default function CampaignsTab({ project }) {
     if (!name.trim()) return setError("Campaign name is required")
     if (!selectedTemplate) return setError("Select a template")
     if (recipientFilter === 'csv' && csvContacts.length === 0) return setError("Upload a CSV file first")
-
     setSending(true)
     setError(null)
-
     const res = await fetch('/api/campaigns', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -119,7 +128,6 @@ export default function CampaignsTab({ project }) {
         csv_contacts: recipientFilter === 'csv' ? csvContacts : null,
       })
     })
-
     if (res.ok) {
       setShowCreate(false)
       setName('')
@@ -150,9 +158,21 @@ export default function CampaignsTab({ project }) {
     )
   }
 
-  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading campaigns...</div>
+  const templateStatusBadge = (status) => {
+    const map = {
+      APPROVED: 'bg-green-100 text-green-700',
+      PENDING:  'bg-yellow-100 text-yellow-700',
+      REJECTED: 'bg-red-100 text-red-600',
+    }
+    return (
+      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[status] || 'bg-gray-100 text-gray-600'}`}>
+        {status}
+      </span>
+    )
+  }
 
-  if (showLibrary) return <TemplateLibrary projectId={projectId} onBack={() => setShowLibrary(false)} />
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading campaigns...</div>
+  if (showLibrary) return <TemplateLibrary projectId={projectId} onBack={() => { setShowLibrary(false); syncTemplates(); }} />
 
   return (
     <div className="p-6 space-y-4">
@@ -178,7 +198,6 @@ export default function CampaignsTab({ project }) {
       {showCreate && (
         <div className="border rounded-xl p-5 space-y-4 bg-blue-50/30">
           <h3 className="font-medium text-sm">Create Campaign</h3>
-
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
 
           {/* Name */}
@@ -191,11 +210,19 @@ export default function CampaignsTab({ project }) {
 
           {/* Template selection */}
           <div>
-            <label className="text-xs font-medium text-muted-foreground">Select template</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-medium text-muted-foreground">Select template</label>
+              <button onClick={syncTemplates} disabled={syncing}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:underline disabled:opacity-50">
+                <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'Syncing...' : 'Sync from Meta'}
+              </button>
+            </div>
+
             {templates.length === 0 ? (
-              <div className="mt-1 border rounded-lg p-4 text-sm text-muted-foreground text-center">
-                No approved templates found. Create and get templates approved in your
-                <a href="https://business.facebook.com" target="_blank" className="text-blue-600 ml-1">WhatsApp Manager</a>.
+              <div className="border rounded-lg p-4 text-sm text-muted-foreground text-center space-y-2">
+                <p>No approved templates found.</p>
+                <p className="text-xs">Add templates via <button onClick={() => setShowLibrary(true)} className="text-blue-600 underline">Template Library</button> or click <strong>Sync from Meta</strong> if you already have approved templates.</p>
               </div>
             ) : (
               <div className="mt-1 space-y-2 max-h-48 overflow-y-auto">
@@ -211,11 +238,9 @@ export default function CampaignsTab({ project }) {
                       }`}>
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium">{t.name}</p>
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                          {t.status}
-                        </span>
+                        {templateStatusBadge(t.status)}
                       </div>
-                      {body && <p className="text-xs text-muted-foreground mt-1">{body.text}</p>}
+                      {body && <p className="text-xs text-muted-foreground mt-1 truncate">{body.text}</p>}
                     </div>
                   )
                 })}
@@ -269,29 +294,17 @@ export default function CampaignsTab({ project }) {
               ))}
             </div>
 
-            {/* CSV Upload */}
             {recipientFilter === 'csv' && (
               <div className="mt-3 space-y-2">
-                <div
-                  className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-muted/30"
-                  onClick={() => document.getElementById('csv-upload').click()}
-                >
-                  <input
-                    id="csv-upload"
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    className="hidden"
-                    onChange={handleCsvUpload}
-                  />
+                <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-muted/30"
+                  onClick={() => document.getElementById('csv-upload').click()}>
+                  <input id="csv-upload" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleCsvUpload} />
                   {csvContacts.length > 0 ? (
-                    <p className="text-sm text-green-700 font-medium">
-                      ✅ {csvContacts.length} contacts loaded
-                    </p>
+                    <p className="text-sm text-green-700 font-medium">✅ {csvContacts.length} contacts loaded</p>
                   ) : (
                     <>
                       <p className="text-sm text-muted-foreground">Click to upload CSV or Excel file</p>
-                      <p className="text-xs text-muted-foreground mt-1">Required column: phone — Optional: name
-                      <p className="text-xs text-muted-foreground">Export contacts from Excel as CSV first</p></p>
+                      <p className="text-xs text-muted-foreground mt-1">Required column: phone — Optional: name</p>
                     </>
                   )}
                 </div>
