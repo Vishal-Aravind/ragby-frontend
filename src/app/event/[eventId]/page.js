@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Check, Calendar, MapPin, Clock, User, Phone, Mail, Users } from "lucide-react";
+import { Check, Calendar, MapPin, Users } from "lucide-react";
+import BlockRenderer from "@/components/builder/BlockRenderer";
+import DynamicForm from "@/components/builder/DynamicForm";
 
 export default function EventRegistrationPage() {
   const { eventId } = useParams();
@@ -12,12 +14,6 @@ export default function EventRegistrationPage() {
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
-
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     if (!eventId) return;
@@ -38,11 +34,8 @@ export default function EventRegistrationPage() {
     return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name.trim() || !phone.trim()) return;
+  const handleSubmit = async (values) => {
     setSubmitting(true);
-    setSubmitError(null);
     try {
       const res = await fetch("/api/public/events/register", {
         method: "POST",
@@ -50,17 +43,14 @@ export default function EventRegistrationPage() {
         body: JSON.stringify({
           event_id: eventId,
           project_id: event.project_id,
-          name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim() || null,
-          notes: notes.trim() || null,
+          data: values,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Registration failed");
       setSubmitted(true);
     } catch (e) {
-      setSubmitError(e.message);
+      alert(e.message);
     } finally {
       setSubmitting(false);
     }
@@ -99,24 +89,36 @@ export default function EventRegistrationPage() {
 
   const spotsFull = event.capacity && event.spots_left <= 0;
   const registrationClosed = event.registration_open === false;
+  const hasCustomPage = event.page_json && event.page_json.length > 0;
+  const formFields = event.form_schema && event.form_schema.length > 0
+    ? event.form_schema
+    : [
+        { id: "name", type: "text", label: "Your name", required: true },
+        { id: "phone", type: "phone", label: "WhatsApp number", required: true },
+      ];
 
   return (
     <div className="min-h-screen pb-10" style={{ background: "#f8f9fa", fontFamily: "system-ui, -apple-system, sans-serif" }}>
 
-      {event.banner_url && (
-        <div className="w-full" style={{ maxHeight: 220, overflow: "hidden" }}>
-          <img src={event.banner_url} alt={event.title} className="w-full object-cover" style={{ maxHeight: 220 }} />
+      {hasCustomPage ? (
+        <div className="max-w-md mx-auto bg-white">
+          <BlockRenderer blocks={event.page_json} accent={accent} />
         </div>
+      ) : (
+        <>
+          {event.banner_url && (
+            <div className="w-full" style={{ maxHeight: 220, overflow: "hidden" }}>
+              <img src={event.banner_url} alt={event.title} className="w-full object-cover" style={{ maxHeight: 220 }} />
+            </div>
+          )}
+          <div className="px-4 pt-6 pb-4" style={{ background: accent }}>
+            <h1 className="text-white font-bold text-xl">{event.title}</h1>
+            {event.description && <p className="text-white text-sm opacity-90 mt-1">{event.description}</p>}
+          </div>
+        </>
       )}
 
-      <div className="px-4 pt-6 pb-4" style={{ background: accent }}>
-        <h1 className="text-white font-bold text-xl">{event.title}</h1>
-        {event.description && (
-          <p className="text-white text-sm opacity-90 mt-1">{event.description}</p>
-        )}
-      </div>
-
-      <div className="px-4 pt-4 space-y-4">
+      <div className="px-4 pt-4 max-w-md mx-auto space-y-4">
         {/* Event details card */}
         <div className="bg-white rounded-2xl shadow-sm border p-4 space-y-3">
           {event.event_date && (
@@ -145,48 +147,14 @@ export default function EventRegistrationPage() {
         {/* Registration form or closed message */}
         {spotsFull || registrationClosed ? (
           <div className="bg-white rounded-2xl shadow-sm border p-6 text-center space-y-2">
-            <p className="text-gray-600 font-medium">
-              {spotsFull ? "This event is fully booked" : "Registration is closed"}
-            </p>
-            {event.contact_phone && (
-              <p className="text-sm text-gray-400">Call {event.contact_phone} for more info</p>
-            )}
+            <p className="text-gray-600 font-medium">{spotsFull ? "This event is fully booked" : "Registration is closed"}</p>
+            {event.contact_phone && <p className="text-sm text-gray-400">Call {event.contact_phone} for more info</p>}
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border p-4 space-y-4">
-            <p className="font-semibold text-sm text-gray-800">Register now</p>
-
-            {submitError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{submitError}</p>
-            )}
-
-            <div className="space-y-1">
-              <label className="text-xs text-gray-500 flex items-center gap-1"><User size={11} /> Your name *</label>
-              <input type="text" required placeholder="Enter your name"
-                value={name} onChange={e => setName(e.target.value)}
-                className="w-full border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2" />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs text-gray-500 flex items-center gap-1"><Phone size={11} /> WhatsApp number *</label>
-              <input type="tel" required placeholder="919876543210"
-                value={phone} onChange={e => setPhone(e.target.value)}
-                className="w-full border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2" />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs text-gray-500 flex items-center gap-1"><Mail size={11} /> Email (optional)</label>
-              <input type="email" placeholder="you@example.com"
-                value={email} onChange={e => setEmail(e.target.value)}
-                className="w-full border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2" />
-            </div>
-
-            <button type="submit" disabled={submitting || !name.trim() || !phone.trim()}
-              className="w-full py-4 rounded-xl text-white font-semibold text-base disabled:opacity-60"
-              style={{ background: accent }}>
-              {submitting ? "Registering..." : "Confirm Registration ✓"}
-            </button>
-          </form>
+          <div className="bg-white rounded-2xl shadow-sm border p-4">
+            <p className="font-semibold text-sm text-gray-800 mb-3">Register now</p>
+            <DynamicForm fields={formFields} accent={accent} onSubmit={handleSubmit} submitting={submitting} />
+          </div>
         )}
       </div>
     </div>

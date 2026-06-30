@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Loader2, Copy, Phone } from 'lucide-react'
+import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Loader2, Copy, Phone, Layout } from 'lucide-react'
+import PageBuilder from '@/components/builder/PageBuilder'
 
 export default function EventsTab({ project }) {
   const projectId = project?.id || project
@@ -8,6 +9,7 @@ export default function EventsTab({ project }) {
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [viewingEvent, setViewingEvent] = useState(null)
+  const [builderEvent, setBuilderEvent] = useState(null)
   const [registrations, setRegistrations] = useState([])
   const [loadingRegs, setLoadingRegs] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -93,6 +95,16 @@ export default function EventsTab({ project }) {
       }
     } catch (e) { console.error(e) }
     setSaving(false)
+  }
+
+  const savePage = async ({ page_json, form_schema }) => {
+    await fetch(`/api/events/${builderEvent.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page_json, form_schema }),
+    })
+    setBuilderEvent(null)
+    fetchEvents()
   }
 
   const toggleActive = async (event) => {
@@ -334,9 +346,13 @@ export default function EventsTab({ project }) {
                 </div>
 
                 <div className="flex gap-2 pt-2">
+                  <button onClick={() => setBuilderEvent(event)}
+                    className="flex-1 flex items-center justify-center gap-1 text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-lg px-3 py-1.5">
+                    <Layout size={11} /> Edit Page
+                  </button>
                   <button onClick={() => viewRegistrations(event)}
                     className="flex-1 flex items-center justify-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5">
-                    <Eye size={11} /> View Registrations
+                    <Eye size={11} /> Registrations
                   </button>
                   <button onClick={() => toggleActive(event)}
                     className="text-xs border rounded-lg px-3 py-1.5 hover:bg-muted">
@@ -351,6 +367,14 @@ export default function EventsTab({ project }) {
             </div>
           ))}
         </div>
+      )}
+
+      {builderEvent && (
+        <PageBuilder
+          event={builderEvent}
+          onSave={savePage}
+          onClose={() => setBuilderEvent(null)}
+        />
       )}
     </div>
   )
