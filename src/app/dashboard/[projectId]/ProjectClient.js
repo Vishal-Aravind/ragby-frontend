@@ -283,9 +283,15 @@ export default function ProjectClient({ project }) {
         <h1 className="text-2xl font-semibold">{project.name}</h1>
       </div>
 
-      {/* Tab bar + domain dropdown on the right */}
-      <div className="flex items-center justify-between border-b pb-2 gap-2 flex-wrap">
-        <div className="flex gap-2 flex-wrap">
+      {/* Tab bar — horizontally scrollable, single row */}
+      <div className="flex items-center justify-between gap-3 border-b pb-2">
+        <div
+          className="flex gap-2 overflow-x-auto scrollbar-hide"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          <style jsx>{`
+            div::-webkit-scrollbar { display: none; }
+          `}</style>
           <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
             <FileText size={13} />Documents
           </TabButton>
@@ -395,7 +401,7 @@ export default function ProjectClient({ project }) {
 
 function TabButton({ active, children, ...props }) {
   return (
-    <Button variant={active ? "default" : "ghost"} size="sm" className="flex items-center gap-1.5" {...props}>
+    <Button variant={active ? "default" : "ghost"} size="sm" className="flex items-center gap-1.5 whitespace-nowrap shrink-0" {...props}>
       {children}
     </Button>
   );
