@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Check, Calendar, MapPin, Users } from "lucide-react";
 
-import { useEffect, useState } from "react";
-
 // ─────────────────────────────────────────────────────────
 // PUBLIC BLOCK RENDERER — turns page_json into actual page
 // ─────────────────────────────────────────────────────────
@@ -168,7 +166,6 @@ function FaqItem({ q, a }) {
   );
 }
 
-import { useState } from "react";
 
 function DynamicForm({ fields, accent, onSubmit, submitting }) {
   const [values, setValues] = useState(
