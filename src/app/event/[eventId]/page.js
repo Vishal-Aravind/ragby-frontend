@@ -89,8 +89,8 @@ export default function EventRegistrationPage() {
 
   const spotsFull = event.capacity && event.spots_left <= 0;
   const registrationClosed = event.registration_open === false;
-  const hasCustomPage = event.page_json && event.page_json.length > 0;
-  const formFields = event.form_schema && event.form_schema.length > 0
+  const hasCustomPage = Array.isArray(event?.page_json) && event.page_json.length > 0;
+  const formFields = Array.isArray(event?.form_schema) && event.form_schema.length > 0
     ? event.form_schema
     : [
         { id: "name", type: "text", label: "Your name", required: true },
