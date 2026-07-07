@@ -46,9 +46,9 @@ const FIELD_TYPES = [
 ]
 
 const TEMPLATES = {
-  blank: { label: 'Blank', blocks: [] },
   conference: {
     label: 'Conference / Expo',
+    desc: 'Big multi-speaker event — banner, countdown, about section, speaker grid, FAQ',
     blocks: [
       { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Your Conference Name 2026', subtitle: 'Join industry leaders for a day of insights' } },
       { id: 'b2', type: 'countdown', props: { ...DEFAULT_PROPS.countdown } },
@@ -59,6 +59,7 @@ const TEMPLATES = {
   },
   workshop: {
     label: 'Workshop / Class',
+    desc: 'Hands-on session — banner, learning outcomes, photo gallery, FAQ',
     blocks: [
       { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Workshop Title', subtitle: 'Hands-on learning session' } },
       { id: 'b2', type: 'text', props: { heading: 'What You\'ll Learn', body: 'List the key takeaways...', align: 'left' } },
@@ -68,6 +69,7 @@ const TEMPLATES = {
   },
   launch: {
     label: 'Product Launch',
+    desc: 'Hype-building page — banner, countdown, video teaser, story',
     blocks: [
       { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Introducing Something New', subtitle: 'Be the first to know' } },
       { id: 'b2', type: 'countdown', props: { ...DEFAULT_PROPS.countdown, label: 'Launching in' } },
@@ -77,11 +79,13 @@ const TEMPLATES = {
   },
   webinar: {
     label: 'Simple Webinar',
+    desc: 'Quick and minimal — banner + agenda',
     blocks: [
       { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Webinar Title', subtitle: 'Live online session' } },
       { id: 'b2', type: 'text', props: { heading: 'Agenda', body: '1. Topic one\n2. Topic two\n3. Q&A', align: 'left' } },
     ],
   },
+  blank: { label: 'Blank', desc: 'Start from scratch and add your own blocks', blocks: [] },
 }
 
 const genId = () => `b_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
@@ -452,8 +456,28 @@ export default function PageBuilder({ event, onSave, onClose }) {
 
   const applyTemplate = (key) => {
     const tmpl = TEMPLATES[key]
-    setBlocks(tmpl.blocks.map(b => ({ ...b, id: genId() })))
+    const blocks = tmpl.blocks.map(b => {
+      const newBlock = { ...b, id: genId() }
+      // Prefill the hero with what was already entered in "Create Event" —
+      // avoids asking the merchant to retype the title/description/banner.
+      if (b.type === 'hero' && event) {
+        newBlock.props = {
+          ...b.props,
+          title: event.title || b.props.title,
+          subtitle: event.description || b.props.subtitle,
+          image_url: event.banner_url || b.props.image_url,
+        }
+      }
+      return newBlock
+    })
+    setBlocks(blocks)
     setShowTemplatePicker(false)
+  }
+
+  const skipCustomPage = () => {
+    // No blocks saved → public event page falls back to the simple
+    // default layout built from the event's own fields.
+    onClose()
   }
 
   const addBlock = (type) => {
@@ -520,7 +544,12 @@ export default function PageBuilder({ event, onSave, onClose }) {
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-lg">Choose a starting point</h3>
+            <div>
+              <h3 className="font-semibold text-lg">Design a landing page?</h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional — pick a layout to customize, or skip and use the simple default page.
+              </p>
+            </div>
             <button onClick={onClose}><X size={18} /></button>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -528,10 +557,14 @@ export default function PageBuilder({ event, onSave, onClose }) {
               <button key={key} onClick={() => applyTemplate(key)}
                 className="border-2 rounded-xl p-4 text-left hover:border-indigo-400 transition-colors">
                 <p className="font-medium text-sm">{t.label}</p>
-                <p className="text-xs text-muted-foreground mt-1">{t.blocks.length} blocks pre-filled</p>
+                <p className="text-xs text-muted-foreground mt-1">{t.desc}</p>
               </button>
             ))}
           </div>
+          <button onClick={skipCustomPage}
+            className="w-full text-sm border-dashed border-2 rounded-xl py-3 text-muted-foreground hover:bg-muted/30 transition-colors">
+            Skip — use the simple default page instead
+          </button>
         </div>
       </div>
     )

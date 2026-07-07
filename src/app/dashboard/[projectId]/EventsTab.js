@@ -348,7 +348,8 @@ export default function EventsTab({ project }) {
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => setBuilderEvent(event)}
                     className="flex-1 flex items-center justify-center gap-1 text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-lg px-3 py-1.5">
-                    <Layout size={11} /> Edit Page
+                    <Layout size={11} />
+                    {Array.isArray(event.page_json) && event.page_json.length > 0 ? "Edit Page" : "Design Page"}
                   </button>
                   <button onClick={() => viewRegistrations(event)}
                     className="flex-1 flex items-center justify-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg px-3 py-1.5">
