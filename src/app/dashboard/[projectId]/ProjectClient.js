@@ -283,98 +283,97 @@ export default function ProjectClient({ project }) {
         <h1 className="text-2xl font-semibold">{project.name}</h1>
       </div>
 
-      {/* Tab bar — horizontally scrollable, single row */}
-      <div className="flex items-center justify-between gap-3 border-b pb-2">
-        <div
-          className="flex gap-2 overflow-x-auto scrollbar-hide"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
-          <style jsx>{`
-            div::-webkit-scrollbar { display: none; }
-          `}</style>
-          <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
-            <FileText size={13} />Documents
-          </TabButton>
-          <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>
-            <MessageCircle size={13} />Chat
-          </TabButton>
-          <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
-            <Plug size={13} />Integrations
-          </TabButton>
-          <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>
-            <Users size={13} />Leads
-          </TabButton>
-          <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
-            <GitBranch size={13} />Flows
-          </TabButton>
-          <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>
-            <Inbox size={13} />Conversations
-          </TabButton>
-          <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
-            <BarChart2 size={13} />Analytics
-          </TabButton>
-          <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>
-            <Key size={13} />API
-          </TabButton>
-          <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>
-            <Megaphone size={13} />Campaigns
-          </TabButton>
-          <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
-            <ShoppingBag size={13} />Shop
-          </TabButton>
-          <TabButton active={activeTab === "appointments"} onClick={() => setActiveTab("appointments")}>
-            <CalendarDays size={13} />Appointments
-          </TabButton>
-          <TabButton active={activeTab === "events"} onClick={() => setActiveTab("events")}>
-            <CalendarRange size={13} />Events
-          </TabButton>
-        </div>
+      <div className="flex gap-6 items-start">
+        {/* ── Vertical tab sidebar ── */}
+        <nav className="w-56 shrink-0 space-y-4">
+          {/* Domain selector — auto-saves on change */}
+          <div className="space-y-1">
+            <select
+              value={domain}
+              onChange={(e) => handleDomainChange(e.target.value)}
+              disabled={savingDomain}
+              className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700 disabled:opacity-60 cursor-pointer"
+            >
+              <option value="">No domain</option>
+              {DOMAINS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            {savingDomain && <span className="text-xs text-muted-foreground">Saving...</span>}
+            {domainSaved && <span className="text-xs text-emerald-600 font-medium">✓ Saved</span>}
+          </div>
 
-        {/* Domain selector — auto-saves on change */}
-        <div className="flex items-center gap-2 shrink-0">
-          <select
-            value={domain}
-            onChange={(e) => handleDomainChange(e.target.value)}
-            disabled={savingDomain}
-            className="border rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700 disabled:opacity-60 cursor-pointer"
-          >
-            <option value="">No domain</option>
-            {DOMAINS.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-          {savingDomain && <span className="text-xs text-muted-foreground">Saving...</span>}
-          {domainSaved && <span className="text-xs text-emerald-600 font-medium">✓ Saved</span>}
+          <div className="flex flex-col gap-1 border-r pr-3">
+            <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
+              <FileText size={13} />Documents
+            </TabButton>
+            <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>
+              <MessageCircle size={13} />Chat
+            </TabButton>
+            <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
+              <Plug size={13} />Integrations
+            </TabButton>
+            <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>
+              <Users size={13} />Leads
+            </TabButton>
+            <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
+              <GitBranch size={13} />Flows
+            </TabButton>
+            <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>
+              <Inbox size={13} />Conversations
+            </TabButton>
+            <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
+              <BarChart2 size={13} />Analytics
+            </TabButton>
+            <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>
+              <Key size={13} />API
+            </TabButton>
+            <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>
+              <Megaphone size={13} />Campaigns
+            </TabButton>
+            <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
+              <ShoppingBag size={13} />Shop
+            </TabButton>
+            <TabButton active={activeTab === "appointments"} onClick={() => setActiveTab("appointments")}>
+              <CalendarDays size={13} />Appointments
+            </TabButton>
+            <TabButton active={activeTab === "events"} onClick={() => setActiveTab("events")}>
+              <CalendarRange size={13} />Events
+            </TabButton>
+          </div>
+        </nav>
+
+        {/* ── Tab content ── */}
+        <div className="flex-1 min-w-0">
+          {activeTab === "documents" && (
+            <DocumentsTab
+              files={files}
+              onSelectFiles={handleSelectFiles}
+              onUpload={handleUpload}
+              uploading={uploading}
+              onDeleteFile={requestDeleteFile}
+              onAddSource={handleAddSource}
+              connecting={connecting}
+              sources={sources}
+              onReload={handleReloadSource}
+              onDeleteSource={handleDeleteSource}
+              onReuploadExcel={handleReuploadExcel}
+            />
+          )}
+
+          {activeTab === "chat" && <ChatTab projectId={project.id} />}
+          {activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
+          {activeTab === "leads" && <LeadsTab project={project.id} />}
+          {activeTab === "flows" && <FlowsTab projectId={project.id} />}
+          {activeTab === "conversations" && <ConversationsTab projectId={project.id} />}
+          {activeTab === "analytics" && <AnalyticsTab project={project} />}
+          {activeTab === "api" && <ApiKeysTab project={project} />}
+          {activeTab === "campaigns" && <CampaignsTab project={project} />}
+          {activeTab === "shop" && <ShopTab project={project} />}
+          {activeTab === "appointments" && <AppointmentsTab project={project} />}
+          {activeTab === "events" && <EventsTab project={project} />}
         </div>
       </div>
-
-      {activeTab === "documents" && (
-        <DocumentsTab
-          files={files}
-          onSelectFiles={handleSelectFiles}
-          onUpload={handleUpload}
-          uploading={uploading}
-          onDeleteFile={requestDeleteFile}
-          onAddSource={handleAddSource}
-          connecting={connecting}
-          sources={sources}
-          onReload={handleReloadSource}
-          onDeleteSource={handleDeleteSource}
-          onReuploadExcel={handleReuploadExcel}
-        />
-      )}
-
-      {activeTab === "chat" && <ChatTab projectId={project.id} />}
-      {activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
-      {activeTab === "leads" && <LeadsTab project={project.id} />}
-      {activeTab === "flows" && <FlowsTab projectId={project.id} />}
-      {activeTab === "conversations" && <ConversationsTab projectId={project.id} />}
-      {activeTab === "analytics" && <AnalyticsTab project={project} />}
-      {activeTab === "api" && <ApiKeysTab project={project} />}
-      {activeTab === "campaigns" && <CampaignsTab project={project} />}
-      {activeTab === "shop" && <ShopTab project={project} />}
-      {activeTab === "appointments" && <AppointmentsTab project={project} />}
-      {activeTab === "events" && <EventsTab project={project} />}
 
       <AppAlertDialog
         open={dialogOpen}
@@ -401,7 +400,12 @@ export default function ProjectClient({ project }) {
 
 function TabButton({ active, children, ...props }) {
   return (
-    <Button variant={active ? "default" : "ghost"} size="sm" className="flex items-center gap-1.5 whitespace-nowrap shrink-0" {...props}>
+    <Button
+      variant={active ? "default" : "ghost"}
+      size="sm"
+      className="flex items-center gap-2 justify-start w-full"
+      {...props}
+    >
       {children}
     </Button>
   );
