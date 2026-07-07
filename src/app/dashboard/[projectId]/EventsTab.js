@@ -89,9 +89,13 @@ export default function EventsTab({ project }) {
         body: JSON.stringify(payload),
       })
       if (res.ok) {
+        const createdEvent = await res.json()
         setShowCreate(false)
         resetForm()
-        fetchEvents()
+        await fetchEvents()
+        // Go straight into page design — template picker shows automatically
+        // since the new event has no page_json yet.
+        setBuilderEvent(createdEvent)
       }
     } catch (e) { console.error(e) }
     setSaving(false)
