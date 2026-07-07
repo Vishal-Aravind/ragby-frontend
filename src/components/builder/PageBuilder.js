@@ -448,24 +448,39 @@ export default function PageBuilder({ event, onSave, onClose }) {
     { id: 'phone', type: 'phone', label: 'WhatsApp number', required: true },
   ])
   const [selectedBlockId, setSelectedBlockId] = useState(null)
-  const [rightPanel, setRightPanel] = useState('blocks') // 'blocks' | 'edit' | 'form'
+  const [rightPanel, setRightPanel] = useState('details') // 'details' | 'blocks' | 'edit' | 'form'
   const [saving, setSaving] = useState(false)
   const dragItem = useRef(null)
 
-  const accent = event?.accent_color || '#6366f1'
+  // Event detail fields — used to live in the "Create Event" popup, now
+  // edited here so the whole thing (name → details → design) is one screen.
+  const [details, setDetails] = useState({
+    title: event?.title || '',
+    description: event?.description || '',
+    banner_url: event?.banner_url || '',
+    event_date: event?.event_date || '',
+    event_time: event?.event_time || '',
+    location: event?.location || '',
+    capacity: event?.capacity ?? '',
+    contact_phone: event?.contact_phone || '',
+    accent_color: event?.accent_color || '#6366f1',
+  })
+  const [uploadingBanner, setUploadingBanner] = useState(false)
+
+  const accent = details.accent_color || '#6366f1'
 
   const applyTemplate = (key) => {
     const tmpl = TEMPLATES[key]
     const blocks = tmpl.blocks.map(b => {
       const newBlock = { ...b, id: genId() }
-      // Prefill the hero with what was already entered in "Create Event" —
+      // Prefill the hero with whatever's been entered on the Details tab —
       // avoids asking the merchant to retype the title/description/banner.
-      if (b.type === 'hero' && event) {
+      if (b.type === 'hero') {
         newBlock.props = {
           ...b.props,
-          title: event.title || b.props.title,
-          subtitle: event.description || b.props.subtitle,
-          image_url: event.banner_url || b.props.image_url,
+          title: details.title || b.props.title,
+          subtitle: details.description || b.props.subtitle,
+          image_url: details.banner_url || b.props.image_url,
         }
       }
       return newBlock
@@ -531,9 +546,32 @@ export default function PageBuilder({ event, onSave, onClose }) {
     return null
   }
 
+  const updateDetail = (patch) => setDetails(d => ({ ...d, ...patch }))
+
+  const handleDetailBannerUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingBanner(true)
+    const url = await uploadImage(file)
+    if (url) updateDetail({ banner_url: url })
+    setUploadingBanner(false)
+  }
+
   const handleSave = async () => {
     setSaving(true)
-    await onSave({ page_json: blocks, form_schema: formFields })
+    await onSave({
+      page_json: blocks,
+      form_schema: formFields,
+      title: details.title.trim(),
+      description: details.description.trim() || null,
+      banner_url: details.banner_url || null,
+      event_date: details.event_date || null,
+      event_time: details.event_time.trim() || null,
+      location: details.location.trim() || null,
+      capacity: details.capacity ? parseInt(details.capacity) : null,
+      contact_phone: details.contact_phone.trim() || null,
+      accent_color: details.accent_color,
+    })
     setSaving(false)
   }
 
@@ -577,7 +615,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
         <div className="flex items-center gap-3">
           <button onClick={onClose} className="text-sm text-muted-foreground hover:text-gray-800">← Close</button>
           <span className="text-gray-300">/</span>
-          <span className="text-sm font-semibold">{event?.title || 'Event Page'}</span>
+          <span className="text-sm font-semibold">{details.title || 'Event Page'}</span>
         </div>
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-1.5 bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
@@ -638,6 +676,10 @@ export default function PageBuilder({ event, onSave, onClose }) {
         <div className="w-80 border-l flex flex-col shrink-0">
           {/* Panel tabs */}
           <div className="flex border-b shrink-0">
+            <button onClick={() => setRightPanel('details')}
+              className={`flex-1 py-2.5 text-xs font-medium ${rightPanel === 'details' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>
+              Details
+            </button>
             <button onClick={() => setRightPanel('blocks')}
               className={`flex-1 py-2.5 text-xs font-medium ${rightPanel === 'blocks' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>
               Add Blocks
@@ -653,6 +695,35 @@ export default function PageBuilder({ event, onSave, onClose }) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
+            {rightPanel === 'details' && (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground mb-1">Shown on the registration page and in WhatsApp confirmations</p>
+                <TextField label="Event title" value={details.title} onChange={v => updateDetail({ title: v })} />
+                <TextAreaField label="Description" value={details.description} onChange={v => updateDetail({ description: v })} rows={3} />
+                <ImageUploadField label="Banner image" value={details.banner_url}
+                  onChange={url => updateDetail({ banner_url: url })}
+                  onUploadImage={async (file) => { const url = await uploadImage(file); return url }} />
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Date</label>
+                    <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value={details.event_date} onChange={e => updateDetail({ event_date: e.target.value })} />
+                  </div>
+                  <TextField label="Time" value={details.event_time} onChange={v => updateDetail({ event_time: v })} placeholder="10 AM - 4 PM" />
+                </div>
+                <TextField label="Location" value={details.location} onChange={v => updateDetail({ location: v })} placeholder="Chennai Trade Centre" />
+                <div className="grid grid-cols-2 gap-2">
+                  <TextField label="Capacity (optional)" value={details.capacity} onChange={v => updateDetail({ capacity: v })} placeholder="Unlimited" />
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">Accent color</label>
+                    <input type="color" className="w-full h-9 border rounded-lg cursor-pointer"
+                      value={details.accent_color} onChange={e => updateDetail({ accent_color: e.target.value })} />
+                  </div>
+                </div>
+                <TextField label={'Contact phone (for "Call to Attend")'} value={details.contact_phone} onChange={v => updateDetail({ contact_phone: v })} placeholder="+91 98765 43210" />
+              </div>
+            )}
+
             {rightPanel === 'blocks' && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground mb-3">Click to add a block to the page</p>

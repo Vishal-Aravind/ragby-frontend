@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Loader2, Copy, Phone, Layout } from 'lucide-react'
+import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Loader2, Copy, Layout } from 'lucide-react'
 import PageBuilder from '@/components/builder/PageBuilder'
 
 export default function EventsTab({ project }) {
@@ -13,21 +13,11 @@ export default function EventsTab({ project }) {
   const [registrations, setRegistrations] = useState([])
   const [loadingRegs, setLoadingRegs] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [uploadingBanner, setUploadingBanner] = useState(false)
 
-  // Form state
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    banner_url: '',
-    event_date: '',
-    event_time: '',
-    location: '',
-    capacity: '',
-    registration_deadline: '',
-    contact_phone: '',
-    accent_color: '#6366f1',
-  })
+  // Create form now only asks for the event name — everything else
+  // (description, banner, date, location, capacity, contact phone, colors)
+  // is filled in on the "Details" tab inside the page design screen right after.
+  const [title, setTitle] = useState('')
 
   const fetchEvents = async () => {
     setLoading(true)
@@ -40,72 +30,36 @@ export default function EventsTab({ project }) {
 
   useEffect(() => { fetchEvents() }, [projectId])
 
-  const resetForm = () => {
-    setForm({
-      title: '', description: '', banner_url: '', event_date: '', event_time: '',
-      location: '', capacity: '', registration_deadline: '', contact_phone: '',
-      accent_color: '#6366f1',
-    })
-  }
-
-  const handleBannerUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingBanner(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('bucket', 'flow-media')
-      formData.append('folder', 'events')
-      const res = await fetch('/api/storage/upload', { method: 'POST', body: formData })
-      if (res.ok) {
-        const { url } = await res.json()
-        setForm(f => ({ ...f, banner_url: url }))
-      }
-    } catch (e) { console.error(e) }
-    setUploadingBanner(false)
-  }
-
   const handleCreate = async () => {
-    if (!form.title.trim()) return
+    if (!title.trim()) return
     setSaving(true)
     try {
-      const payload = {
-        project_id: projectId,
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        banner_url: form.banner_url || null,
-        event_date: form.event_date || null,
-        event_time: form.event_time.trim() || null,
-        location: form.location.trim() || null,
-        capacity: form.capacity ? parseInt(form.capacity) : null,
-        registration_deadline: form.registration_deadline || null,
-        contact_phone: form.contact_phone.trim() || null,
-        accent_color: form.accent_color,
-      }
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ project_id: projectId, title: title.trim() }),
       })
       if (res.ok) {
         const createdEvent = await res.json()
         setShowCreate(false)
-        resetForm()
+        setTitle('')
         await fetchEvents()
-        // Go straight into page design — template picker shows automatically
-        // since the new event has no page_json yet.
+        // Go straight into page design — template picker + Details tab
+        // show automatically since the new event only has a name so far.
         setBuilderEvent(createdEvent)
       }
     } catch (e) { console.error(e) }
     setSaving(false)
   }
 
-  const savePage = async ({ page_json, form_schema }) => {
+  // PageBuilder's onSave now sends blocks/form fields AND the event detail
+  // fields (title, description, banner, date, location, etc.) all together,
+  // since those are edited in the Details tab of the same screen.
+  const savePage = async (data) => {
     await fetch(`/api/events/${builderEvent.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page_json, form_schema }),
+      body: JSON.stringify(data),
     })
     setBuilderEvent(null)
     fetchEvents()
@@ -215,89 +169,34 @@ export default function EventsTab({ project }) {
         </button>
       </div>
 
-      {/* Create form modal */}
+      {/* Create form modal — name only; everything else is filled in on the
+          Details tab of the page design screen that opens right after. */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Create Event</h3>
-              <button onClick={() => { setShowCreate(false); resetForm(); }}><X size={18} /></button>
+              <h3 className="font-semibold">Name your event</h3>
+              <button onClick={() => { setShowCreate(false); setTitle(''); }}><X size={18} /></button>
             </div>
 
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Event title *</label>
               <input className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
                 placeholder="e.g. Chennai Business Expo 2026"
-                value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Description</label>
-              <textarea className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200" rows={3}
-                placeholder="Brief description shown on registration page"
-                value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Banner image</label>
-              {form.banner_url ? (
-                <div className="relative">
-                  <img src={form.banner_url} className="w-full h-32 object-cover rounded-lg border" />
-                  <button onClick={() => setForm(f => ({ ...f, banner_url: '' }))}
-                    className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">✕</button>
-                </div>
-              ) : (
-                <label className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:bg-muted/30 block">
-                  <input type="file" accept="image/*" className="hidden" onChange={handleBannerUpload} />
-                  <p className="text-sm text-muted-foreground">{uploadingBanner ? 'Uploading...' : 'Click to upload banner image'}</p>
-                </label>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Date</label>
-                <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Time</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="10 AM - 4 PM"
-                  value={form.event_time} onChange={e => setForm(f => ({ ...f, event_time: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Location</label>
-              <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Chennai Trade Centre"
-                value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Capacity (optional)</label>
-                <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Unlimited"
-                  value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Accent color</label>
-                <input type="color" className="w-full h-9 border rounded-lg cursor-pointer"
-                  value={form.accent_color} onChange={e => setForm(f => ({ ...f, accent_color: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Contact phone (for "Call to Attend")</label>
-              <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="+91 98765 43210"
-                value={form.contact_phone} onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))} />
+                value={title} onChange={e => setTitle(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                autoFocus />
+              <p className="text-xs text-muted-foreground">
+                You'll add the description, banner, date, and other details next, on the same screen where you design the page.
+              </p>
             </div>
 
             <div className="flex gap-2 pt-2">
-              <button onClick={() => { setShowCreate(false); resetForm(); }}
+              <button onClick={() => { setShowCreate(false); setTitle(''); }}
                 className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-muted">Cancel</button>
-              <button onClick={handleCreate} disabled={saving || !form.title.trim()}
+              <button onClick={handleCreate} disabled={saving || !title.trim()}
                 className="flex-1 bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Creating...' : 'Create Event'}
+                {saving ? 'Creating...' : 'Continue'}
               </button>
             </div>
           </div>
