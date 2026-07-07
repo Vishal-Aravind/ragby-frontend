@@ -43,10 +43,11 @@ export default function EventsTab({ project }) {
         const createdEvent = await res.json()
         setShowCreate(false)
         setTitle('')
-        await fetchEvents()
-        // Go straight into page design — template picker + Details tab
-        // show automatically since the new event only has a name so far.
+        // Open the builder immediately — the template picker shows right
+        // away since the new event only has a name so far. Refresh the
+        // events list quietly in the background, don't make the user wait on it.
         setBuilderEvent(createdEvent)
+        fetchEvents()
       }
     } catch (e) { console.error(e) }
     setSaving(false)
