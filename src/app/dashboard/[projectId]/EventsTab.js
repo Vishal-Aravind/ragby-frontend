@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Loader2, Copy, Layout } from 'lucide-react'
 import PageBuilder from '@/components/builder/PageBuilder'
 
@@ -12,12 +12,15 @@ export default function EventsTab({ project }) {
   const [builderEvent, setBuilderEvent] = useState(null)
   const [registrations, setRegistrations] = useState([])
   const [loadingRegs, setLoadingRegs] = useState(false)
-  const [saving, setSaving] = useState(false)
 
   // Create form now only asks for the event name — everything else
   // (description, banner, date, location, capacity, contact phone, colors)
   // is filled in on the "Details" tab inside the page design screen right after.
   const [title, setTitle] = useState('')
+
+  // Holds the in-flight "create event" request so savePage can wait on it
+  // if the user hits Save before the real event ID has come back yet.
+  const pendingCreateRef = useRef(null)
 
   const fetchEvents = async () => {
     setLoading(true)
@@ -30,34 +33,53 @@ export default function EventsTab({ project }) {
 
   useEffect(() => { fetchEvents() }, [projectId])
 
-  const handleCreate = async () => {
-    if (!title.trim()) return
-    setSaving(true)
-    try {
-      const res = await fetch('/api/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: projectId, title: title.trim() }),
-      })
-      if (res.ok) {
-        const createdEvent = await res.json()
-        setShowCreate(false)
-        setTitle('')
-        // Open the builder immediately — the template picker shows right
-        // away since the new event only has a name so far. Refresh the
-        // events list quietly in the background, don't make the user wait on it.
-        setBuilderEvent(createdEvent)
+  const handleCreate = () => {
+    const trimmedTitle = title.trim()
+    if (!trimmedTitle) return
+
+    setShowCreate(false)
+    setTitle('')
+
+    // Open the builder — and its template picker — instantly. Don't make
+    // the user stare at a spinner waiting on the network round-trip;
+    // the event row gets created in the background instead.
+    setBuilderEvent({ id: null, title: trimmedTitle, page_json: null, form_schema: null, accent_color: '#6366f1' })
+
+    const createPromise = fetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: projectId, title: trimmedTitle }),
+    }).then(res => (res.ok ? res.json() : Promise.reject(new Error('Failed to create event'))))
+
+    pendingCreateRef.current = createPromise
+
+    createPromise
+      .then(createdEvent => {
+        // Fill in the real ID once it arrives — only if the user is still
+        // on this same (not-yet-saved) draft.
+        setBuilderEvent(prev => (prev && !prev.id ? { ...prev, ...createdEvent } : prev))
         fetchEvents()
-      }
-    } catch (e) { console.error(e) }
-    setSaving(false)
+      })
+      .catch(e => {
+        console.error(e)
+        alert('Failed to create the event. Please try again.')
+        setBuilderEvent(null)
+      })
+      .finally(() => { pendingCreateRef.current = null })
   }
 
   // PageBuilder's onSave now sends blocks/form fields AND the event detail
   // fields (title, description, banner, date, location, etc.) all together,
   // since those are edited in the Details tab of the same screen.
   const savePage = async (data) => {
-    await fetch(`/api/events/${builderEvent.id}`, {
+    // If the user hit Save super fast, the background "create event"
+    // request might not have returned an ID yet — wait for it here.
+    let eventId = builderEvent.id
+    if (!eventId && pendingCreateRef.current) {
+      const created = await pendingCreateRef.current
+      eventId = created.id
+    }
+    await fetch(`/api/events/${eventId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -195,9 +217,9 @@ export default function EventsTab({ project }) {
             <div className="flex gap-2 pt-2">
               <button onClick={() => { setShowCreate(false); setTitle(''); }}
                 className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-muted">Cancel</button>
-              <button onClick={handleCreate} disabled={saving || !title.trim()}
+              <button onClick={handleCreate} disabled={!title.trim()}
                 className="flex-1 bg-indigo-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-50">
-                {saving ? 'Creating...' : 'Continue'}
+                Continue
               </button>
             </div>
           </div>
