@@ -11,11 +11,13 @@ export async function GET(req) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Only the internal test-chat channel — real customer conversations
+  // (whatsapp/telegram/slack/public) belong in the Conversations tab, not here.
   const { data, error } = await supabase
     .from("chats")
     .select("*")
     .eq("project_id", projectId)
-    .neq("channel", "public")
+    .eq("channel", "inapp")
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

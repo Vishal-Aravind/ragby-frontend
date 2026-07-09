@@ -21,10 +21,13 @@ export async function GET(req) {
     grouped[m.chat_id].push(m);
   });
 
+  // Only search within the internal test-chat channel, matching the list
+  // shown by /api/chats — keeps real customer conversations out of this tool.
   const { data: chats } = await supabase
     .from("chats")
     .select("*")
-    .eq("project_id", projectId);
+    .eq("project_id", projectId)
+    .eq("channel", "inapp");
 
   return NextResponse.json(
     chats

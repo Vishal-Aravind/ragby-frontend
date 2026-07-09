@@ -55,17 +55,21 @@ export default function TemplateLibrary({ projectId, onBack }) {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground">
-              ← Campaigns
-            </button>
-            <span className="text-muted-foreground">/</span>
+            {onBack && (
+              <>
+                <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground">
+                  ← Campaigns
+                </button>
+                <span className="text-muted-foreground">/</span>
+              </>
+            )}
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Sparkles size={18} className="text-yellow-500" />
               Template Library
             </h2>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Pre-built templates — add to your WhatsApp account with one click
+            Pre-built templates — add to your WhatsApp account with one click. Used by Campaigns, the API, and appointment reminders.
           </p>
         </div>
       </div>

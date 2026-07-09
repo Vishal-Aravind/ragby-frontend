@@ -1,4 +1,5 @@
-// src/app/api/conversations/[chatId]/messages/route.js
+// src/app/api/conversations/[chatId]/assign/route.js
+// Claim/assign/unassign a conversation to a specific team member.
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
@@ -26,24 +27,33 @@ function getSupabase(req) {
   };
 }
 
-export async function GET(req, { params }) {
+export async function POST(req, { params }) {
   const { chatId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: chat } = await supabaseAdmin.from("chats").select("project_id").eq("id", chatId).maybeSingle();
-  if (!chat) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { project_id, assigned_to } = await req.json(); // assigned_to: a user id, or null to unassign
 
-  const role = await getProjectRole(user.id, chat.project_id);
+  const { data: chat } = await supabaseAdmin.from("chats").select("project_id").eq("id", chatId).maybeSingle();
+  if (!chat || chat.project_id !== project_id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const role = await getProjectRole(user.id, project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data, error } = await supabase
-    .from("chat_messages")
-    .select("id, role, content, created_at")
-    .eq("chat_id", chatId)
-    .order("created_at", { ascending: true });
+  // Assignee must actually have access to this project too (owner, or an active member).
+  if (assigned_to) {
+    const assigneeRole = await getProjectRole(assigned_to, project_id);
+    if (!assigneeRole) return NextResponse.json({ error: "That person doesn't have access to this project" }, { status: 400 });
+  }
+
+  const { error } = await supabaseAdmin
+    .from("chats")
+    .update({ assigned_to: assigned_to || null })
+    .eq("id", chatId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data || []);
+  return NextResponse.json({ success: true });
 }

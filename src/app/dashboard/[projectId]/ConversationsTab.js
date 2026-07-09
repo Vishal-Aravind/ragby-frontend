@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle } from "lucide-react";
+import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2 } from "lucide-react";
 
 export default function ConversationsTab({ projectId }) {
   const [chats, setChats]           = useState([]);
@@ -17,6 +17,39 @@ export default function ConversationsTab({ projectId }) {
   const pollRef        = useRef(null);
   const chatsPollRef   = useRef(null);
   const textareaRef    = useRef(null);
+
+  // ── Team / assignment / notes ────────────────────────────
+  const [me, setMe]               = useState(null);
+  const [team, setTeam]           = useState({ owner: null, members: [] });
+  const [filterMode, setFilterMode] = useState("all"); // all | mine | unassigned
+  const [assigning, setAssigning] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
+  const [notes, setNotes]         = useState([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [noteText, setNoteText]   = useState("");
+  const [postingNote, setPostingNote] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.user) setMe(d.user); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/team?projectId=${projectId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setTeam(d); })
+      .catch(() => {});
+  }, [projectId]);
+
+  // Everyone who could plausibly be assigned a conversation — owner + active members.
+  const people = [
+    ...(team.owner?.id ? [{ id: team.owner.id, label: team.owner.name || team.owner.email || "Owner" }] : []),
+    ...(team.members || []).filter(m => m.user_id).map(m => ({ id: m.user_id, label: m.email })),
+  ];
+  const peopleById = Object.fromEntries(people.map(p => [p.id, p.label]));
 
   // ── Fetch all chats ─────────────────────────────────────
   const fetchChats = useCallback(async () => {
@@ -51,11 +84,63 @@ export default function ConversationsTab({ projectId }) {
     setMessages([]);
     setReply("");
     setSendError("");
+    setShowNotes(false);
     setMsgLoading(true);
     await fetchMessages(chat.id);
     setMsgLoading(false);
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => fetchMessages(chat.id), 5000);
+  };
+
+  // ── Internal notes ───────────────────────────────────────
+  const fetchNotes = async (chatId) => {
+    setNotesLoading(true);
+    const res = await fetch(`/api/conversations/${chatId}/notes`);
+    if (res.ok) setNotes((await res.json()) || []);
+    setNotesLoading(false);
+  };
+
+  const toggleNotes = async () => {
+    const opening = !showNotes;
+    setShowNotes(opening);
+    if (opening && selected) await fetchNotes(selected.id);
+  };
+
+  const postNote = async () => {
+    if (!noteText.trim() || !selected) return;
+    setPostingNote(true);
+    try {
+      const res = await fetch(`/api/conversations/${selected.id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: noteText.trim() }),
+      });
+      if (res.ok) {
+        setNoteText("");
+        await fetchNotes(selected.id);
+      }
+    } finally {
+      setPostingNote(false);
+    }
+  };
+
+  // ── Assignment ────────────────────────────────────────────
+  const assignChat = async (userId) => {
+    if (!selected) return;
+    setAssigning(true);
+    try {
+      const res = await fetch(`/api/conversations/${selected.id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId, assigned_to: userId || null }),
+      });
+      if (res.ok) {
+        setSelected(prev => prev && { ...prev, assigned_to: userId || null });
+        await fetchChats();
+      }
+    } finally {
+      setAssigning(false);
+    }
   };
 
   useEffect(() => {
@@ -119,12 +204,19 @@ export default function ConversationsTab({ projectId }) {
 
   const isHandoff = selected?.session_mode === "human";
 
-  const filtered = chats.filter(c =>
-    (c.external_id || "").includes(search) ||
-    (c.title || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = chats.filter(c => {
+    const matchSearch =
+      (c.external_id || "").includes(search) ||
+      (c.title || "").toLowerCase().includes(search.toLowerCase());
+    if (!matchSearch) return false;
+    if (filterMode === "mine") return me && c.assigned_to === me.id;
+    if (filterMode === "unassigned") return !c.assigned_to;
+    return true;
+  });
 
   const handoffCount = chats.filter(c => c.session_mode === "human").length;
+  const mineCount = me ? chats.filter(c => c.assigned_to === me.id).length : 0;
+  const unassignedCount = chats.filter(c => !c.assigned_to).length;
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 120px)", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "white" }}>
@@ -148,7 +240,7 @@ export default function ConversationsTab({ projectId }) {
               </span>
             </div>
           </div>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative", marginBottom: 10 }}>
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
             <input
               style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px 7px 32px", fontSize: 13, outline: "none", boxSizing: "border-box", background: "#f8fafc" }}
@@ -156,6 +248,23 @@ export default function ConversationsTab({ projectId }) {
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[
+              { key: "all", label: `All ${chats.length}` },
+              { key: "mine", label: `Mine ${mineCount}` },
+              { key: "unassigned", label: `Unassigned ${unassignedCount}` },
+            ].map(f => (
+              <button key={f.key} onClick={() => setFilterMode(f.key)}
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: "4px 9px", borderRadius: 20, cursor: "pointer",
+                  border: filterMode === f.key ? "1px solid #1e40af" : "1px solid #e2e8f0",
+                  background: filterMode === f.key ? "#eff6ff" : "white",
+                  color: filterMode === f.key ? "#1e40af" : "#64748b",
+                }}>
+                {f.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -218,6 +327,11 @@ export default function ConversationsTab({ projectId }) {
                         {chat.last_message || "No messages yet"}
                       </p>
                     </div>
+                    {chat.assigned_to && peopleById[chat.assigned_to] && (
+                      <p style={{ fontSize: 10, color: "#8b5cf6", margin: "2px 0 0", display: "flex", alignItems: "center", gap: 3 }}>
+                        <UserCircle2 size={10} /> {peopleById[chat.assigned_to]}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -251,6 +365,28 @@ export default function ConversationsTab({ projectId }) {
                 {isHandoff && <span style={{ marginLeft: 6, color: "#dc2626", fontWeight: 600 }}>· Waiting for human reply</span>}
               </p>
             </div>
+            <select
+              value={selected.assigned_to || ""}
+              onChange={e => assignChat(e.target.value || null)}
+              disabled={assigning}
+              title="Assign this conversation"
+              style={{ fontSize: 12, padding: "5px 8px", borderRadius: 6, border: "1px solid #e2e8f0", background: "white", color: "#334155", cursor: "pointer" }}
+            >
+              <option value="">Unassigned</option>
+              {people.map(p => (
+                <option key={p.id} value={p.id}>{p.id === me?.id ? `${p.label} (you)` : p.label}</option>
+              ))}
+            </select>
+            <button onClick={toggleNotes}
+              style={{
+                fontSize: 12, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 4,
+                background: showNotes ? "#eef2ff" : "white",
+                color: showNotes ? "#4338ca" : "#64748b",
+                border: showNotes ? "1px solid #c7d2fe" : "1px solid #e2e8f0",
+              }}>
+              <StickyNote size={12} /> {showNotes ? "Back to chat" : "Notes"}
+            </button>
             {isHandoff && (
               <button onClick={handBackToBot}
                 style={{ fontSize: 12, padding: "5px 12px", background: "#f0fdf4", color: "#166534", border: "1px solid #86efac", borderRadius: 6, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
@@ -259,6 +395,53 @@ export default function ConversationsTab({ projectId }) {
             )}
           </div>
 
+          {showNotes ? (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "#fffbeb", display: "flex", flexDirection: "column", gap: 10 }}>
+                <p style={{ fontSize: 11, color: "#92400e", margin: "0 0 4px", fontWeight: 600 }}>
+                  🔒 Internal notes — visible to your team only, never sent to the customer
+                </p>
+                {notesLoading && <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 16 }}>Loading notes...</div>}
+                {!notesLoading && notes.length === 0 && (
+                  <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 16 }}>No notes yet</div>
+                )}
+                {notes.map(note => (
+                  <div key={note.id} style={{ background: "white", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px" }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "#92400e", margin: "0 0 3px" }}>{note.author_name}</p>
+                    <p style={{ fontSize: 13, color: "#1f2937", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{note.content}</p>
+                    <p style={{ fontSize: 10, color: "#a16207", margin: "4px 0 0", opacity: 0.8 }}>{formatMsgTime(note.created_at)}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: "12px 16px", borderTop: "1px solid #e2e8f0", background: "white" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                  <textarea
+                    style={{
+                      flex: 1, border: "1px solid #e2e8f0", borderRadius: 8,
+                      padding: "8px 12px", fontSize: 13, resize: "none", outline: "none",
+                      fontFamily: "inherit", maxHeight: 120, minHeight: 40,
+                    }}
+                    rows={1}
+                    placeholder="Add an internal note..."
+                    value={noteText}
+                    onChange={e => setNoteText(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postNote(); } }}
+                  />
+                  <button onClick={postNote} disabled={!noteText.trim() || postingNote}
+                    style={{
+                      width: 40, height: 40, borderRadius: 8, border: "none",
+                      background: noteText.trim() && !postingNote ? "#d97706" : "#e2e8f0",
+                      color: noteText.trim() && !postingNote ? "white" : "#94a3b8",
+                      cursor: noteText.trim() && !postingNote ? "pointer" : "not-allowed",
+                      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                    }}>
+                    <Send size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+          <>
           {/* Handoff banner */}
           {isHandoff && (
             <div style={{ padding: "8px 16px", background: "#fff7ed", borderBottom: "1px solid #fed7aa", display: "flex", alignItems: "center", gap: 8 }}>
@@ -374,6 +557,8 @@ export default function ConversationsTab({ projectId }) {
                 Read-only · Bot is handling this conversation · User can trigger handoff by tapping "Talk to Human"
               </p>
             </div>
+          )}
+          </>
           )}
         </div>
       ) : (

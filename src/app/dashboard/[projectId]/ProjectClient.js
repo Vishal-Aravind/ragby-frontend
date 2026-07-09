@@ -6,21 +6,22 @@ import { useEffect, useState } from "react";
 import DocumentsTab from "./DocumentsTab";
 import IntegrationsTab from "./IntegrationsTab";
 import LeadsTab from "./LeadsTab";
-import ChatTab from "./ChatTab";
 import FlowsTab from "./FlowsTab";
 import ConversationsTab from "./ConversationsTab";
 import AnalyticsTab from "./AnalyticsTab";
 import ApiKeysTab from "./ApiKeysTab";
 import CampaignsTab from "./CampaignsTab";
+import TemplateLibrary from "./TemplateLibrary";
 import ShopTab from "./ShopTab";
 import AppointmentsTab from "./AppointmentsTab";
 import EventsTab from "./EventsTab";
+import TeamTab from "./TeamTab";
 
 import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
 import {
-  FileText, MessageCircle, Plug, Users, GitBranch,
-  Inbox, BarChart2, Key, Megaphone, ShoppingBag, CalendarDays, CalendarRange
+  FileText, Plug, Users, GitBranch,
+  Inbox, BarChart2, Key, Megaphone, Sparkles, ShoppingBag, CalendarDays, CalendarRange, UserCog
 } from "lucide-react";
 
 const ALLOWED_TYPES = [
@@ -41,7 +42,12 @@ const DOMAINS = [
 ];
 
 export default function ProjectClient({ project }) {
-  const [activeTab, setActiveTab] = useState("documents");
+  // Agents only get Conversations + Leads — everything else (sources,
+  // flows, billing-adjacent settings, team management) is owner/admin only.
+  const myRole = project.myRole || "owner";
+  const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
+
+  const [activeTab, setActiveTab] = useState(isOwnerOrAdmin ? "documents" : "conversations");
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
@@ -286,67 +292,95 @@ export default function ProjectClient({ project }) {
       <div className="flex gap-6 items-start">
         {/* ── Vertical tab sidebar ── */}
         <nav className="w-56 shrink-0 space-y-4">
-          {/* Domain selector — auto-saves on change */}
-          <div className="space-y-1">
-            <select
-              value={domain}
-              onChange={(e) => handleDomainChange(e.target.value)}
-              disabled={savingDomain}
-              className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700 disabled:opacity-60 cursor-pointer"
-            >
-              <option value="">No domain</option>
-              {DOMAINS.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-            {savingDomain && <span className="text-xs text-muted-foreground">Saving...</span>}
-            {domainSaved && <span className="text-xs text-emerald-600 font-medium">✓ Saved</span>}
-          </div>
+          {/* Domain selector — auto-saves on change. Settings, owner/admin only. */}
+          {isOwnerOrAdmin && (
+            <div className="space-y-1">
+              <select
+                value={domain}
+                onChange={(e) => handleDomainChange(e.target.value)}
+                disabled={savingDomain}
+                className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700 disabled:opacity-60 cursor-pointer"
+              >
+                <option value="">No domain</option>
+                {DOMAINS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              {savingDomain && <span className="text-xs text-muted-foreground">Saving...</span>}
+              {domainSaved && <span className="text-xs text-emerald-600 font-medium">✓ Saved</span>}
+            </div>
+          )}
 
           <div className="flex flex-col gap-1 border-r pr-3">
-            <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
-              <FileText size={13} />Documents
-            </TabButton>
-            <TabButton active={activeTab === "chat"} onClick={() => setActiveTab("chat")}>
-              <MessageCircle size={13} />Chat
-            </TabButton>
-            <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
-              <Plug size={13} />Integrations
-            </TabButton>
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
+                <FileText size={13} />Documents
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
+                <Plug size={13} />Integrations
+              </TabButton>
+            )}
             <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>
               <Users size={13} />Leads
             </TabButton>
-            <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
-              <GitBranch size={13} />Flows
-            </TabButton>
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
+                <GitBranch size={13} />Flows
+              </TabButton>
+            )}
             <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>
               <Inbox size={13} />Conversations
             </TabButton>
-            <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
-              <BarChart2 size={13} />Analytics
-            </TabButton>
-            <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>
-              <Key size={13} />API
-            </TabButton>
-            <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>
-              <Megaphone size={13} />Campaigns
-            </TabButton>
-            <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
-              <ShoppingBag size={13} />Shop
-            </TabButton>
-            <TabButton active={activeTab === "appointments"} onClick={() => setActiveTab("appointments")}>
-              <CalendarDays size={13} />Appointments
-            </TabButton>
-            <TabButton active={activeTab === "events"} onClick={() => setActiveTab("events")}>
-              <CalendarRange size={13} />Events
-            </TabButton>
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
+                <BarChart2 size={13} />Analytics
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>
+                <Key size={13} />API
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>
+                <Megaphone size={13} />Campaigns
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "templates"} onClick={() => setActiveTab("templates")}>
+                <Sparkles size={13} />Templates
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
+                <ShoppingBag size={13} />Shop
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "appointments"} onClick={() => setActiveTab("appointments")}>
+                <CalendarDays size={13} />Appointments
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "events"} onClick={() => setActiveTab("events")}>
+                <CalendarRange size={13} />Events
+              </TabButton>
+            )}
+            {isOwnerOrAdmin && (
+              <TabButton active={activeTab === "team"} onClick={() => setActiveTab("team")}>
+                <UserCog size={13} />Team
+              </TabButton>
+            )}
           </div>
         </nav>
 
         {/* ── Tab content ── */}
         <div className="flex-1 min-w-0">
-          {activeTab === "documents" && (
+          {isOwnerOrAdmin && activeTab === "documents" && (
             <DocumentsTab
+              projectId={project.id}
               files={files}
               onSelectFiles={handleSelectFiles}
               onUpload={handleUpload}
@@ -361,17 +395,20 @@ export default function ProjectClient({ project }) {
             />
           )}
 
-          {activeTab === "chat" && <ChatTab projectId={project.id} />}
-          {activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
+          {isOwnerOrAdmin && activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
           {activeTab === "leads" && <LeadsTab project={project.id} />}
-          {activeTab === "flows" && <FlowsTab projectId={project.id} />}
+          {isOwnerOrAdmin && activeTab === "flows" && <FlowsTab projectId={project.id} />}
           {activeTab === "conversations" && <ConversationsTab projectId={project.id} />}
-          {activeTab === "analytics" && <AnalyticsTab project={project} />}
-          {activeTab === "api" && <ApiKeysTab project={project} />}
-          {activeTab === "campaigns" && <CampaignsTab project={project} />}
-          {activeTab === "shop" && <ShopTab project={project} />}
-          {activeTab === "appointments" && <AppointmentsTab project={project} />}
-          {activeTab === "events" && <EventsTab project={project} />}
+          {isOwnerOrAdmin && activeTab === "analytics" && <AnalyticsTab project={project} />}
+          {isOwnerOrAdmin && activeTab === "api" && <ApiKeysTab project={project} />}
+          {isOwnerOrAdmin && activeTab === "campaigns" && (
+            <CampaignsTab project={project} onOpenTemplateLibrary={() => setActiveTab("templates")} />
+          )}
+          {isOwnerOrAdmin && activeTab === "templates" && <TemplateLibrary projectId={project.id} />}
+          {isOwnerOrAdmin && activeTab === "shop" && <ShopTab project={project} />}
+          {isOwnerOrAdmin && activeTab === "appointments" && <AppointmentsTab project={project} />}
+          {isOwnerOrAdmin && activeTab === "events" && <EventsTab project={project} />}
+          {isOwnerOrAdmin && activeTab === "team" && <TeamTab project={project} />}
         </div>
       </div>
 

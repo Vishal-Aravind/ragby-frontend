@@ -2,17 +2,19 @@
 import { useEffect, useState } from 'react'
 import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles, RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
-import TemplateLibrary from './TemplateLibrary'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://ragby-backend.onrender.com'
 
-export default function CampaignsTab({ project }) {
+// `onOpenTemplateLibrary` — Template Library now lives in its own top-level
+// tab (shared by Campaigns, the public API, and appointment reminders),
+// so this just asks the dashboard shell to switch tabs instead of
+// rendering it inline here.
+export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
   const projectId = project?.id || project
   const [campaigns, setCampaigns]     = useState([])
   const [templates, setTemplates]     = useState([])
   const [loading, setLoading]         = useState(true)
   const [showCreate, setShowCreate]   = useState(false)
-  const [showLibrary, setShowLibrary] = useState(false)
   const [sending, setSending]         = useState(false)
   const [syncing, setSyncing]         = useState(false)
   const [error, setError]             = useState(null)
@@ -172,7 +174,6 @@ export default function CampaignsTab({ project }) {
   }
 
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading campaigns...</div>
-  if (showLibrary) return <TemplateLibrary projectId={projectId} onBack={() => { setShowLibrary(false); syncTemplates(); }} />
 
   return (
     <div className="p-6 space-y-4">
@@ -183,7 +184,7 @@ export default function CampaignsTab({ project }) {
           <p className="text-sm text-muted-foreground">Send WhatsApp template messages to your contacts</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => setShowLibrary(true)}
+          <button onClick={onOpenTemplateLibrary}
             className="flex items-center gap-1.5 border text-sm px-4 py-2 rounded-lg hover:bg-muted">
             <Sparkles size={14} className="text-yellow-500" /> Template Library
           </button>
@@ -222,7 +223,7 @@ export default function CampaignsTab({ project }) {
             {templates.length === 0 ? (
               <div className="border rounded-lg p-4 text-sm text-muted-foreground text-center space-y-2">
                 <p>No approved templates found.</p>
-                <p className="text-xs">Add templates via <button onClick={() => setShowLibrary(true)} className="text-blue-600 underline">Template Library</button> or click <strong>Sync from Meta</strong> if you already have approved templates.</p>
+                <p className="text-xs">Add templates via <button onClick={onOpenTemplateLibrary} className="text-blue-600 underline">Template Library</button> or click <strong>Sync from Meta</strong> if you already have approved templates.</p>
               </div>
             ) : (
               <div className="mt-1 space-y-2 max-h-48 overflow-y-auto">

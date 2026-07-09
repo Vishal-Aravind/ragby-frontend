@@ -10,6 +10,7 @@ export default function ProjectCard({ project, onDelete }) {
   const router = useRouter();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const isOwner = (project.myRole || "owner") === "owner";
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -32,26 +33,33 @@ export default function ProjectCard({ project, onDelete }) {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-lg truncate">{project.name}</h2>
 
-            {/* Delete button — shows on hover */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation(); // prevent card click
-                setDeleteDialogOpen(true);
-              }}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
-            >
-              <Trash2 size={15} />
-            </button>
+            {/* Delete button — owner only, shows on hover */}
+            {isOwner && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // prevent card click
+                  setDeleteDialogOpen(true);
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
           </div>
 
           {project.domain && (
             <p className="text-sm text-muted-foreground">{project.domain}</p>
           )}
 
-          <div className="pt-1">
+          <div className="pt-1 flex items-center gap-2">
             <span className="inline-block text-xs border rounded px-2 py-0.5 text-muted-foreground">
               {project.domain || "No domain"}
             </span>
+            {!isOwner && (
+              <span className="inline-block text-xs border rounded px-2 py-0.5 text-blue-600 border-blue-200 bg-blue-50 capitalize">
+                {project.myRole}
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>

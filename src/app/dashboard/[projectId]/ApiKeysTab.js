@@ -84,9 +84,13 @@ export default function ApiKeysTab({ project }) {
       {/* How to use */}
       <div className="border rounded-xl p-5 space-y-4">
         <h3 className="text-sm font-semibold">How to use</h3>
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          ⚠️ This only works if the customer has messaged you within the last 24 hours (WhatsApp's rule, not ours).
+          To message someone anytime — reminders, confirmations, order updates — use the <strong>template API</strong> below instead.
+        </p>
 
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Send a WhatsApp message</p>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Send a plain WhatsApp message (24-hour window only)</p>
           <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
 {`POST https://ragby-backend.onrender.com/public/send
 Headers:
@@ -134,6 +138,62 @@ requests.post(
         "message": "Your order is confirmed!",
     }
 )`}
+          </pre>
+        </div>
+      </div>
+
+      {/* Template API — the "anytime" alternative to /public/send */}
+      <div className="border rounded-xl p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold">Send a template message (works anytime)</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Uses one of your approved WhatsApp templates (see the Templates tab to add one) — not restricted to the 24-hour window.
+            Good for appointment reminders, order confirmations, or any message you need to send proactively.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">List your approved templates</p>
+          <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
+{`GET https://ragby-backend.onrender.com/api/templates
+Headers:
+  X-API-Key: ${visible ? apiKey?.key : maskedKey}`}
+          </pre>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Send to one recipient</p>
+          <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
+{`POST https://ragby-backend.onrender.com/api/send-template
+Headers:
+  X-API-Key: ${visible ? apiKey?.key : maskedKey}
+  Content-Type: application/json
+
+Body:
+{
+  "to": "919876543210",
+  "template": "appointment_reminder",
+  "variables": ["John", "25 Dec 2026", "3:00 PM"]
+}`}
+          </pre>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Send to many recipients at once (max 100)</p>
+          <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
+{`POST https://ragby-backend.onrender.com/api/send-template/bulk
+Headers:
+  X-API-Key: ${visible ? apiKey?.key : maskedKey}
+  Content-Type: application/json
+
+Body:
+{
+  "template": "appointment_reminder",
+  "recipients": [
+    { "to": "919876543210", "variables": ["John", "25 Dec", "3pm"] },
+    { "to": "919812345678", "variables": ["Priya", "26 Dec", "4pm"] }
+  ]
+}`}
           </pre>
         </div>
       </div>

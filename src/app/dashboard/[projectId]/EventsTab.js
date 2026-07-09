@@ -22,13 +22,16 @@ export default function EventsTab({ project }) {
   // if the user hits Save before the real event ID has come back yet.
   const pendingCreateRef = useRef(null)
 
-  const fetchEvents = async () => {
-    setLoading(true)
+  // `silent` skips the loading flag — used for background refreshes so they
+  // don't trigger the whole-tab "Loading events..." early return below,
+  // which would unmount (and reset) an open page-builder overlay.
+  const fetchEvents = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true)
     try {
       const res = await fetch(`/api/events?projectId=${projectId}`)
       if (res.ok) setEvents(await res.json())
     } catch (e) { console.error(e) }
-    setLoading(false)
+    if (!silent) setLoading(false)
   }
 
   useEffect(() => { fetchEvents() }, [projectId])
@@ -58,7 +61,7 @@ export default function EventsTab({ project }) {
         // Fill in the real ID once it arrives — only if the user is still
         // on this same (not-yet-saved) draft.
         setBuilderEvent(prev => (prev && !prev.id ? { ...prev, ...createdEvent } : prev))
-        fetchEvents()
+        fetchEvents({ silent: true })
       })
       .catch(e => {
         console.error(e)

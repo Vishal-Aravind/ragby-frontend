@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Database, Table, Sheet, RefreshCw } from "lucide-react";
+import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Database, Table, Sheet, RefreshCw, MessageCircle, X } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
+import ChatTab from "./ChatTab";
 
 const SOURCE_TABS = [
   { id: "documents", label: "Documents", icon: FileText },
@@ -15,6 +16,7 @@ const SOURCE_TABS = [
 ];
 
 export default function DocumentsTab({
+  projectId,
   files,
   onSelectFiles,
   onUpload,
@@ -28,6 +30,7 @@ export default function DocumentsTab({
   onReuploadExcel,
 }) {
   const [type, setType] = useState("documents");
+  const [showChat, setShowChat] = useState(false);
 
   // ── Documents state ──────────────────────────────────
   const handleFileChange = (e) => {
@@ -179,10 +182,17 @@ export default function DocumentsTab({
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="space-y-5">
+
+        {/* ── Page header ── */}
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Data Sources</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Connect documents, spreadsheets, websites, or databases to power your AI's answers.</p>
+        </div>
 
         {/* ── Source type tab bar ── */}
-        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit border border-gray-200/60">
           {SOURCE_TABS.map(tab => {
             const Icon = tab.icon;
             return (
@@ -200,15 +210,30 @@ export default function DocumentsTab({
               </button>
             );
           })}
+          </div>
+
+          <button
+            onClick={() => setShowChat(true)}
+            title="Test chat with your bot"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-indigo-200 text-indigo-600 bg-indigo-50/50 hover:bg-indigo-50 transition-colors"
+          >
+            <MessageCircle size={14} />
+            Test Chat
+          </button>
         </div>
 
         {/* ── Documents tab ── */}
         {type === "documents" && (
-          <div className="border rounded-xl p-6 space-y-4 bg-white">
+          <div className="border rounded-xl p-6 space-y-4 bg-white shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">Upload Documents</h3>
-                <p className="text-xs text-gray-500 mt-0.5">PDF, DOCX, PPTX, TXT supported</p>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gray-50 border flex items-center justify-center shrink-0">
+                  <FileText size={16} className="text-gray-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Upload Documents</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">PDF, DOCX, PPTX, TXT supported</p>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Button asChild variant="outline" size="sm">
@@ -238,8 +263,10 @@ export default function DocumentsTab({
               <div className="space-y-2">
                 {files.map((file, idx) => (
                   <div key={idx} className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText size={14} className="text-gray-400 shrink-0" />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-md bg-white border flex items-center justify-center shrink-0">
+                        <FileText size={13} className="text-gray-400" />
+                      </div>
                       <span className="truncate text-sm text-gray-700 max-w-xs">{file.name}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -264,10 +291,15 @@ export default function DocumentsTab({
 
         {/* ── Google Sheets tab ── */}
         {type === "gsheet" && (
-          <div className="border rounded-xl p-6 space-y-4 bg-white">
-            <div>
-              <h3 className="font-semibold text-gray-900">Connect Google Sheets</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Make sure the sheet is set to "Anyone with the link can view"</p>
+          <div className="border rounded-xl p-6 space-y-4 bg-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-green-50 border border-green-100 flex items-center justify-center shrink-0">
+                <Sheet size={16} className="text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Connect Google Sheets</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Make sure the sheet is set to "Anyone with the link can view"</p>
+              </div>
             </div>
             <Input placeholder="Label (e.g. Product Catalog)" value={sheetLabel} onChange={e => setSheetLabel(e.target.value)} />
             <Input placeholder="Paste Google Sheets link or Sheet ID" value={gsheetUrl} onChange={e => setGsheetUrl(e.target.value)} />
@@ -300,10 +332,15 @@ export default function DocumentsTab({
 
         {/* ── Excel tab ── */}
         {type === "excel" && (
-          <div className="border rounded-xl p-6 space-y-4 bg-white">
-            <div>
-              <h3 className="font-semibold text-gray-900">Upload Excel File</h3>
-              <p className="text-xs text-gray-500 mt-0.5">All sheets in the file will be indexed. Re-upload to update.</p>
+          <div className="border rounded-xl p-6 space-y-4 bg-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                <Table size={16} className="text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Upload Excel File</h3>
+                <p className="text-xs text-gray-500 mt-0.5">All sheets in the file will be indexed. Re-upload to update.</p>
+              </div>
             </div>
             <Input placeholder="Label (e.g. Sales Data)" value={excelLabel} onChange={e => setExcelLabel(e.target.value)} />
             <div className="flex items-center gap-3">
@@ -326,10 +363,15 @@ export default function DocumentsTab({
 
         {/* ── Website tab ── */}
         {type === "website" && (
-          <div className="border rounded-xl p-6 space-y-4 bg-white">
-            <div>
-              <h3 className="font-semibold text-gray-900">Crawl Website</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Website must be publicly accessible. Some sites with Cloudflare may not work.</p>
+          <div className="border rounded-xl p-6 space-y-4 bg-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0">
+                <Globe size={16} className="text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Crawl Website</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Website must be publicly accessible. Some sites with Cloudflare may not work.</p>
+              </div>
             </div>
             <Input placeholder="Label (e.g. Company Website)" value={websiteLabel} onChange={e => setWebsiteLabel(e.target.value)} />
             <Input placeholder="https://yourwebsite.com" value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)} />
@@ -352,10 +394,15 @@ export default function DocumentsTab({
 
         {/* ── Database tab ── */}
         {type === "database" && (
-          <div className="border rounded-xl p-6 space-y-4 bg-white">
-            <div>
-              <h3 className="font-semibold text-gray-900">Connect Database</h3>
-              <p className="text-xs text-gray-500 mt-0.5">PostgreSQL and MySQL supported</p>
+          <div className="border rounded-xl p-6 space-y-4 bg-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                <Database size={16} className="text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Connect Database</h3>
+                <p className="text-xs text-gray-500 mt-0.5">PostgreSQL and MySQL supported</p>
+              </div>
             </div>
             <Input placeholder="Label (e.g. Production DB)" value={dbLabel} onChange={e => setDbLabel(e.target.value)} />
             <div className="flex gap-2">
@@ -417,13 +464,18 @@ export default function DocumentsTab({
 
         {/* ── Connected Sources ── */}
         {sources.length > 0 && (
-          <div className="border rounded-xl p-6 space-y-3 bg-white">
-            <h3 className="font-semibold text-gray-900">Connected Sources</h3>
+          <div className="border rounded-xl p-6 space-y-3 bg-white shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Connected Sources</h3>
+              <span className="text-xs text-gray-400">{sources.length} connected</span>
+            </div>
             <div className="space-y-2">
               {sources.map((source) => (
                 <div key={source.id} className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {sourceIcon(source)}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-md bg-white border flex items-center justify-center shrink-0">
+                      {sourceIcon(source)}
+                    </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{source.label}</p>
                       <p className="text-xs text-gray-400">{sourceTypeLabel(source)}</p>
@@ -476,6 +528,26 @@ export default function DocumentsTab({
         onConfirm={() => { if (sourceToDelete) onDeleteSource(sourceToDelete.id); setDeleteDialogOpen(false); setSourceToDelete(null); }}
         onCancel={() => { setDeleteDialogOpen(false); setSourceToDelete(null); }}
       />
+
+      {showChat && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowChat(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl w-full max-w-3xl space-y-3 max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-2 pt-2">
+              <p className="text-sm font-semibold text-gray-800 px-2">Test chat — uses all your connected sources</p>
+              <button onClick={() => setShowChat(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
+                <X size={16} className="text-gray-500" />
+              </button>
+            </div>
+            <ChatTab projectId={projectId} />
+          </div>
+        </div>
+      )}
     </>
   );
 }
