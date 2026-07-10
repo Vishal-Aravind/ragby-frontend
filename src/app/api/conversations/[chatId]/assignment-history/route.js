@@ -1,5 +1,6 @@
-// src/app/api/conversations/[chatId]/assign/route.js
-// Claim/assign/unassign a conversation to a specific team member.
+// src/app/api/conversations/[chatId]/assignment-history/route.js
+// Who assigned this conversation to whom, and when — so a chain of
+// delegations (manager assigns to A, A hands it to B) is traceable.
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
@@ -27,42 +28,44 @@ function getSupabase(req) {
   };
 }
 
-export async function POST(req, { params }) {
+export async function GET(req, { params }) {
   const { chatId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { project_id, assigned_to } = await req.json(); // assigned_to: a user id, or null to unassign
-
   const { data: chat } = await supabaseAdmin.from("chats").select("project_id").eq("id", chatId).maybeSingle();
-  if (!chat || chat.project_id !== project_id) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!chat) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const role = await getProjectRole(user.id, project_id);
+  const role = await getProjectRole(user.id, chat.project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Assignee must actually have access to this project too (owner, or an active member).
-  if (assigned_to) {
-    const assigneeRole = await getProjectRole(assigned_to, project_id);
-    if (!assigneeRole) return NextResponse.json({ error: "That person doesn't have access to this project" }, { status: 400 });
-  }
-
-  const { error } = await supabaseAdmin
-    .from("chats")
-    .update({ assigned_to: assigned_to || null })
-    .eq("id", chatId);
+  const { data: entries, error } = await supabaseAdmin
+    .from("chat_assignment_log")
+    .select("id, assigned_to, assigned_by, created_at")
+    .eq("chat_id", chatId)
+    .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Log who changed it and to whom — so a chain of delegations (manager
-  // assigns to A, A hands it to B) is traceable, not just "currently B".
-  await supabaseAdmin.from("chat_assignment_log").insert({
-    chat_id: chatId,
-    assigned_to: assigned_to || null,
-    assigned_by: user.id,
-  });
+  const userIds = [...new Set(
+    (entries || []).flatMap(e => [e.assigned_to, e.assigned_by]).filter(Boolean)
+  )];
 
-  return NextResponse.json({ success: true });
+  let profileMap = {};
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, name, email")
+      .in("id", userIds);
+    (profiles || []).forEach(p => { profileMap[p.id] = p.name || p.email; });
+  }
+
+  const result = (entries || []).map(e => ({
+    ...e,
+    assigned_to_name: e.assigned_to ? (profileMap[e.assigned_to] || "Unknown") : null,
+    assigned_by_name: profileMap[e.assigned_by] || "Unknown",
+  }));
+
+  return NextResponse.json(result);
 }

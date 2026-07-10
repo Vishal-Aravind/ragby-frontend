@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2 } from "lucide-react";
+import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2, ArrowRightLeft } from "lucide-react";
 
 export default function ConversationsTab({ projectId }) {
   const [chats, setChats]           = useState([]);
@@ -23,8 +23,10 @@ export default function ConversationsTab({ projectId }) {
   const [team, setTeam]           = useState({ owner: null, members: [] });
   const [filterMode, setFilterMode] = useState("all"); // all | mine | unassigned
   const [assigning, setAssigning] = useState(false);
+  const [takingOver, setTakingOver] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes]         = useState([]);
+  const [history, setHistory]     = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [noteText, setNoteText]   = useState("");
   const [postingNote, setPostingNote] = useState(false);
@@ -92,11 +94,15 @@ export default function ConversationsTab({ projectId }) {
     pollRef.current = setInterval(() => fetchMessages(chat.id), 5000);
   };
 
-  // ── Internal notes ───────────────────────────────────────
+  // ── Internal notes + assignment history ──────────────────
   const fetchNotes = async (chatId) => {
     setNotesLoading(true);
-    const res = await fetch(`/api/conversations/${chatId}/notes`);
-    if (res.ok) setNotes((await res.json()) || []);
+    const [notesRes, historyRes] = await Promise.all([
+      fetch(`/api/conversations/${chatId}/notes`),
+      fetch(`/api/conversations/${chatId}/assignment-history`),
+    ]);
+    if (notesRes.ok) setNotes((await notesRes.json()) || []);
+    if (historyRes.ok) setHistory((await historyRes.json()) || []);
     setNotesLoading(false);
   };
 
@@ -187,6 +193,23 @@ export default function ConversationsTab({ projectId }) {
       body: JSON.stringify({ project_id: projectId, phone_number: selected.external_id }),
     });
     await fetchChats();
+  };
+
+  // ── Take over from bot (proactive — doesn't need the customer to ask) ──
+  const takeOver = async () => {
+    if (!selected) return;
+    setTakingOver(true);
+    try {
+      await fetch(`/api/conversations/${selected.id}/takeover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId, phone_number: selected.external_id }),
+      });
+      setSelected(prev => prev && { ...prev, session_mode: "human" });
+      await fetchChats();
+    } finally {
+      setTakingOver(false);
+    }
   };
 
   // ── Helpers ─────────────────────────────────────────────
@@ -387,10 +410,15 @@ export default function ConversationsTab({ projectId }) {
               }}>
               <StickyNote size={12} /> {showNotes ? "Back to chat" : "Notes"}
             </button>
-            {isHandoff && (
+            {isHandoff ? (
               <button onClick={handBackToBot}
                 style={{ fontSize: 12, padding: "5px 12px", background: "#f0fdf4", color: "#166534", border: "1px solid #86efac", borderRadius: 6, cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
                 <Bot size={12} /> Hand back to bot
+              </button>
+            ) : (
+              <button onClick={takeOver} disabled={takingOver}
+                style={{ fontSize: 12, padding: "5px 12px", background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", borderRadius: 6, cursor: takingOver ? "not-allowed" : "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                <User size={12} /> {takingOver ? "Taking over..." : "Take over"}
               </button>
             )}
           </div>
@@ -399,19 +427,31 @@ export default function ConversationsTab({ projectId }) {
             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
               <div style={{ flex: 1, overflowY: "auto", padding: "16px", background: "#fffbeb", display: "flex", flexDirection: "column", gap: 10 }}>
                 <p style={{ fontSize: 11, color: "#92400e", margin: "0 0 4px", fontWeight: 600 }}>
-                  🔒 Internal notes — visible to your team only, never sent to the customer
+                  🔒 Internal notes &amp; assignment history — visible to your team only, never sent to the customer
                 </p>
-                {notesLoading && <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 16 }}>Loading notes...</div>}
-                {!notesLoading && notes.length === 0 && (
-                  <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 16 }}>No notes yet</div>
+                {notesLoading && <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 16 }}>Loading...</div>}
+                {!notesLoading && notes.length === 0 && history.length === 0 && (
+                  <div style={{ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 16 }}>No notes or assignment activity yet</div>
                 )}
-                {notes.map(note => (
-                  <div key={note.id} style={{ background: "white", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px" }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "#92400e", margin: "0 0 3px" }}>{note.author_name}</p>
-                    <p style={{ fontSize: 13, color: "#1f2937", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{note.content}</p>
-                    <p style={{ fontSize: 10, color: "#a16207", margin: "4px 0 0", opacity: 0.8 }}>{formatMsgTime(note.created_at)}</p>
-                  </div>
-                ))}
+                {[
+                  ...notes.map(n => ({ kind: "note", ...n })),
+                  ...history.map(h => ({ kind: "history", ...h })),
+                ]
+                  .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                  .map(item => item.kind === "note" ? (
+                    <div key={`note-${item.id}`} style={{ background: "white", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px" }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#92400e", margin: "0 0 3px" }}>{item.author_name}</p>
+                      <p style={{ fontSize: 13, color: "#1f2937", margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{item.content}</p>
+                      <p style={{ fontSize: 10, color: "#a16207", margin: "4px 0 0", opacity: 0.8 }}>{formatMsgTime(item.created_at)}</p>
+                    </div>
+                  ) : (
+                    <div key={`hist-${item.id}`} style={{ display: "flex", alignItems: "center", gap: 6, padding: "1px 4px" }}>
+                      <ArrowRightLeft size={11} style={{ color: "#a855f7", flexShrink: 0 }} />
+                      <p style={{ fontSize: 11, color: "#7c3aed", margin: 0, fontStyle: "italic" }}>
+                        {item.assigned_to_name ? `Assigned to ${item.assigned_to_name}` : "Unassigned"} by {item.assigned_by_name} · {formatMsgTime(item.created_at)}
+                      </p>
+                    </div>
+                  ))}
               </div>
               <div style={{ padding: "12px 16px", borderTop: "1px solid #e2e8f0", background: "white" }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
@@ -554,7 +594,7 @@ export default function ConversationsTab({ projectId }) {
           ) : (
             <div style={{ padding: "10px 16px", borderTop: "1px solid #e2e8f0", background: "white" }}>
               <p style={{ fontSize: 11, color: "#94a3b8", margin: 0, textAlign: "center" }}>
-                Read-only · Bot is handling this conversation · User can trigger handoff by tapping "Talk to Human"
+                Read-only · Bot is handling this conversation · Click "Take over" above to reply directly, or the user can trigger handoff by tapping "Talk to Human"
               </p>
             </div>
           )}

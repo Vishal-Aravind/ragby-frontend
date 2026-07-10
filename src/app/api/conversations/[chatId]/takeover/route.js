@@ -1,4 +1,7 @@
-// src/app/api/conversations/[chatId]/handback/route.js
+// src/app/api/conversations/[chatId]/takeover/route.js
+// Lets a team member proactively pause the bot and take over a
+// conversation — the mirror of "hand back to bot", but triggered by the
+// team instead of the customer tapping "Talk to Human".
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
@@ -37,14 +40,23 @@ export async function POST(req, { params }) {
   const role = await getProjectRole(user.id, project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Reset session mode back to flow — service-role client so this isn't
-  // at the mercy of whatever RLS policy exists on whatsapp_sessions today;
-  // access is already gated by the getProjectRole check above.
   await supabaseAdmin.from("whatsapp_sessions").upsert({
     project_id,
     phone_number,
-    mode: "flow",
+    mode: "human",
   }, { onConflict: "project_id,phone_number" });
 
-  return NextResponse.json({ status: "handed_back" });
+  // Auto-claim the conversation for whoever took it over, but don't steal
+  // it from someone who already has it assigned.
+  const { data: chat } = await supabaseAdmin.from("chats").select("assigned_to").eq("id", chatId).maybeSingle();
+  if (chat && !chat.assigned_to) {
+    await supabaseAdmin.from("chats").update({ assigned_to: user.id }).eq("id", chatId);
+    await supabaseAdmin.from("chat_assignment_log").insert({
+      chat_id: chatId,
+      assigned_to: user.id,
+      assigned_by: user.id,
+    });
+  }
+
+  return NextResponse.json({ status: "taken_over" });
 }
