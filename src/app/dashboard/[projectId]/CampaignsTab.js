@@ -25,6 +25,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
   const [variables, setVariables]     = useState([])
   const [recipientFilter, setRecipientFilter] = useState('whatsapp')
   const [tagFilter, setTagFilter]     = useState('')
+  const [availableTags, setAvailableTags] = useState([])
   const [csvContacts, setCsvContacts] = useState([])
 
   const handleCsvUpload = async (e) => {
@@ -102,6 +103,19 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
 
   useEffect(() => { fetchData() }, [projectId])
 
+  // Pull the set of tags that actually exist on leads, so "By tag" picks
+  // from real values instead of asking the user to type one blind.
+  useEffect(() => {
+    if (!projectId) return
+    fetch(`/api/leads?projectId=${projectId}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(leads => {
+        const tags = Array.from(new Set((Array.isArray(leads) ? leads : []).flatMap(l => l.tags || []))).sort()
+        setAvailableTags(tags)
+      })
+      .catch(() => {})
+  }, [projectId])
+
   const selectTemplate = (t) => {
     setSelectedTemplate(t)
     const body = t.components?.find(c => c.type === "BODY")
@@ -114,6 +128,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
     if (!name.trim()) return setError("Campaign name is required")
     if (!selectedTemplate) return setError("Select a template")
     if (recipientFilter === 'csv' && csvContacts.length === 0) return setError("Upload a CSV file first")
+    if (recipientFilter === 'tag' && !tagFilter) return setError("Pick a tag first")
     setSending(true)
     setError(null)
     const res = await fetch('/api/campaigns', {
@@ -137,6 +152,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
       setVariables([])
       setCsvContacts([])
       setRecipientFilter('whatsapp')
+      setTagFilter('')
       setTimeout(fetchData, 2000)
     } else {
       const data = await res.json()
@@ -281,6 +297,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
                 { value: 'all', label: 'All contacts' },
                 { value: 'whatsapp', label: 'WhatsApp only' },
                 { value: 'web', label: 'Web leads only' },
+                { value: 'tag', label: '🏷️ By tag' },
                 { value: 'csv', label: '📂 Upload CSV/Excel' },
               ].map(opt => (
                 <button key={opt.value}
@@ -294,6 +311,27 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
                 </button>
               ))}
             </div>
+
+            {recipientFilter === 'tag' && (
+              <div className="mt-3 space-y-2">
+                {availableTags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No tags exist yet — add tags to leads in the Leads tab first.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableTags.map(tag => (
+                      <button key={tag} type="button" onClick={() => setTagFilter(tagFilter === tag ? '' : tag)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          tagFilter === tag ? 'bg-indigo-600 text-white border-indigo-600' : 'hover:bg-muted'
+                        }`}>
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {recipientFilter === 'csv' && (
               <div className="mt-3 space-y-2">
