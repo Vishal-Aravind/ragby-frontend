@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { MessageSquare, Users, Bot, GitBranch, PhoneCall, TrendingUp } from 'lucide-react'
+import { MessageSquare, Users, Bot, GitBranch, PhoneCall, TrendingUp, HelpCircle, Check, Sparkles, Loader2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 export default function AnalyticsTab({ project }) {
@@ -9,9 +9,18 @@ export default function AnalyticsTab({ project }) {
   const [chartData, setChartData] = useState([])
   const [loading, setLoading]   = useState(true)
 
+  // ── Unanswered questions ──────────────────────────────────
+  const [gaps, setGaps]           = useState([])
+  const [gapsLoading, setGapsLoading] = useState(true)
+  const [gapsTab, setGapsTab]     = useState('unresolved') // unresolved | resolved
+  const [expandedKey, setExpandedKey] = useState(null)
+  const [answerText, setAnswerText] = useState('')
+  const [savingKey, setSavingKey] = useState(null)
+
   useEffect(() => {
     if (!projectId) return
     fetchAnalytics()
+    fetchGaps()
   }, [projectId])
 
   const fetchAnalytics = async () => {
@@ -23,6 +32,58 @@ export default function AnalyticsTab({ project }) {
       setChartData(data.chart)
     }
     setLoading(false)
+  }
+
+  const fetchGaps = async () => {
+    setGapsLoading(true)
+    const res = await fetch(`/api/analytics/unanswered-questions?project_id=${projectId}`)
+    if (res.ok) {
+      const data = await res.json()
+      setGaps(data.groups || [])
+    }
+    setGapsLoading(false)
+  }
+
+  const markResolved = async (question) => {
+    setSavingKey(question)
+    try {
+      await fetch('/api/analytics/unanswered-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId, question }),
+      })
+      await fetchGaps()
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
+  const saveAnswer = async (question) => {
+    if (!answerText.trim()) return
+    setSavingKey(question)
+    try {
+      const res = await fetch('/api/analytics/unanswered-questions/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId, question, answer: answerText.trim() }),
+      })
+      if (res.ok) {
+        setExpandedKey(null)
+        setAnswerText('')
+        await fetchGaps()
+      }
+    } finally {
+      setSavingKey(null)
+    }
+  }
+
+  const formatRelative = (ts) => {
+    const diff = Date.now() - new Date(ts).getTime()
+    const days = Math.floor(diff / 86400000)
+    if (days <= 0) return 'today'
+    if (days === 1) return 'yesterday'
+    if (days < 30) return `${days}d ago`
+    return new Date(ts).toLocaleDateString()
   }
 
   if (loading) return (
@@ -50,6 +111,10 @@ export default function AnalyticsTab({ project }) {
     indigo: { bg: "bg-indigo-50", text: "text-indigo-700", icon: "text-indigo-500" },
     red:    { bg: "bg-red-50",    text: "text-red-700",    icon: "text-red-500"    },
   }
+
+  const unresolvedGaps = gaps.filter(g => !g.resolved)
+  const resolvedGaps = gaps.filter(g => g.resolved)
+  const visibleGaps = gapsTab === 'unresolved' ? unresolvedGaps : resolvedGaps
 
   return (
     <div className="p-6 space-y-6">
@@ -112,6 +177,110 @@ export default function AnalyticsTab({ project }) {
           No message data yet for the chart.
         </div>
       )}
+
+      {/* ── Unanswered Questions ── */}
+      <div className="border rounded-xl overflow-hidden">
+        <div className="p-4 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <HelpCircle size={16} className="text-amber-500" />
+            <h3 className="text-sm font-semibold">Unanswered Questions</h3>
+            {unresolvedGaps.length > 0 && (
+              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                {unresolvedGaps.length}
+              </span>
+            )}
+          </div>
+          <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+            {['unresolved', 'resolved'].map(t => (
+              <button key={t} onClick={() => setGapsTab(t)}
+                className={`text-xs px-3 py-1 rounded-md font-medium capitalize transition-colors ${
+                  gapsTab === t ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}>
+                {t} {t === 'unresolved' ? `(${unresolvedGaps.length})` : `(${resolvedGaps.length})`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground px-4 pt-3">
+          Questions your bot couldn't find an answer for — add an answer to train it, or dismiss if it's not worth documenting.
+        </p>
+
+        <div className="p-4 space-y-2">
+          {gapsLoading ? (
+            <div className="text-center text-sm text-muted-foreground py-6">Loading...</div>
+          ) : visibleGaps.length === 0 ? (
+            <div className="text-center text-sm text-muted-foreground py-6">
+              {gapsTab === 'unresolved'
+                ? (gaps.length === 0 ? 'No unanswered questions yet — nice!' : 'Nothing unresolved right now 🎉')
+                : 'Nothing marked resolved yet.'}
+            </div>
+          ) : (
+            visibleGaps.map(g => (
+              <div key={g.key} className="border rounded-lg p-3 bg-gray-50">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-800">{g.question}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                        Asked {g.count} time{g.count > 1 ? 's' : ''}
+                      </span>
+                      <span className="text-xs text-muted-foreground">Last asked {formatRelative(g.last_asked_at)}</span>
+                    </div>
+                  </div>
+                  {gapsTab === 'unresolved' && (
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => { setExpandedKey(expandedKey === g.key ? null : g.key); setAnswerText('') }}
+                        className="text-xs border border-indigo-200 text-indigo-600 bg-indigo-50 rounded-lg px-2.5 py-1.5 hover:bg-indigo-100 flex items-center gap-1 font-medium">
+                        <Sparkles size={11} /> Answer &amp; train bot
+                      </button>
+                      <button
+                        onClick={() => markResolved(g.question)}
+                        disabled={savingKey === g.question}
+                        className="text-xs border rounded-lg px-2.5 py-1.5 hover:bg-muted flex items-center gap-1 text-gray-600 disabled:opacity-50">
+                        {savingKey === g.question ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Mark resolved
+                      </button>
+                    </div>
+                  )}
+                  {gapsTab === 'resolved' && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium shrink-0 flex items-center gap-1">
+                      <Check size={11} /> Resolved
+                    </span>
+                  )}
+                </div>
+
+                {expandedKey === g.key && (
+                  <div className="mt-3 pt-3 border-t space-y-2">
+                    <textarea
+                      autoFocus
+                      rows={3}
+                      placeholder="Type the answer — this gets added to your knowledge base so the bot can answer this next time."
+                      value={answerText}
+                      onChange={e => setAnswerText(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200 bg-white"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => saveAnswer(g.question)}
+                        disabled={!answerText.trim() || savingKey === g.question}
+                        className="text-xs bg-indigo-600 text-white rounded-lg px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1 font-medium">
+                        {savingKey === g.question ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                        {savingKey === g.question ? 'Training...' : 'Save & train bot'}
+                      </button>
+                      <button
+                        onClick={() => { setExpandedKey(null); setAnswerText('') }}
+                        className="text-xs border rounded-lg px-3 py-1.5 hover:bg-muted">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   )
 }

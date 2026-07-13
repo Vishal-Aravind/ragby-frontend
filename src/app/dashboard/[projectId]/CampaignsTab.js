@@ -27,6 +27,9 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
   const [tagFilter, setTagFilter]     = useState('')
   const [availableTags, setAvailableTags] = useState([])
   const [csvContacts, setCsvContacts] = useState([])
+  const [sendTiming, setSendTiming]   = useState('now') // now | later
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [cancellingId, setCancellingId] = useState(null)
 
   const handleCsvUpload = async (e) => {
     const file = e.target.files[0]
@@ -129,6 +132,10 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
     if (!selectedTemplate) return setError("Select a template")
     if (recipientFilter === 'csv' && csvContacts.length === 0) return setError("Upload a CSV file first")
     if (recipientFilter === 'tag' && !tagFilter) return setError("Pick a tag first")
+    if (sendTiming === 'later') {
+      if (!scheduledAt) return setError("Pick a date and time first")
+      if (new Date(scheduledAt) <= new Date()) return setError("Scheduled time must be in the future")
+    }
     setSending(true)
     setError(null)
     const res = await fetch('/api/campaigns', {
@@ -143,6 +150,9 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
         recipient_filter: recipientFilter,
         tag_filter: tagFilter || null,
         csv_contacts: recipientFilter === 'csv' ? csvContacts : null,
+        // datetime-local has no timezone info — treat it as local time and
+        // convert to a proper ISO string with offset for the backend.
+        scheduled_at: sendTiming === 'later' ? new Date(scheduledAt).toISOString() : null,
       })
     })
     if (res.ok) {
@@ -153,6 +163,8 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
       setCsvContacts([])
       setRecipientFilter('whatsapp')
       setTagFilter('')
+      setSendTiming('now')
+      setScheduledAt('')
       setTimeout(fetchData, 2000)
     } else {
       const data = await res.json()
@@ -161,12 +173,25 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
     setSending(false)
   }
 
+  const handleCancel = async (campaignId) => {
+    if (!confirm('Cancel this scheduled campaign? It will not be sent.')) return
+    setCancellingId(campaignId)
+    try {
+      await fetch(`/api/campaigns/${campaignId}/cancel`, { method: 'POST' })
+      await fetchData()
+    } finally {
+      setCancellingId(null)
+    }
+  }
+
   const statusBadge = (status) => {
     const map = {
-      draft:   { color: 'bg-gray-100 text-gray-600',   icon: <Clock size={11} />,        label: 'Draft' },
-      sending: { color: 'bg-blue-100 text-blue-600',   icon: <Send size={11} />,         label: 'Sending...' },
-      sent:    { color: 'bg-green-100 text-green-700', icon: <CheckCircle size={11} />,  label: 'Sent' },
-      failed:  { color: 'bg-red-100 text-red-600',     icon: <XCircle size={11} />,      label: 'Failed' },
+      draft:     { color: 'bg-gray-100 text-gray-600',   icon: <Clock size={11} />,        label: 'Draft' },
+      scheduled: { color: 'bg-indigo-100 text-indigo-700', icon: <Clock size={11} />,      label: 'Scheduled' },
+      sending:   { color: 'bg-blue-100 text-blue-600',   icon: <Send size={11} />,         label: 'Sending...' },
+      sent:      { color: 'bg-green-100 text-green-700', icon: <CheckCircle size={11} />,  label: 'Sent' },
+      cancelled: { color: 'bg-gray-100 text-gray-500',   icon: <XCircle size={11} />,      label: 'Cancelled' },
+      failed:    { color: 'bg-red-100 text-red-600',     icon: <XCircle size={11} />,      label: 'Failed' },
     }
     const s = map[status] || map.draft
     return (
@@ -359,6 +384,36 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
             )}
           </div>
 
+          {/* When to send */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">When</label>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {[
+                { value: 'now', label: 'Send now' },
+                { value: 'later', label: '🕒 Schedule for later' },
+              ].map(opt => (
+                <button key={opt.value}
+                  onClick={() => setSendTiming(opt.value)}
+                  className={`text-xs border rounded-lg px-3 py-2 transition-colors ${
+                    sendTiming === opt.value
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'hover:bg-muted/50'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {sendTiming === 'later' && (
+              <input
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={e => setScheduledAt(e.target.value)}
+                min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                className="mt-2 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            )}
+          </div>
+
           {/* Actions */}
           <div className="flex gap-2 pt-2">
             <button onClick={() => setShowCreate(false)}
@@ -367,7 +422,9 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
             </button>
             <button onClick={handleSend} disabled={sending}
               className="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
-              {sending ? 'Sending...' : <><Send size={13} /> Send Campaign</>}
+              {sending
+                ? (sendTiming === 'later' ? 'Scheduling...' : 'Sending...')
+                : sendTiming === 'later' ? <><Clock size={13} /> Schedule Campaign</> : <><Send size={13} /> Send Campaign</>}
             </button>
           </div>
         </div>
@@ -389,6 +446,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
                 <th className="text-left px-4 py-3 font-medium">Sent</th>
                 <th className="text-left px-4 py-3 font-medium">Failed</th>
                 <th className="text-left px-4 py-3 font-medium">Date</th>
+                <th className="text-left px-4 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -403,7 +461,17 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
                   </td>
                   <td className="px-4 py-3 text-red-600">{c.failed_count}</td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {new Date(c.created_at).toLocaleDateString()}
+                    {c.status === 'scheduled' && c.scheduled_at
+                      ? <>Scheduled: {new Date(c.scheduled_at).toLocaleString()}</>
+                      : new Date(c.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3">
+                    {c.status === 'scheduled' && (
+                      <button onClick={() => handleCancel(c.id)} disabled={cancellingId === c.id}
+                        className="text-xs text-red-600 border border-red-200 rounded px-2 py-1 hover:bg-red-50 disabled:opacity-50">
+                        {cancellingId === c.id ? 'Cancelling...' : 'Cancel'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
