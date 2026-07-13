@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import ProjectCard from "@/components/ProjectCard";
+import { NewProjectForm } from "./new/page";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import { Loader2, Zap } from "lucide-react";
 
@@ -105,6 +107,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState(null);
+  const [showNewProject, setShowNewProject] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -156,7 +159,7 @@ export default function Dashboard() {
         <div className="px-6">
           <div className="flex justify-between mb-6">
             <h1 className="text-2xl font-semibold">Projects</h1>
-            <Button onClick={() => router.push("/dashboard/new")}>
+            <Button onClick={() => setShowNewProject(true)}>
               + New project
             </Button>
           </div>
@@ -176,6 +179,15 @@ export default function Dashboard() {
           )}
         </div>
       </main>
+
+      <Dialog open={showNewProject} onOpenChange={setShowNewProject}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create new project</DialogTitle>
+          </DialogHeader>
+          <NewProjectForm />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
