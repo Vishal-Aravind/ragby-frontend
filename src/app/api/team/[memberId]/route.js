@@ -8,6 +8,14 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Same grantable set as ProjectClient.js's GRANTABLE_TABS — keep in sync.
+// Team management is deliberately excluded: granting it would let an agent
+// add/remove teammates or change roles, which is a privilege-escalation risk.
+const GRANTABLE_PERMISSIONS = [
+  "documents", "integrations", "flows", "analytics", "api",
+  "campaigns", "templates", "shop", "appointments", "events",
+];
+
 async function requireManagerFor(userId, memberId) {
   const { data: member } = await supabaseAdmin
     .from("project_members")
@@ -30,9 +38,30 @@ export async function PATCH(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { role } = await req.json();
-  if (!["admin", "agent"].includes(role)) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+  const { role, permissions } = await req.json();
+
+  const update = {};
+
+  if (role !== undefined) {
+    if (!["admin", "agent"].includes(role)) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+    update.role = role;
+    // Promoting to admin makes custom permissions moot (admins have full
+    // access already) — clear them so a later demotion back to agent
+    // doesn't silently resurrect a stale grant.
+    if (role === "admin") update.permissions = null;
+  }
+
+  if (permissions !== undefined) {
+    if (!Array.isArray(permissions) || permissions.some(p => !GRANTABLE_PERMISSIONS.includes(p))) {
+      return NextResponse.json({ error: "Invalid permissions" }, { status: 400 });
+    }
+    update.permissions = permissions;
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const check = await requireManagerFor(user.id, memberId);
@@ -40,7 +69,7 @@ export async function PATCH(req, { params }) {
 
   const { data, error } = await supabaseAdmin
     .from("project_members")
-    .update({ role })
+    .update(update)
     .eq("id", memberId)
     .select()
     .single();

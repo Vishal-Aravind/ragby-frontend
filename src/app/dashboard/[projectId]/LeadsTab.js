@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { MessageSquare, Globe, Search, Download, RefreshCw, Tag } from 'lucide-react'
+import { MessageSquare, Globe, Search, Download, RefreshCw, Tag, Loader2, X } from 'lucide-react'
 
 export default function LeadsTab({ project }) {
   const projectId = project?.id || project
@@ -13,6 +13,11 @@ export default function LeadsTab({ project }) {
 
   const [editingTagsFor, setEditingTagsFor] = useState(null) // lead id
   const [newTagText, setNewTagText] = useState('')
+
+  // ── Bulk selection / bulk tagging ────────────────────────
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [bulkTagText, setBulkTagText] = useState('')
+  const [bulkApplying, setBulkApplying] = useState(false)
 
   const fetchLeads = () => {
     if (!projectId) return
@@ -41,8 +46,10 @@ export default function LeadsTab({ project }) {
     }
   }
 
-  const addTag = (lead) => {
-    const tag = newTagText.trim()
+  const addTag = (lead, tagValue) => {
+    // Lowercase client-side too — matches what the backend normalizes to,
+    // so there's no flash of "VIP" before it settles into "vip".
+    const tag = (tagValue ?? newTagText).trim().toLowerCase()
     if (!tag) { setEditingTagsFor(null); return }
     const tags = Array.from(new Set([...(lead.tags || []), tag]))
     updateLeadTags(lead, tags)
@@ -52,6 +59,43 @@ export default function LeadsTab({ project }) {
 
   const removeTag = (lead, tag) => {
     updateLeadTags(lead, (lead.tags || []).filter(t => t !== tag))
+  }
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = (ids) => {
+    setSelectedIds(prev => {
+      const allSelected = ids.length > 0 && ids.every(id => prev.has(id))
+      return allSelected ? new Set() : new Set(ids)
+    })
+  }
+
+  const applyBulkTag = async () => {
+    const tag = bulkTagText.trim().toLowerCase()
+    if (!tag || selectedIds.size === 0) return
+    setBulkApplying(true)
+    try {
+      const targets = leads.filter(l => selectedIds.has(l.id))
+      await Promise.all(targets.map(l => {
+        const tags = Array.from(new Set([...(l.tags || []), tag]))
+        return fetch(`/api/leads/${l.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags }),
+        })
+      }))
+      setBulkTagText('')
+      setSelectedIds(new Set())
+      await fetchLeads()
+    } finally {
+      setBulkApplying(false)
+    }
   }
 
   const allTags = Array.from(new Set(leads.flatMap(l => l.tags || []))).sort()
@@ -169,6 +213,36 @@ export default function LeadsTab({ project }) {
         </div>
       )}
 
+      {/* Bulk tag bar — shows once at least one lead is selected */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
+          <span className="text-xs font-medium text-indigo-700 whitespace-nowrap">
+            {selectedIds.size} selected
+          </span>
+          <input
+            className="flex-1 border rounded px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-200"
+            placeholder="Tag to apply to all selected..."
+            value={bulkTagText}
+            onChange={e => setBulkTagText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && applyBulkTag()}
+          />
+          <button
+            onClick={applyBulkTag}
+            disabled={!bulkTagText.trim() || bulkApplying}
+            className="text-xs bg-indigo-600 text-white rounded px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1 whitespace-nowrap"
+          >
+            {bulkApplying ? <Loader2 size={12} className="animate-spin" /> : <Tag size={12} />}
+            Apply tag
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-xs text-indigo-400 hover:text-indigo-700 flex items-center gap-1 whitespace-nowrap"
+          >
+            <X size={12} /> Clear
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-sm text-muted-foreground">
@@ -181,6 +255,13 @@ export default function LeadsTab({ project }) {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
+                <th className="px-4 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && filtered.every(l => selectedIds.has(l.id))}
+                    onChange={() => toggleSelectAll(filtered.map(l => l.id))}
+                  />
+                </th>
                 <th className="text-left px-4 py-3 font-medium">Name</th>
                 <th className="text-left px-4 py-3 font-medium">Phone</th>
                 <th className="text-left px-4 py-3 font-medium">Email</th>
@@ -195,6 +276,9 @@ export default function LeadsTab({ project }) {
                 const isWhatsApp = lead.channel === 'whatsapp' || lead.source === 'whatsapp'
                 return (
                   <tr key={lead.id} className={i % 2 === 0 ? 'bg-white' : 'bg-muted/20'}>
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} />
+                    </td>
                     <td className="px-4 py-3 font-medium">{lead.name || <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-4 py-3 font-mono text-xs">{lead.phone || '—'}</td>
                     <td className="px-4 py-3">{lead.email || <span className="text-muted-foreground">—</span>}</td>
@@ -208,34 +292,60 @@ export default function LeadsTab({ project }) {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {(lead.tags || []).map(tag => (
-                          <span key={tag} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5">
-                            {tag}
-                            <button onClick={() => removeTag(lead, tag)} className="text-indigo-400 hover:text-red-600 leading-none">×</button>
-                          </span>
-                        ))}
-                        {editingTagsFor === lead.id ? (
-                          <input
-                            autoFocus
-                            className="text-xs border rounded px-1.5 py-0.5 w-20 outline-none focus:ring-1 focus:ring-indigo-300"
-                            placeholder="tag..."
-                            value={newTagText}
-                            onChange={e => setNewTagText(e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') addTag(lead)
-                              if (e.key === 'Escape') { setEditingTagsFor(null); setNewTagText('') }
-                            }}
-                            onBlur={() => addTag(lead)}
-                          />
-                        ) : (
-                          <button
-                            onClick={() => { setEditingTagsFor(lead.id); setNewTagText('') }}
-                            className="text-xs text-muted-foreground hover:text-indigo-600 border border-dashed rounded-full px-2 py-0.5"
-                          >
-                            + tag
-                          </button>
-                        )}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {(lead.tags || []).map(tag => (
+                            <span key={tag} className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full px-2 py-0.5">
+                              {tag}
+                              <button onClick={() => removeTag(lead, tag)} className="text-indigo-400 hover:text-red-600 leading-none">×</button>
+                            </span>
+                          ))}
+                          {editingTagsFor === lead.id ? (
+                            <input
+                              autoFocus
+                              className="text-xs border rounded px-1.5 py-0.5 w-24 outline-none focus:ring-1 focus:ring-indigo-300"
+                              placeholder="tag..."
+                              value={newTagText}
+                              onChange={e => setNewTagText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') addTag(lead)
+                                if (e.key === 'Escape') { setEditingTagsFor(null); setNewTagText('') }
+                              }}
+                              onBlur={() => addTag(lead)}
+                            />
+                          ) : (
+                            <button
+                              onClick={() => { setEditingTagsFor(lead.id); setNewTagText('') }}
+                              className="text-xs text-muted-foreground hover:text-indigo-600 border border-dashed rounded-full px-2 py-0.5"
+                            >
+                              + tag
+                            </button>
+                          )}
+                        </div>
+                        {/* Autocomplete suggestions — existing tags matching what's typed,
+                            shown inline (not a floating dropdown) so the table's overflow
+                            clipping can't cut it off. */}
+                        {editingTagsFor === lead.id && newTagText.trim() && (() => {
+                          const q = newTagText.trim().toLowerCase()
+                          const suggestions = allTags
+                            .filter(t => t.includes(q) && !(lead.tags || []).includes(t))
+                            .slice(0, 5)
+                          return suggestions.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {suggestions.map(t => (
+                                <button
+                                  key={t}
+                                  type="button"
+                                  onMouseDown={e => e.preventDefault()} // keep input focused so blur doesn't fire before this click
+                                  onClick={() => addTag(lead, t)}
+                                  className="text-xs bg-white border border-gray-200 rounded-full px-2 py-0.5 text-gray-500 hover:border-indigo-300 hover:text-indigo-600"
+                                >
+                                  {t}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null
+                        })()}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">

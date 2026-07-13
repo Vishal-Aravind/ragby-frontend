@@ -8,6 +8,9 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// Mirrors PLAN_LIMITS["seats"] in backend/config.py — keep in sync.
+const SEAT_LIMITS = { free: 1, pro: 5, business: null };
+
 export async function GET(req) {
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
@@ -28,20 +31,24 @@ export async function GET(req) {
 
   const { data: ownerProfile } = await supabaseAdmin
     .from("profiles")
-    .select("email, name")
+    .select("email, name, plan")
     .eq("id", project.user_id)
     .maybeSingle();
 
   const { data: members } = await supabaseAdmin
     .from("project_members")
-    .select("id, user_id, email, role, status, created_at")
+    .select("id, user_id, email, role, status, permissions, created_at")
     .eq("project_id", projectId)
     .order("created_at", { ascending: true });
+
+  const seatLimit = SEAT_LIMITS[ownerProfile?.plan] ?? SEAT_LIMITS.free;
+  const activeMembers = (members || []).filter(m => m.status === "active").length;
 
   return NextResponse.json({
     myRole,
     owner: { id: project.user_id, email: ownerProfile?.email || null, name: ownerProfile?.name || null },
     members: members || [],
+    seats: { used: 1 + activeMembers, limit: seatLimit },
   });
 }
 
@@ -103,6 +110,29 @@ export async function POST(req) {
 
   if (existing) {
     return NextResponse.json({ error: "That person is already on the team" }, { status: 400 });
+  }
+
+  const { data: ownerProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("plan")
+    .eq("id", project.user_id)
+    .maybeSingle();
+
+  const seatLimit = SEAT_LIMITS[ownerProfile?.plan] ?? SEAT_LIMITS.free;
+  if (seatLimit !== null) {
+    const { count: activeMembers } = await supabaseAdmin
+      .from("project_members")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .eq("status", "active");
+
+    const seatsUsed = 1 + (activeMembers || 0); // owner counts as a seat
+    if (seatsUsed >= seatLimit) {
+      return NextResponse.json(
+        { error: `Your plan allows ${seatLimit} seat${seatLimit === 1 ? "" : "s"} on this project. Upgrade to invite more people.` },
+        { status: 403 }
+      );
+    }
   }
 
   const { data: created, error } = await supabaseAdmin

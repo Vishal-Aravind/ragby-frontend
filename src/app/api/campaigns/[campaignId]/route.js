@@ -1,4 +1,4 @@
-// src/app/api/campaigns/route.js
+// src/app/api/campaigns/[campaignId]/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
@@ -21,37 +21,21 @@ function getSupabase(req) {
   };
 }
 
-export async function GET(req) {
-  const { supabase } = getSupabase(req);
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { searchParams } = new URL(req.url);
-  const projectId = searchParams.get("projectId");
-
-  const res = await fetch(`${BACKEND}/campaigns?project_id=${projectId}`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-
-  if (!res.ok) return NextResponse.json([], { status: 200 });
-  return NextResponse.json(await res.json());
-}
-
-export async function POST(req) {
+export async function PUT(req, { params }) {
+  const { campaignId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
 
-  const res = await fetch(`${BACKEND}/campaigns`, {
-    method: "POST",
+  const res = await fetch(`${BACKEND}/campaigns/${campaignId}`, {
+    method: "PUT",
     headers: {
       Authorization: `Bearer ${session.access_token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      project_id: body.projectId,
       name: body.name,
       template_name: body.template_name,
       template_language: body.template_language,

@@ -29,7 +29,9 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
   const [csvContacts, setCsvContacts] = useState([])
   const [sendTiming, setSendTiming]   = useState('now') // now | later
   const [scheduledAt, setScheduledAt] = useState('')
+  const [recurrence, setRecurrence]   = useState('none') // none | daily | weekly | monthly
   const [cancellingId, setCancellingId] = useState(null)
+  const [editingCampaignId, setEditingCampaignId] = useState(null) // null = creating new
 
   const handleCsvUpload = async (e) => {
     const file = e.target.files[0]
@@ -127,6 +129,20 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
     setVariables(Array(count).fill(""))
   }
 
+  const resetForm = () => {
+    setShowCreate(false)
+    setName('')
+    setSelectedTemplate(null)
+    setVariables([])
+    setCsvContacts([])
+    setRecipientFilter('whatsapp')
+    setTagFilter('')
+    setSendTiming('now')
+    setScheduledAt('')
+    setRecurrence('none')
+    setEditingCampaignId(null)
+  }
+
   const handleSend = async () => {
     if (!name.trim()) return setError("Campaign name is required")
     if (!selectedTemplate) return setError("Select a template")
@@ -136,41 +152,71 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
       if (!scheduledAt) return setError("Pick a date and time first")
       if (new Date(scheduledAt) <= new Date()) return setError("Scheduled time must be in the future")
     }
+    if (recurrence !== 'none' && recipientFilter === 'csv') {
+      return setError("Recurring campaigns can't use a one-time CSV upload — pick a live filter instead")
+    }
     setSending(true)
     setError(null)
-    const res = await fetch('/api/campaigns', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        projectId,
-        name,
-        template_name: selectedTemplate.name,
-        template_language: selectedTemplate.language || 'en_US',
-        variables,
-        recipient_filter: recipientFilter,
-        tag_filter: tagFilter || null,
-        csv_contacts: recipientFilter === 'csv' ? csvContacts : null,
-        // datetime-local has no timezone info — treat it as local time and
-        // convert to a proper ISO string with offset for the backend.
-        scheduled_at: sendTiming === 'later' ? new Date(scheduledAt).toISOString() : null,
-      })
-    })
+
+    const payload = {
+      projectId,
+      name,
+      template_name: selectedTemplate.name,
+      template_language: selectedTemplate.language || 'en_US',
+      variables,
+      recipient_filter: recipientFilter,
+      tag_filter: tagFilter || null,
+      csv_contacts: recipientFilter === 'csv' ? csvContacts : null,
+      // datetime-local has no timezone info — treat it as local time and
+      // convert to a proper ISO string with offset for the backend.
+      scheduled_at: sendTiming === 'later' ? new Date(scheduledAt).toISOString() : null,
+      recurrence: sendTiming === 'later' && recurrence !== 'none' ? recurrence : null,
+    }
+
+    const res = editingCampaignId
+      ? await fetch(`/api/campaigns/${editingCampaignId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      : await fetch('/api/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+
     if (res.ok) {
-      setShowCreate(false)
-      setName('')
-      setSelectedTemplate(null)
-      setVariables([])
-      setCsvContacts([])
-      setRecipientFilter('whatsapp')
-      setTagFilter('')
-      setSendTiming('now')
-      setScheduledAt('')
-      setTimeout(fetchData, 2000)
+      resetForm()
+      setTimeout(fetchData, editingCampaignId ? 0 : 2000)
     } else {
       const data = await res.json()
-      setError(data.error || 'Failed to send campaign')
+      setError(data.error || 'Failed to save campaign')
     }
     setSending(false)
+  }
+
+  const openEditCampaign = (campaign) => {
+    const tv = campaign.template_variables || {}
+    const matchedTemplate = templates.find(t => t.name === campaign.template_name) || {
+      name: campaign.template_name,
+      language: tv.language || 'en_US',
+      components: [],
+    }
+    setSelectedTemplate(matchedTemplate)
+    setName(campaign.name)
+    setVariables(tv.variables && tv.variables.length ? tv.variables : Array((tv.variables || []).length).fill(''))
+    setRecipientFilter(campaign.recipient_filter || 'all')
+    setTagFilter(campaign.tag_filter || '')
+    setCsvContacts([])
+    setSendTiming('later')
+    // scheduled_at is stored as UTC ISO — datetime-local inputs need
+    // "YYYY-MM-DDTHH:mm" in the browser's local time.
+    const dt = new Date(campaign.scheduled_at)
+    setScheduledAt(new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16))
+    setRecurrence(campaign.recurrence || 'none')
+    setEditingCampaignId(campaign.id)
+    setError(null)
+    setShowCreate(true)
   }
 
   const handleCancel = async (campaignId) => {
@@ -229,7 +275,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
             className="flex items-center gap-1.5 border text-sm px-4 py-2 rounded-lg hover:bg-muted">
             <Sparkles size={14} className="text-yellow-500" /> Template Library
           </button>
-          <button onClick={() => setShowCreate(v => !v)}
+          <button onClick={() => { if (showCreate) { resetForm() } else { setEditingCampaignId(null); setShowCreate(true) } }}
             className="flex items-center gap-1.5 bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">
             <Plus size={14} /> New Campaign
           </button>
@@ -239,7 +285,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
       {/* Create form */}
       {showCreate && (
         <div className="border rounded-xl p-5 space-y-4 bg-blue-50/30">
-          <h3 className="font-medium text-sm">Create Campaign</h3>
+          <h3 className="font-medium text-sm">{editingCampaignId ? 'Edit Scheduled Campaign' : 'Create Campaign'}</h3>
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
 
           {/* Name */}
@@ -384,46 +430,79 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
             )}
           </div>
 
-          {/* When to send */}
+          {/* When to send — editing a scheduled campaign always keeps it scheduled */}
           <div>
             <label className="text-xs font-medium text-muted-foreground">When</label>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              {[
-                { value: 'now', label: 'Send now' },
-                { value: 'later', label: '🕒 Schedule for later' },
-              ].map(opt => (
-                <button key={opt.value}
-                  onClick={() => setSendTiming(opt.value)}
-                  className={`text-xs border rounded-lg px-3 py-2 transition-colors ${
-                    sendTiming === opt.value
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'hover:bg-muted/50'
-                  }`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            {!editingCampaignId && (
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {[
+                  { value: 'now', label: 'Send now' },
+                  { value: 'later', label: '🕒 Schedule for later' },
+                ].map(opt => (
+                  <button key={opt.value}
+                    onClick={() => setSendTiming(opt.value)}
+                    className={`text-xs border rounded-lg px-3 py-2 transition-colors ${
+                      sendTiming === opt.value
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'hover:bg-muted/50'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {sendTiming === 'later' && (
-              <input
-                type="datetime-local"
-                value={scheduledAt}
-                onChange={e => setScheduledAt(e.target.value)}
-                min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
-                className="mt-2 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
-              />
+              <>
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={e => setScheduledAt(e.target.value)}
+                  min={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                  className="mt-2 w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                />
+                {recipientFilter !== 'csv' && (
+                  <div className="mt-2">
+                    <label className="text-xs font-medium text-muted-foreground">Repeat</label>
+                    <div className="mt-1 grid grid-cols-4 gap-1.5">
+                      {[
+                        { value: 'none', label: "Doesn't repeat" },
+                        { value: 'daily', label: 'Daily' },
+                        { value: 'weekly', label: 'Weekly' },
+                        { value: 'monthly', label: 'Monthly' },
+                      ].map(opt => (
+                        <button key={opt.value}
+                          onClick={() => setRecurrence(opt.value)}
+                          className={`text-xs border rounded-lg px-2 py-1.5 transition-colors ${
+                            recurrence === opt.value
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'hover:bg-muted/50'
+                          }`}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    {recurrence !== 'none' && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Each run re-checks your "{recipientFilter}" filter fresh — new matching leads get included automatically.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           {/* Actions */}
           <div className="flex gap-2 pt-2">
-            <button onClick={() => setShowCreate(false)}
+            <button onClick={resetForm}
               className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-muted">
               Cancel
             </button>
             <button onClick={handleSend} disabled={sending}
               className="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
               {sending
-                ? (sendTiming === 'later' ? 'Scheduling...' : 'Sending...')
+                ? (editingCampaignId ? 'Saving...' : sendTiming === 'later' ? 'Scheduling...' : 'Sending...')
+                : editingCampaignId ? <><Clock size={13} /> Save Changes</>
                 : sendTiming === 'later' ? <><Clock size={13} /> Schedule Campaign</> : <><Send size={13} /> Send Campaign</>}
             </button>
           </div>
@@ -462,15 +541,32 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
                   <td className="px-4 py-3 text-red-600">{c.failed_count}</td>
                   <td className="px-4 py-3 text-muted-foreground text-xs">
                     {c.status === 'scheduled' && c.scheduled_at
-                      ? <>Scheduled: {new Date(c.scheduled_at).toLocaleString()}</>
+                      ? (
+                        <>
+                          Scheduled: {new Date(c.scheduled_at).toLocaleString()}
+                          {c.recurrence && (
+                            <div className="text-indigo-600 mt-0.5">
+                              Repeats: {c.recurrence.charAt(0).toUpperCase() + c.recurrence.slice(1)}
+                            </div>
+                          )}
+                        </>
+                      )
                       : new Date(c.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3">
                     {c.status === 'scheduled' && (
-                      <button onClick={() => handleCancel(c.id)} disabled={cancellingId === c.id}
-                        className="text-xs text-red-600 border border-red-200 rounded px-2 py-1 hover:bg-red-50 disabled:opacity-50">
-                        {cancellingId === c.id ? 'Cancelling...' : 'Cancel'}
-                      </button>
+                      <div className="flex gap-1.5">
+                        {c.recipient_filter !== 'csv' && (
+                          <button onClick={() => openEditCampaign(c)}
+                            className="text-xs text-blue-600 border border-blue-200 rounded px-2 py-1 hover:bg-blue-50">
+                            Edit
+                          </button>
+                        )}
+                        <button onClick={() => handleCancel(c.id)} disabled={cancellingId === c.id}
+                          className="text-xs text-red-600 border border-red-200 rounded px-2 py-1 hover:bg-red-50 disabled:opacity-50">
+                          {cancellingId === c.id ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>

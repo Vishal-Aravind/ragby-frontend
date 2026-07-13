@@ -61,3 +61,28 @@ export async function getProjectRole(userId, projectId) {
 
   return member?.role || null;
 }
+
+// Returns { role, permissions } — permissions is only meaningful for
+// role "agent" (custom extra tabs granted beyond the Conversations/Leads
+// default); owner/admin always have full access regardless of this array.
+export async function getProjectAccess(userId, projectId) {
+  const { data: project } = await supabaseAdmin
+    .from("projects")
+    .select("user_id")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (!project) return { role: null, permissions: [] };
+  if (project.user_id === userId) return { role: "owner", permissions: [] };
+
+  const { data: member } = await supabaseAdmin
+    .from("project_members")
+    .select("role, permissions")
+    .eq("project_id", projectId)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!member) return { role: null, permissions: [] };
+  return { role: member.role, permissions: member.permissions || [] };
+}

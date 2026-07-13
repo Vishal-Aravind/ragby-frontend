@@ -42,12 +42,17 @@ const DOMAINS = [
 ];
 
 export default function ProjectClient({ project }) {
-  // Agents only get Conversations + Leads — everything else (sources,
-  // flows, billing-adjacent settings, team management) is owner/admin only.
+  // Agents only get Conversations + Leads by default — everything else
+  // (sources, flows, billing-adjacent settings) is owner/admin only,
+  // UNLESS an owner/admin has granted a specific agent extra tabs via
+  // custom permissions (Team tab). Team management itself is never
+  // grantable this way — only owner/admin can touch it.
   const myRole = project.myRole || "owner";
   const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
+  const myPermissions = project.myPermissions || [];
+  const hasAccess = (tab) => isOwnerOrAdmin || myPermissions.includes(tab);
 
-  const [activeTab, setActiveTab] = useState(isOwnerOrAdmin ? "documents" : "conversations");
+  const [activeTab, setActiveTab] = useState(hasAccess("documents") ? "documents" : "conversations");
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
@@ -312,12 +317,12 @@ export default function ProjectClient({ project }) {
           )}
 
           <div className="flex flex-col gap-1 border-r pr-3">
-            {isOwnerOrAdmin && (
+            {hasAccess("documents") && (
               <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
                 <FileText size={13} />Documents
               </TabButton>
             )}
-            {isOwnerOrAdmin && (
+            {hasAccess("integrations") && (
               <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
                 <Plug size={13} />Integrations
               </TabButton>
@@ -325,7 +330,7 @@ export default function ProjectClient({ project }) {
             <TabButton active={activeTab === "leads"} onClick={() => setActiveTab("leads")}>
               <Users size={13} />Leads
             </TabButton>
-            {isOwnerOrAdmin && (
+            {hasAccess("flows") && (
               <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
                 <GitBranch size={13} />Flows
               </TabButton>
@@ -333,37 +338,37 @@ export default function ProjectClient({ project }) {
             <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>
               <Inbox size={13} />Conversations
             </TabButton>
-            {isOwnerOrAdmin && (
+            {hasAccess("analytics") && (
               <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
                 <BarChart2 size={13} />Analytics
               </TabButton>
             )}
-            {isOwnerOrAdmin && (
+            {hasAccess("api") && (
               <TabButton active={activeTab === "api"} onClick={() => setActiveTab("api")}>
                 <Key size={13} />API
               </TabButton>
             )}
-            {isOwnerOrAdmin && (
+            {hasAccess("campaigns") && (
               <TabButton active={activeTab === "campaigns"} onClick={() => setActiveTab("campaigns")}>
                 <Megaphone size={13} />Campaigns
               </TabButton>
             )}
-            {isOwnerOrAdmin && (
+            {hasAccess("templates") && (
               <TabButton active={activeTab === "templates"} onClick={() => setActiveTab("templates")}>
                 <Sparkles size={13} />Templates
               </TabButton>
             )}
-            {isOwnerOrAdmin && (
+            {hasAccess("shop") && (
               <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
                 <ShoppingBag size={13} />Shop
               </TabButton>
             )}
-            {isOwnerOrAdmin && (
+            {hasAccess("appointments") && (
               <TabButton active={activeTab === "appointments"} onClick={() => setActiveTab("appointments")}>
                 <CalendarDays size={13} />Appointments
               </TabButton>
             )}
-            {isOwnerOrAdmin && (
+            {hasAccess("events") && (
               <TabButton active={activeTab === "events"} onClick={() => setActiveTab("events")}>
                 <CalendarRange size={13} />Events
               </TabButton>
@@ -378,7 +383,7 @@ export default function ProjectClient({ project }) {
 
         {/* ── Tab content ── */}
         <div className="flex-1 min-w-0">
-          {isOwnerOrAdmin && activeTab === "documents" && (
+          {hasAccess("documents") && activeTab === "documents" && (
             <DocumentsTab
               projectId={project.id}
               files={files}
@@ -395,19 +400,19 @@ export default function ProjectClient({ project }) {
             />
           )}
 
-          {isOwnerOrAdmin && activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
+          {hasAccess("integrations") && activeTab === "integrations" && <IntegrationsTab projectId={project.id} />}
           {activeTab === "leads" && <LeadsTab project={project.id} />}
-          {isOwnerOrAdmin && activeTab === "flows" && <FlowsTab projectId={project.id} />}
+          {hasAccess("flows") && activeTab === "flows" && <FlowsTab projectId={project.id} />}
           {activeTab === "conversations" && <ConversationsTab projectId={project.id} />}
-          {isOwnerOrAdmin && activeTab === "analytics" && <AnalyticsTab project={project} />}
-          {isOwnerOrAdmin && activeTab === "api" && <ApiKeysTab project={project} />}
-          {isOwnerOrAdmin && activeTab === "campaigns" && (
+          {hasAccess("analytics") && activeTab === "analytics" && <AnalyticsTab project={project} />}
+          {hasAccess("api") && activeTab === "api" && <ApiKeysTab project={project} />}
+          {hasAccess("campaigns") && activeTab === "campaigns" && (
             <CampaignsTab project={project} onOpenTemplateLibrary={() => setActiveTab("templates")} />
           )}
-          {isOwnerOrAdmin && activeTab === "templates" && <TemplateLibrary projectId={project.id} />}
-          {isOwnerOrAdmin && activeTab === "shop" && <ShopTab project={project} />}
-          {isOwnerOrAdmin && activeTab === "appointments" && <AppointmentsTab project={project} />}
-          {isOwnerOrAdmin && activeTab === "events" && <EventsTab project={project} />}
+          {hasAccess("templates") && activeTab === "templates" && <TemplateLibrary projectId={project.id} />}
+          {hasAccess("shop") && activeTab === "shop" && <ShopTab project={project} />}
+          {hasAccess("appointments") && activeTab === "appointments" && <AppointmentsTab project={project} />}
+          {hasAccess("events") && activeTab === "events" && <EventsTab project={project} />}
           {isOwnerOrAdmin && activeTab === "team" && <TeamTab project={project} />}
         </div>
       </div>

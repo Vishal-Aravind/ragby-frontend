@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import { getProjectRole } from "@/lib/supabase-api";
+import { getProjectRole, getProjectAccess } from "@/lib/supabase-api";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -38,9 +38,10 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Owner, admin, or agent can all view the project — role determines
-  // what the dashboard shows them, not whether they can load it at all.
-  const myRole = await getProjectRole(user.id, projectId);
+  // Owner, admin, or agent can all view the project — role (and, for
+  // agents, custom permissions) determines what the dashboard shows them,
+  // not whether they can load it at all.
+  const { role: myRole, permissions: myPermissions } = await getProjectAccess(user.id, projectId);
   if (!myRole) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -55,7 +56,7 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ...data, myRole });
+  return NextResponse.json({ ...data, myRole, myPermissions });
 }
 
 // ---------------- PATCH ----------------

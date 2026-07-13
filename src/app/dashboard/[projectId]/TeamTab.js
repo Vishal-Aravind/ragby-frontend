@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { UserPlus, Crown, Shield, Headset, Trash2, Loader2, Clock } from 'lucide-react'
+import { UserPlus, Crown, Shield, Headset, Trash2, Loader2, Clock, SlidersHorizontal } from 'lucide-react'
 
 const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', agent: 'Agent' }
 const ROLE_ICONS = { owner: Crown, admin: Shield, agent: Headset }
@@ -8,6 +8,22 @@ const ROLE_COLORS = {
   owner: 'bg-amber-50 text-amber-700 border-amber-200',
   admin: 'bg-blue-50 text-blue-700 border-blue-200',
   agent: 'bg-gray-50 text-gray-600 border-gray-200',
+}
+
+// Extra tabs an owner/admin can grant to an individual agent, beyond the
+// Conversations + Leads default. Team management is never grantable this
+// way — kept in sync with GRANTABLE_PERMISSIONS in the team/[memberId] API route.
+const PERMISSION_LABELS = {
+  documents: 'Documents',
+  integrations: 'Integrations',
+  flows: 'Flows',
+  analytics: 'Analytics',
+  api: 'API',
+  campaigns: 'Campaigns',
+  templates: 'Templates',
+  shop: 'Shop',
+  appointments: 'Appointments',
+  events: 'Events',
 }
 
 export default function TeamTab({ project }) {
@@ -19,6 +35,8 @@ export default function TeamTab({ project }) {
   const [inviting, setInviting] = useState(false)
   const [error, setError] = useState(null)
   const [removingId, setRemovingId] = useState(null)
+  const [permissionsOpenFor, setPermissionsOpenFor] = useState(null)
+  const [savingPermissionsFor, setSavingPermissionsFor] = useState(null)
 
   const fetchTeam = async () => {
     setLoading(true)
@@ -59,6 +77,22 @@ export default function TeamTab({ project }) {
     await fetchTeam()
   }
 
+  const handlePermissionToggle = async (member, key) => {
+    const current = member.permissions || []
+    const next = current.includes(key) ? current.filter(p => p !== key) : [...current, key]
+    setSavingPermissionsFor(member.id)
+    try {
+      await fetch(`/api/team/${member.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions: next }),
+      })
+      await fetchTeam()
+    } finally {
+      setSavingPermissionsFor(null)
+    }
+  }
+
   const handleRemove = async (memberId) => {
     if (!confirm('Remove this teammate from the project?')) return
     setRemovingId(memberId)
@@ -74,12 +108,19 @@ export default function TeamTab({ project }) {
   if (!data) return <div className="p-6 text-sm text-muted-foreground">Could not load team.</div>
 
   const canManage = data.myRole === 'owner' || data.myRole === 'admin'
+  const seats = data.seats || { used: 1, limit: 1 }
+  const atSeatLimit = seats.limit !== null && seats.used >= seats.limit
 
   return (
     <div className="p-6 space-y-4 max-w-2xl">
-      <div>
-        <h2 className="text-lg font-semibold">Team</h2>
-        <p className="text-sm text-muted-foreground">Who has access to this project, and what they can do.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">Team</h2>
+          <p className="text-sm text-muted-foreground">Who has access to this project, and what they can do.</p>
+        </div>
+        <span className="text-xs px-2.5 py-1 rounded-full border bg-gray-50 text-gray-600 whitespace-nowrap">
+          {seats.limit === null ? `${seats.used} seat${seats.used === 1 ? '' : 's'} used` : `${seats.used} / ${seats.limit} seats used`}
+        </span>
       </div>
 
       {/* Members list */}
@@ -107,44 +148,82 @@ export default function TeamTab({ project }) {
         ) : (
           data.members.map(m => {
             const Icon = ROLE_ICONS[m.role]
+            const permissionsExpanded = permissionsOpenFor === m.id
             return (
-              <div key={m.id} className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 ${ROLE_COLORS[m.role]}`}>
-                    <Icon size={14} />
+              <div key={m.id}>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 ${ROLE_COLORS[m.role]}`}>
+                      <Icon size={14} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{m.email}</p>
+                      {m.status === 'pending' && (
+                        <p className="text-xs text-amber-600 flex items-center gap-1"><Clock size={10} /> Pending</p>
+                      )}
+                      {m.role === 'agent' && (m.permissions || []).length > 0 && (
+                        <p className="text-xs text-indigo-600 truncate">
+                          +{m.permissions.length} extra tab{m.permissions.length === 1 ? '' : 's'}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{m.email}</p>
-                    {m.status === 'pending' && (
-                      <p className="text-xs text-amber-600 flex items-center gap-1"><Clock size={10} /> Pending</p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {canManage && m.role === 'agent' && (
+                      <button
+                        onClick={() => setPermissionsOpenFor(permissionsExpanded ? null : m.id)}
+                        title="Custom permissions"
+                        className={`p-1.5 rounded-lg hover:bg-gray-100 ${permissionsExpanded ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400'}`}
+                      >
+                        <SlidersHorizontal size={13} />
+                      </button>
+                    )}
+                    {canManage ? (
+                      <select
+                        value={m.role}
+                        onChange={e => handleRoleChange(m.id, e.target.value)}
+                        className="text-xs border rounded-lg px-2 py-1.5 bg-white"
+                      >
+                        <option value="admin">Admin</option>
+                        <option value="agent">Agent</option>
+                      </select>
+                    ) : (
+                      <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${ROLE_COLORS[m.role]}`}>
+                        {ROLE_LABELS[m.role]}
+                      </span>
+                    )}
+                    {canManage && (
+                      <button
+                        onClick={() => handleRemove(m.id)}
+                        disabled={removingId === m.id}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"
+                      >
+                        {removingId === m.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                      </button>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {canManage ? (
-                    <select
-                      value={m.role}
-                      onChange={e => handleRoleChange(m.id, e.target.value)}
-                      className="text-xs border rounded-lg px-2 py-1.5 bg-white"
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="agent">Agent</option>
-                    </select>
-                  ) : (
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${ROLE_COLORS[m.role]}`}>
-                      {ROLE_LABELS[m.role]}
-                    </span>
-                  )}
-                  {canManage && (
-                    <button
-                      onClick={() => handleRemove(m.id)}
-                      disabled={removingId === m.id}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"
-                    >
-                      {removingId === m.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                    </button>
-                  )}
-                </div>
+                {permissionsExpanded && (
+                  <div className="px-4 pb-3 -mt-1 bg-gray-50/50">
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Extra tabs this agent can see, beyond Conversations and Leads:
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {Object.entries(PERMISSION_LABELS).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-1.5 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={(m.permissions || []).includes(key)}
+                            disabled={savingPermissionsFor === m.id}
+                            onChange={() => handlePermissionToggle(m, key)}
+                            className="accent-indigo-600"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })
@@ -157,9 +236,15 @@ export default function TeamTab({ project }) {
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <UserPlus size={14} /> Invite a teammate
           </h3>
-          <p className="text-xs text-muted-foreground">
-            They need an existing Zavo account — ask them to sign up first if they don't have one yet.
-          </p>
+          {atSeatLimit ? (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              You've used all {seats.limit} seat{seats.limit === 1 ? '' : 's'} on your current plan. Upgrade your plan to invite more teammates.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              They need an existing Zavo account — ask them to sign up first if they don't have one yet.
+            </p>
+          )}
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
           <div className="flex gap-2">
             <input
@@ -168,19 +253,21 @@ export default function TeamTab({ project }) {
               value={inviteEmail}
               onChange={e => setInviteEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleInvite()}
-              className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+              disabled={atSeatLimit}
+              className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-50 disabled:bg-gray-50"
             />
             <select
               value={inviteRole}
               onChange={e => setInviteRole(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm bg-white"
+              disabled={atSeatLimit}
+              className="border rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-50"
             >
               <option value="agent">Agent</option>
               <option value="admin">Admin</option>
             </select>
             <button
               onClick={handleInvite}
-              disabled={inviting || !inviteEmail.trim()}
+              disabled={inviting || !inviteEmail.trim() || atSeatLimit}
               className="bg-gray-900 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-700 disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
             >
               {inviting ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
