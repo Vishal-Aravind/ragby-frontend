@@ -87,7 +87,7 @@ export default function ShopTab({ project }) {
           store_name: "", store_phone: "", gst_percent: 0,
           currency: "₹", accent_color: "#16a34a",
           delivery_types: ["Takeaway"], terms_note: "",
-          razorpay_key_id: "", razorpay_key_secret: "", is_enabled: false,
+          razorpay_key_id: "", razorpay_key_secret: "", is_enabled: false, bot_can_assist: false,
         });
       });
   }, [projectId]);
@@ -380,6 +380,19 @@ export default function ShopTab({ project }) {
                 </div>
                 <button onClick={() => setConfig(c => ({ ...c, is_enabled: !c.is_enabled }))}>
                   {config.is_enabled
+                    ? <ToggleRight size={28} className="text-green-600" />
+                    : <ToggleLeft size={28} className="text-gray-400" />}
+                </button>
+              </div>
+
+              {/* Let the AI bot check orders / browse catalog in chat */}
+              <div className="flex items-center justify-between pt-2 border-t">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Let the AI assist in chat</p>
+                  <p className="text-xs text-gray-400">Bot can check order status and answer product questions directly in conversation (read-only — it won't place orders itself)</p>
+                </div>
+                <button onClick={() => setConfig(c => ({ ...c, bot_can_assist: !c.bot_can_assist }))}>
+                  {config.bot_can_assist
                     ? <ToggleRight size={28} className="text-green-600" />
                     : <ToggleLeft size={28} className="text-gray-400" />}
                 </button>

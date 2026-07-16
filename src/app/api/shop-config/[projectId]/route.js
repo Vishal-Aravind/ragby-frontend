@@ -57,6 +57,7 @@ export async function PUT(req, { params }) {
       razorpay_key_id: body.razorpay_key_id || null,
       razorpay_key_secret: body.razorpay_key_secret || null,
       is_enabled: body.is_enabled ?? false,
+      bot_can_assist: body.bot_can_assist ?? false,
     }, { onConflict: "project_id" })
     .select()
     .single();
