@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.trustpilot.com)",
+      "WebFetch(domain:www.g2.com)",
+      "WebFetch(domain:www.capterra.com)"
+    ]
+  }
+}

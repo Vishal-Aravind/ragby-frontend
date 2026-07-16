@@ -230,6 +230,19 @@ export default function AppointmentsTab({ project }) {
             </button>
           </div>
 
+          {/* Let the AI bot book directly in chat — separate from the public booking page above */}
+          <div className="flex items-center justify-between border rounded-xl px-4 py-3 bg-white">
+            <div>
+              <p className="text-sm font-medium">Let the AI book in chat</p>
+              <p className="text-xs text-muted-foreground">Your chatbot can check availability and book appointments directly inside a conversation (WhatsApp, Telegram, Slack, web chat)</p>
+            </div>
+            <button
+              onClick={() => setSettings(s => ({ ...s, bot_can_book: !s.bot_can_book }))}
+              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors shrink-0 ml-4 ${settings.bot_can_book ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${settings.bot_can_book ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
           {/* Google Calendar */}
           <div className="border rounded-xl p-4 bg-white space-y-3">
             <p className="text-sm font-semibold flex items-center gap-2">
