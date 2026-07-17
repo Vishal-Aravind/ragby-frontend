@@ -87,7 +87,7 @@ export default function ShopTab({ project }) {
           store_name: "", store_phone: "", gst_percent: 0,
           currency: "₹", accent_color: "#16a34a",
           delivery_types: ["Takeaway"], terms_note: "",
-          razorpay_key_id: "", razorpay_key_secret: "", is_enabled: false, bot_can_assist: false,
+          razorpay_key_id: "", razorpay_key_secret: "", is_enabled: false, bot_can_assist: false, bot_can_order: false,
         });
       });
   }, [projectId]);
@@ -389,10 +389,28 @@ export default function ShopTab({ project }) {
               <div className="flex items-center justify-between pt-2 border-t">
                 <div>
                   <p className="text-sm font-medium text-gray-700">Let the AI assist in chat</p>
-                  <p className="text-xs text-gray-400">Bot can check order status and answer product questions directly in conversation (read-only — it won't place orders itself)</p>
+                  <p className="text-xs text-gray-400">Bot can check order status and answer product questions directly in conversation</p>
                 </div>
-                <button onClick={() => setConfig(c => ({ ...c, bot_can_assist: !c.bot_can_assist }))}>
+                <button onClick={() => setConfig(c => {
+                  const next = !c.bot_can_assist
+                  return { ...c, bot_can_assist: next, bot_can_order: next ? c.bot_can_order : false }
+                })}>
                   {config.bot_can_assist
+                    ? <ToggleRight size={28} className="text-green-600" />
+                    : <ToggleLeft size={28} className="text-gray-400" />}
+                </button>
+              </div>
+
+              {/* Let the AI bot actually place an order — nested under assist, WhatsApp only */}
+              <div className={`flex items-center justify-between pt-2 border-t ${!config.bot_can_assist ? 'opacity-40' : ''}`}>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Let the AI place orders (WhatsApp only)</p>
+                  <p className="text-xs text-gray-400">Bot can build a cart from what the customer says and start checkout — customer still confirms and pays via the usual WhatsApp buttons</p>
+                </div>
+                <button
+                  disabled={!config.bot_can_assist}
+                  onClick={() => setConfig(c => ({ ...c, bot_can_order: !c.bot_can_order }))}>
+                  {config.bot_can_order
                     ? <ToggleRight size={28} className="text-green-600" />
                     : <ToggleLeft size={28} className="text-gray-400" />}
                 </button>
