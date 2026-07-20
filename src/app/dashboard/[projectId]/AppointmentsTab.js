@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Calendar, Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, Loader2, Search } from 'lucide-react'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
@@ -13,6 +13,8 @@ export default function AppointmentsTab({ project }) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [googleConnecting, setGoogleConnecting] = useState(false)
+  const [statusFilter, setStatusFilter] = useState('upcoming') // upcoming | completed | cancelled | all
+  const [search, setSearch] = useState('')
 
   const DAYS = [
     { key: 'mon', label: 'Monday' },
@@ -128,6 +130,50 @@ export default function AppointmentsTab({ project }) {
 
   const bookingUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/book/${projectId}`
 
+  // Date-grouped agenda view, anchored to today — the pattern every
+  // booking tool (Calendly, Cal.com, Setmore) actually uses for
+  // day-to-day management, since a flat list stops scaling fast.
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  const statusCounts = {
+    upcoming: appointments.filter(a => ['confirmed', 'rescheduled'].includes(a.status) && a.appointment_date >= todayStr).length,
+    completed: appointments.filter(a => a.status === 'completed').length,
+    cancelled: appointments.filter(a => a.status === 'cancelled').length,
+    all: appointments.length,
+  }
+
+  const filteredAppointments = appointments.filter(appt => {
+    if (statusFilter === 'upcoming' && !(['confirmed', 'rescheduled'].includes(appt.status) && appt.appointment_date >= todayStr)) return false
+    if (statusFilter === 'completed' && appt.status !== 'completed') return false
+    if (statusFilter === 'cancelled' && appt.status !== 'cancelled') return false
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      if (!appt.customer_name?.toLowerCase().includes(q) && !appt.customer_phone?.includes(q)) return false
+    }
+    return true
+  })
+
+  // Upcoming/all: soonest first. Completed/cancelled: most recent first —
+  // reads like a history log, matching how Cal.com's Past tab behaves.
+  const chronological = statusFilter === 'completed' || statusFilter === 'cancelled' ? -1 : 1
+  const sortedAppointments = [...filteredAppointments].sort((a, b) => {
+    const cmp = a.appointment_date.localeCompare(b.appointment_date) || a.start_time.localeCompare(b.start_time)
+    return cmp * chronological
+  })
+
+  const formatDateHeader = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00')
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const diffDays = Math.round((d - today) / 86400000)
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Tomorrow'
+    if (diffDays === -1) return 'Yesterday'
+    return d.toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric',
+      year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+    })
+  }
+
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading appointments...</div>
 
   return (
@@ -175,40 +221,85 @@ export default function AppointmentsTab({ project }) {
 
       {/* Appointments tab */}
       {activeTab === 'appointments' && (
-        <div className="space-y-3">
-          {appointments.length === 0 ? (
+        <div className="space-y-4">
+          {/* Status tabs + search */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex gap-1 flex-wrap">
+              {[
+                { key: 'upcoming', label: 'Upcoming' },
+                { key: 'completed', label: 'Completed' },
+                { key: 'cancelled', label: 'Cancelled' },
+                { key: 'all', label: 'All' },
+              ].map(t => (
+                <button key={t.key} onClick={() => setStatusFilter(t.key)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                    statusFilter === t.key
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-muted-foreground border-gray-200 hover:bg-muted/50'
+                  }`}>
+                  {t.label} <span className="opacity-70">({statusCounts[t.key]})</span>
+                </button>
+              ))}
+            </div>
+            <div className="relative w-full sm:w-56">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search name or phone"
+                className="w-full border rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            </div>
+          </div>
+
+          {/* Date-grouped agenda list */}
+          {sortedAppointments.length === 0 ? (
             <div className="text-center py-12 border rounded-xl text-sm text-muted-foreground">
-              No appointments yet. Share your booking link to get started.
+              {appointments.length === 0
+                ? 'No appointments yet. Share your booking link to get started.'
+                : 'No appointments match this filter.'}
             </div>
           ) : (
-            appointments.map(appt => (
-              <div key={appt.id} className="border rounded-xl p-4 bg-white space-y-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-sm">{appt.customer_name}</p>
-                    <p className="text-xs text-muted-foreground">+{appt.customer_phone}</p>
+            <div className="space-y-5">
+              {sortedAppointments.map((appt, i) => {
+                const showHeader = i === 0 || sortedAppointments[i - 1].appointment_date !== appt.appointment_date
+                return (
+                  <div key={appt.id}>
+                    {showHeader && (
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 mt-1">
+                        {formatDateHeader(appt.appointment_date)}
+                      </p>
+                    )}
+                    <div className="border rounded-xl p-4 bg-white space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-sm">{appt.customer_name}</p>
+                          <p className="text-xs text-muted-foreground">+{appt.customer_phone}</p>
+                        </div>
+                        {statusBadge(appt.status)}
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Clock size={11} /> {appt.start_time} – {appt.end_time}</span>
+                      </div>
+                      {appt.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{appt.notes}</p>}
+                      {appt.status === 'confirmed' && (
+                        <div className="flex gap-2">
+                          <button onClick={() => updateAppointment(appt.id, 'completed')}
+                            className="flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg px-3 py-1.5">
+                            <Check size={11} /> Mark Complete
+                          </button>
+                          <button onClick={() => updateAppointment(appt.id, 'cancelled')}
+                            className="flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg px-3 py-1.5">
+                            <X size={11} /> Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {statusBadge(appt.status)}
-                </div>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Calendar size={11} /> {appt.appointment_date}</span>
-                  <span className="flex items-center gap-1"><Clock size={11} /> {appt.start_time} – {appt.end_time}</span>
-                </div>
-                {appt.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{appt.notes}</p>}
-                {appt.status === 'confirmed' && (
-                  <div className="flex gap-2">
-                    <button onClick={() => updateAppointment(appt.id, 'completed')}
-                      className="flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg px-3 py-1.5">
-                      <Check size={11} /> Mark Complete
-                    </button>
-                    <button onClick={() => updateAppointment(appt.id, 'cancelled')}
-                      className="flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg px-3 py-1.5">
-                      <X size={11} /> Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))
+                )
+              })}
+            </div>
           )}
         </div>
       )}
