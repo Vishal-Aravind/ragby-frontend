@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, Loader2, Search } from 'lucide-react'
+import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays } from 'lucide-react'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
@@ -15,6 +15,9 @@ export default function AppointmentsTab({ project }) {
   const [googleConnecting, setGoogleConnecting] = useState(false)
   const [statusFilter, setStatusFilter] = useState('upcoming') // upcoming | completed | cancelled | all
   const [search, setSearch] = useState('')
+  const [viewMode, setViewMode] = useState('agenda') // agenda | calendar
+  const [calendarMonth, setCalendarMonth] = useState(new Date())
+  const [selectedDay, setSelectedDay] = useState(null)
 
   const DAYS = [
     { key: 'mon', label: 'Monday' },
@@ -174,6 +177,66 @@ export default function AppointmentsTab({ project }) {
     })
   }
 
+  // Calendar grid view — a real month view, added alongside (not instead
+  // of) the agenda list. Cal.com added this exact thing in 2026 as a
+  // second, optional view layered on their list, specifically so people
+  // can spot gaps across a week at a glance — the agenda list already
+  // covers day-to-day management well on its own.
+  const statusDotColor = {
+    confirmed: 'bg-green-500',
+    cancelled: 'bg-red-500',
+    completed: 'bg-blue-500',
+    rescheduled: 'bg-yellow-500',
+  }
+
+  const toDateStr = (date) => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1).getDay()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    const days = []
+    for (let i = 0; i < firstDay; i++) days.push(null)
+    for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i))
+    return days
+  }
+
+  const apptsForDay = (dateStr) => filteredAppointments.filter(a => a.appointment_date === dateStr)
+
+  const renderApptCard = (appt) => (
+    <div key={appt.id} className="border rounded-xl p-4 bg-white space-y-3">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="font-semibold text-sm">{appt.customer_name}</p>
+          <p className="text-xs text-muted-foreground">+{appt.customer_phone}</p>
+        </div>
+        {statusBadge(appt.status)}
+      </div>
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1"><Clock size={11} /> {appt.start_time} – {appt.end_time}</span>
+      </div>
+      {appt.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{appt.notes}</p>}
+      {appt.status === 'confirmed' && (
+        <div className="flex gap-2">
+          <button onClick={() => updateAppointment(appt.id, 'completed')}
+            className="flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg px-3 py-1.5">
+            <Check size={11} /> Mark Complete
+          </button>
+          <button onClick={() => updateAppointment(appt.id, 'cancelled')}
+            className="flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg px-3 py-1.5">
+            <X size={11} /> Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading appointments...</div>
 
   return (
@@ -222,7 +285,7 @@ export default function AppointmentsTab({ project }) {
       {/* Appointments tab */}
       {activeTab === 'appointments' && (
         <div className="space-y-4">
-          {/* Status tabs + search */}
+          {/* Status tabs + search + view toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex gap-1 flex-wrap">
               {[
@@ -241,64 +304,142 @@ export default function AppointmentsTab({ project }) {
                 </button>
               ))}
             </div>
-            <div className="relative w-full sm:w-56">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search name or phone"
-                className="w-full border rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-200"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative w-full sm:w-56">
+                <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search name or phone"
+                  className="w-full border rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+              <div className="flex border rounded-lg overflow-hidden shrink-0">
+                <button onClick={() => setViewMode('agenda')}
+                  title="Agenda list"
+                  className={`px-2.5 py-1.5 flex items-center ${viewMode === 'agenda' ? 'bg-indigo-600 text-white' : 'bg-white text-muted-foreground hover:bg-muted/50'}`}>
+                  <List size={14} />
+                </button>
+                <button onClick={() => setViewMode('calendar')}
+                  title="Calendar"
+                  className={`px-2.5 py-1.5 flex items-center border-l ${viewMode === 'calendar' ? 'bg-indigo-600 text-white' : 'bg-white text-muted-foreground hover:bg-muted/50'}`}>
+                  <CalendarDays size={14} />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Date-grouped agenda list */}
-          {sortedAppointments.length === 0 ? (
-            <div className="text-center py-12 border rounded-xl text-sm text-muted-foreground">
-              {appointments.length === 0
-                ? 'No appointments yet. Share your booking link to get started.'
-                : 'No appointments match this filter.'}
-            </div>
-          ) : (
-            <div className="space-y-5">
-              {sortedAppointments.map((appt, i) => {
-                const showHeader = i === 0 || sortedAppointments[i - 1].appointment_date !== appt.appointment_date
-                return (
-                  <div key={appt.id}>
-                    {showHeader && (
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 mt-1">
-                        {formatDateHeader(appt.appointment_date)}
-                      </p>
-                    )}
-                    <div className="border rounded-xl p-4 bg-white space-y-3">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold text-sm">{appt.customer_name}</p>
-                          <p className="text-xs text-muted-foreground">+{appt.customer_phone}</p>
-                        </div>
-                        {statusBadge(appt.status)}
-                      </div>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Clock size={11} /> {appt.start_time} – {appt.end_time}</span>
-                      </div>
-                      {appt.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{appt.notes}</p>}
-                      {appt.status === 'confirmed' && (
-                        <div className="flex gap-2">
-                          <button onClick={() => updateAppointment(appt.id, 'completed')}
-                            className="flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg px-3 py-1.5">
-                            <Check size={11} /> Mark Complete
-                          </button>
-                          <button onClick={() => updateAppointment(appt.id, 'cancelled')}
-                            className="flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg px-3 py-1.5">
-                            <X size={11} /> Cancel
-                          </button>
-                        </div>
+          {viewMode === 'agenda' && (
+            sortedAppointments.length === 0 ? (
+              <div className="text-center py-12 border rounded-xl text-sm text-muted-foreground">
+                {appointments.length === 0
+                  ? 'No appointments yet. Share your booking link to get started.'
+                  : 'No appointments match this filter.'}
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {sortedAppointments.map((appt, i) => {
+                  const showHeader = i === 0 || sortedAppointments[i - 1].appointment_date !== appt.appointment_date
+                  return (
+                    <div key={appt.id}>
+                      {showHeader && (
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 mt-1">
+                          {formatDateHeader(appt.appointment_date)}
+                        </p>
                       )}
+                      {renderApptCard(appt)}
                     </div>
+                  )
+                })}
+              </div>
+            )
+          )}
+
+          {/* Calendar grid view */}
+          {viewMode === 'calendar' && (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
+              <div className="border rounded-xl bg-white p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <button onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() - 1))}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted">
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className="font-semibold text-sm">
+                    {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </span>
+                  <button onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + 1))}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted">
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center">
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                    <div key={d} className="text-[10px] text-muted-foreground font-medium py-1">{d}</div>
+                  ))}
+                  {getDaysInMonth(calendarMonth).map((date, i) => {
+                    if (!date) return <div key={i} />
+                    const dateStr = toDateStr(date)
+                    const dayAppts = apptsForDay(dateStr)
+                    const isToday = dateStr === todayStr
+                    const isSelected = selectedDay === dateStr
+                    return (
+                      <button key={i} onClick={() => setSelectedDay(dateStr)}
+                        className={`aspect-square rounded-lg p-1 flex flex-col items-center justify-start gap-1 border transition-colors ${
+                          isSelected ? 'border-indigo-600 bg-indigo-50' :
+                          isToday ? 'border-indigo-200 bg-indigo-50/50' :
+                          'border-transparent hover:bg-muted/50'
+                        }`}>
+                        <span className={`text-xs ${isToday ? 'font-bold text-indigo-600' : 'text-gray-700'}`}>
+                          {date.getDate()}
+                        </span>
+                        {dayAppts.length > 0 && (
+                          <div className="flex flex-wrap gap-0.5 justify-center items-center">
+                            {dayAppts.slice(0, 3).map(a => (
+                              <span key={a.id} className={`w-1.5 h-1.5 rounded-full ${statusDotColor[a.status] || 'bg-gray-400'}`} />
+                            ))}
+                            {dayAppts.length > 3 && (
+                              <span className="text-[9px] text-muted-foreground leading-none">+{dayAppts.length - 3}</span>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t flex-wrap">
+                  {Object.entries(statusDotColor).map(([status, color]) => (
+                    <span key={status} className="flex items-center gap-1 text-[10px] text-muted-foreground capitalize">
+                      <span className={`w-1.5 h-1.5 rounded-full ${color}`} /> {status}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selected day detail panel */}
+              <div className="space-y-3">
+                {selectedDay ? (
+                  <>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      {formatDateHeader(selectedDay)}
+                    </p>
+                    {apptsForDay(selectedDay).length === 0 ? (
+                      <div className="text-center py-8 border rounded-xl text-sm text-muted-foreground">
+                        No appointments on this day.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {apptsForDay(selectedDay).map(appt => renderApptCard(appt))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-8 border rounded-xl text-sm text-muted-foreground">
+                    Click a date to see its appointments.
                   </div>
-                )
-              })}
+                )}
+              </div>
             </div>
           )}
         </div>
