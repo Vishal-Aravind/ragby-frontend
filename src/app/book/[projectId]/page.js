@@ -143,52 +143,49 @@ export default function BookingPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: "#f8f9fa" }}>
-      <div className="text-center space-y-3">
-        <div className="w-10 h-10 rounded-full animate-spin mx-auto"
-          style={{ border: "3px solid #e5e7eb", borderTopColor: accent }} />
-        <p className="text-sm text-gray-400">Loading...</p>
-      </div>
+      <div className="w-8 h-8 rounded-full animate-spin"
+        style={{ border: "3px solid #e5e7eb", borderTopColor: accent }} />
     </div>
   );
 
   if (error) return (
     <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#f8f9fa" }}>
-      <div className="text-center space-y-3">
+      <div className="text-center space-y-2">
         <p className="text-2xl">😔</p>
-        <p className="text-gray-600 font-medium">Booking unavailable</p>
-        <p className="text-sm text-gray-400">{error}</p>
+        <p className="text-gray-600 font-medium text-sm">Booking unavailable</p>
+        <p className="text-xs text-gray-400">{error}</p>
       </div>
     </div>
   );
 
   // Step 4 — Confirmed
   if (step === 4) return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#f8f9fa" }}>
-      <div className="text-center space-y-5 max-w-xs w-full">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto" style={{ background: accent }}>
-          <Check size={28} color="white" strokeWidth={3} />
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#f8f9fa", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div className="w-full max-w-[360px] bg-white rounded-2xl shadow-sm border p-6 text-center space-y-4">
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto" style={{ background: accent }}>
+          <Check size={24} color="white" strokeWidth={3} />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Booking Confirmed!</h2>
-          <p className="text-sm text-gray-500 mt-1">#{booking?.appointment_id?.slice(0, 8).toUpperCase()}</p>
+          <h2 className="text-lg font-bold text-gray-900">Booking Confirmed!</h2>
+          <p className="text-xs text-gray-400 mt-0.5">#{booking?.appointment_id?.slice(0, 8).toUpperCase()}</p>
         </div>
-        <div className="bg-white rounded-xl border p-4 text-left space-y-2">
+        <div className="bg-gray-50 rounded-xl border p-3 text-left space-y-1.5">
           <div className="flex items-center gap-2 text-sm">
-            <Calendar size={14} style={{ color: accent }} />
+            <Calendar size={13} style={{ color: accent }} />
             <span className="text-gray-600">{booking?.date}</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <Clock size={14} style={{ color: accent }} />
+            <Clock size={13} style={{ color: accent }} />
             <span className="text-gray-600">{booking?.time} ({duration} mins)</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <User size={14} style={{ color: accent }} />
+            <User size={13} style={{ color: accent }} />
             <span className="text-gray-600">{name}</span>
           </div>
         </div>
         <p className="text-xs text-gray-400">A confirmation has been sent to your WhatsApp.</p>
         <button onClick={openWhatsApp}
-          className="w-full py-4 rounded-xl text-white font-semibold"
+          className="w-full py-3 rounded-xl text-white font-semibold text-sm"
           style={{ background: accent }}>
           💬 Open WhatsApp
         </button>
@@ -200,111 +197,109 @@ export default function BookingPage() {
   const monthName = currentMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 
   return (
-    <div className="min-h-screen pb-10" style={{ background: "#f8f9fa", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "#f8f9fa", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div className="w-full max-w-[360px] bg-white rounded-2xl shadow-sm border overflow-hidden">
 
-      {/* Header */}
-      <div className="px-4 pt-6 pb-4" style={{ background: accent }}>
-        {isReschedule && (
-          <div className="bg-white bg-opacity-20 rounded-lg px-3 py-1.5 mb-2 text-white text-xs font-medium">
-            🔄 Rescheduling your appointment — pick a new time below
-          </div>
-        )}
-        <h1 className="text-white font-bold text-lg">{service}</h1>
-        <div className="flex items-center gap-3 mt-1">
-          <span className="text-white text-xs opacity-80 flex items-center gap-1">
-            <Clock size={11} /> {duration} mins
+        {/* Header */}
+        <div className="px-4 pt-4 pb-3" style={{ background: accent }}>
+          {isReschedule && (
+            <div className="bg-white bg-opacity-20 rounded-lg px-2.5 py-1 mb-2 text-white text-[11px] font-medium">
+              🔄 Rescheduling — pick a new time below
+            </div>
+          )}
+          <h1 className="text-white font-bold text-base">{service}</h1>
+          <span className="text-white text-[11px] opacity-80 flex items-center gap-1 mt-0.5">
+            <Clock size={10} /> {duration} mins
           </span>
-        </div>
 
-        {/* Steps */}
-        <div className="flex items-center gap-2 mt-4">
-          {["Date", "Time", "Details"].map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${
-                step > i + 1 ? "bg-white text-gray-800" :
-                step === i + 1 ? "bg-white bg-opacity-30 text-white" :
-                "bg-white bg-opacity-10 text-white opacity-50"
-              }`}>
-                {step > i + 1 ? <Check size={10} /> : null}
-                {s}
-              </div>
-              {i < 2 && <div className="w-4 h-px bg-white opacity-30" />}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="px-4 pt-4">
-
-        {/* Step 1 — Date picker */}
-        {step === 1 && (
-          <div className="bg-white rounded-2xl shadow-sm border p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <button onClick={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() - 1))}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
-                <ChevronLeft size={16} />
-              </button>
-              <span className="font-semibold text-sm">{monthName}</span>
-              <button onClick={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() + 1))}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100">
-                <ChevronRight size={16} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 text-center">
-              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
-                <div key={d} className="text-xs text-gray-400 font-medium py-1">{d}</div>
-              ))}
-              {days.map((date, i) => (
-                <div key={i}>
-                  {date ? (
-                    <button
-                      onClick={() => handleDateSelect(date)}
-                      disabled={!isDateAvailable(date)}
-                      className={`w-full aspect-square rounded-lg text-sm font-medium transition-all ${
-                        selectedDate && formatDate(date) === formatDate(selectedDate)
-                          ? "text-white"
-                          : isDateAvailable(date)
-                          ? "hover:bg-gray-100 text-gray-800"
-                          : "text-gray-300 cursor-not-allowed"
-                      }`}
-                      style={selectedDate && formatDate(date) === formatDate(selectedDate)
-                        ? { background: accent } : {}}>
-                      {date.getDate()}
-                    </button>
-                  ) : <div />}
+          {/* Steps */}
+          <div className="flex items-center gap-1.5 mt-3">
+            {["Date", "Time", "Details"].map((s, i) => (
+              <div key={s} className="flex items-center gap-1.5">
+                <div className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                  step > i + 1 ? "bg-white text-gray-800" :
+                  step === i + 1 ? "bg-white bg-opacity-30 text-white" :
+                  "bg-white bg-opacity-10 text-white opacity-50"
+                }`}>
+                  {step > i + 1 ? <Check size={9} /> : null}
+                  {s}
                 </div>
-              ))}
-            </div>
+                {i < 2 && <div className="w-3 h-px bg-white opacity-30" />}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* Step 2 — Time slots */}
-        {step === 2 && (
-          <div className="space-y-4">
-            <button onClick={() => setStep(1)} className="flex items-center gap-1 text-sm text-gray-500">
-              <ChevronLeft size={14} /> {formatDateDisplay(selectedDate)}
-            </button>
-            <div className="bg-white rounded-2xl shadow-sm border p-4 space-y-3">
-              <p className="font-semibold text-sm text-gray-800">Available times</p>
+        <div className="p-4">
+
+          {/* Step 1 — Date picker */}
+          {step === 1 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <button onClick={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() - 1))}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100">
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="font-semibold text-sm">{monthName}</span>
+                <button onClick={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() + 1))}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100">
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5 text-center">
+                {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(d => (
+                  <div key={d} className="text-[10px] text-gray-400 font-medium py-1">{d}</div>
+                ))}
+                {days.map((date, i) => (
+                  <div key={i}>
+                    {date ? (
+                      <button
+                        onClick={() => handleDateSelect(date)}
+                        disabled={!isDateAvailable(date)}
+                        className={`w-full aspect-square rounded-lg text-xs font-medium transition-all ${
+                          selectedDate && formatDate(date) === formatDate(selectedDate)
+                            ? "text-white"
+                            : isDateAvailable(date)
+                            ? "hover:bg-gray-100 text-gray-800"
+                            : "text-gray-300 cursor-not-allowed"
+                        }`}
+                        style={selectedDate && formatDate(date) === formatDate(selectedDate)
+                          ? { background: accent } : {}}>
+                        {date.getDate()}
+                      </button>
+                    ) : <div />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2 — Time slots */}
+          {step === 2 && (
+            <div className="space-y-3">
+              <button onClick={() => setStep(1)} className="flex items-center gap-1 text-xs text-gray-500">
+                <ChevronLeft size={12} /> {formatDateDisplay(selectedDate)}
+              </button>
+              <p className="font-semibold text-xs text-gray-800">Available times</p>
               {slotsLoading ? (
-                <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-2">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="h-10 bg-gray-100 rounded-lg animate-pulse" />
+                    <div key={i} className="h-9 bg-gray-100 rounded-lg animate-pulse" />
                   ))}
                 </div>
               ) : slots.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-400 text-sm">No available slots on this day</p>
-                  <button onClick={() => setStep(1)} className="text-sm mt-2 underline" style={{ color: accent }}>
+                <div className="text-center py-6">
+                  <p className="text-gray-400 text-xs">No available slots on this day</p>
+                  <button onClick={() => setStep(1)} className="text-xs mt-1.5 underline" style={{ color: accent }}>
                     Choose another date
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5 max-h-52 overflow-y-auto pr-0.5">
                   {slots.map(slot => (
                     <button key={slot} onClick={() => handleSlotSelect(slot)}
-                      className="py-2.5 rounded-lg border text-sm font-medium transition-all"
+                      className="py-2 rounded-lg border text-xs font-medium transition-all"
                       style={selectedSlot === slot
                         ? { background: accent, color: "white", borderColor: accent }
                         : { borderColor: "#e5e7eb", color: "#374151" }}>
@@ -314,75 +309,68 @@ export default function BookingPage() {
                 </div>
               )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Step 3 — Details form */}
-        {step === 3 && (
-          <div className="space-y-4">
-            <button onClick={() => setStep(2)} className="flex items-center gap-1 text-sm text-gray-500">
-              <ChevronLeft size={14} /> {formatDateDisplay(selectedDate)} at {selectedSlot}
-            </button>
-            <div className="bg-white rounded-2xl shadow-sm border p-4 space-y-4">
-              <p className="font-semibold text-sm text-gray-800">Your details</p>
+          {/* Step 3 — Details form */}
+          {step === 3 && (
+            <div className="space-y-3">
+              <button onClick={() => setStep(2)} className="flex items-center gap-1 text-xs text-gray-500">
+                <ChevronLeft size={12} /> {formatDateDisplay(selectedDate)} at {selectedSlot}
+              </button>
 
               <div className="space-y-1">
-                <label className="text-xs text-gray-500 flex items-center gap-1">
-                  <User size={11} /> Your name
+                <label className="text-[11px] text-gray-500 flex items-center gap-1">
+                  <User size={10} /> Your name
                 </label>
                 <input type="text" placeholder="Enter your name"
                   value={name} onChange={e => setName(e.target.value)}
-                  className="w-full border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2"
+                  className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2"
                   style={{ "--tw-ring-color": accent }}
                   autoFocus />
               </div>
 
               {phone && (
-                <div className="flex items-center gap-2 text-sm bg-gray-50 rounded-xl px-3 py-3 border">
-                  <Phone size={13} className="text-gray-400" />
+                <div className="flex items-center gap-2 text-xs bg-gray-50 rounded-lg px-3 py-2 border">
+                  <Phone size={12} className="text-gray-400" />
                   <span className="text-gray-600">+{phone}</span>
                 </div>
               )}
 
               <div className="space-y-1">
-                <label className="text-xs text-gray-500 flex items-center gap-1">
-                  <FileText size={11} /> Notes (optional)
+                <label className="text-[11px] text-gray-500 flex items-center gap-1">
+                  <FileText size={10} /> Notes (optional)
                 </label>
-                <textarea placeholder="Any special requests or notes..."
+                <textarea placeholder="Any special requests..."
                   value={notes} onChange={e => setNotes(e.target.value)}
-                  rows={3}
-                  className="w-full border rounded-xl px-3 py-3 text-sm outline-none resize-none focus:ring-2" />
+                  rows={2}
+                  className="w-full border rounded-lg px-3 py-2 text-sm outline-none resize-none focus:ring-2" />
               </div>
 
               {/* Summary */}
-              <div className="bg-gray-50 rounded-xl p-3 space-y-1.5 border">
-                <p className="text-xs font-medium text-gray-600">Booking summary</p>
-                <div className="flex justify-between text-xs text-gray-500">
+              <div className="bg-gray-50 rounded-lg p-2.5 space-y-1 border">
+                <div className="flex justify-between text-[11px] text-gray-500">
                   <span>Service</span><span className="font-medium text-gray-800">{service}</span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-500">
+                <div className="flex justify-between text-[11px] text-gray-500">
                   <span>Date</span><span className="font-medium text-gray-800">{formatDateDisplay(selectedDate)}</span>
                 </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Time</span><span className="font-medium text-gray-800">{selectedSlot}</span>
-                </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>Duration</span><span className="font-medium text-gray-800">{duration} mins</span>
+                <div className="flex justify-between text-[11px] text-gray-500">
+                  <span>Time</span><span className="font-medium text-gray-800">{selectedSlot} · {duration} mins</span>
                 </div>
               </div>
 
               <button onClick={handleSubmit}
                 disabled={submitting || !name.trim()}
-                className="w-full py-4 rounded-xl text-white font-semibold text-base flex items-center justify-center gap-2 disabled:opacity-60"
+                className="w-full py-2.5 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{ background: accent }}>
                 {submitting
-                  ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Booking...</>
+                  ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Booking...</>
                   : isReschedule ? "Confirm Reschedule ✓" : "Confirm Booking ✓"
                 }
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
