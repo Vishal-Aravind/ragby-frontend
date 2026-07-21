@@ -370,7 +370,7 @@ export default function ProjectClient({ project }) {
             )}
             {hasAccess("events") && (
               <TabButton active={activeTab === "events"} onClick={() => setActiveTab("events")}>
-                <CalendarRange size={13} />Events
+                <CalendarRange size={13} />Registrations
               </TabButton>
             )}
             {isOwnerOrAdmin && (

@@ -131,7 +131,7 @@ export default function EventsTab({ project }) {
     return (
       <div className="p-6 space-y-4">
         <button onClick={() => setViewingEvent(null)} className="text-sm text-muted-foreground hover:text-gray-800">
-          ← Back to Events
+          ← Back to Registrations
         </button>
         <div>
           <h2 className="text-lg font-semibold">{viewingEvent.title}</h2>
@@ -186,7 +186,7 @@ export default function EventsTab({ project }) {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Events</h2>
+          <h2 className="text-lg font-semibold">Registrations</h2>
           <p className="text-sm text-muted-foreground">Create event registrations — webinars, expos, workshops, demos</p>
         </div>
         <button onClick={() => setShowCreate(true)}

@@ -23,7 +23,7 @@ const PERMISSION_LABELS = {
   templates: 'Templates',
   shop: 'Shop',
   appointments: 'Appointments',
-  events: 'Events',
+  events: 'Registrations',
 }
 
 export default function TeamTab({ project }) {
