@@ -490,6 +490,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
     capacity: event?.capacity ?? '',
     contact_phone: event?.contact_phone || '',
     accent_color: event?.accent_color || '#6366f1',
+    bot_can_register: event?.bot_can_register ?? false,
   })
   const [uploadingBanner, setUploadingBanner] = useState(false)
 
@@ -597,6 +598,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
       capacity: details.capacity ? parseInt(details.capacity) : null,
       contact_phone: details.contact_phone.trim() || null,
       accent_color: details.accent_color,
+      bot_can_register: details.bot_can_register,
     })
     setSaving(false)
   }
@@ -740,6 +742,21 @@ export default function PageBuilder({ event, onSave, onClose }) {
                   </div>
                 </div>
                 <TextField label={'Contact phone (for "Call to Attend")'} value={details.contact_phone} onChange={v => updateDetail({ contact_phone: v })} placeholder="+91 98765 43210" />
+
+                {/* Let the AI bot register directly in chat for THIS event —
+                    per-event, not project-wide, since a merchant may want
+                    automation on one event but not another running the same week. */}
+                <div className="flex items-center justify-between border rounded-xl px-3 py-3 bg-white">
+                  <div>
+                    <p className="text-sm font-medium">Let the AI register in chat</p>
+                    <p className="text-xs text-muted-foreground">Your chatbot can register customers for this event directly inside a conversation (WhatsApp, Telegram, Slack, web chat)</p>
+                  </div>
+                  <button
+                    onClick={() => updateDetail({ bot_can_register: !details.bot_can_register })}
+                    className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors shrink-0 ml-4 ${details.bot_can_register ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${details.bot_can_register ? 'translate-x-5' : 'translate-x-1'}`} />
+                  </button>
+                </div>
               </div>
             )}
 
