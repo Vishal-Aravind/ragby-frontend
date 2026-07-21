@@ -202,11 +202,6 @@ export default function BookingPage() {
 
         {/* Header */}
         <div className="px-4 pt-4 pb-3" style={{ background: accent }}>
-          {isReschedule && (
-            <div className="bg-white bg-opacity-20 rounded-lg px-2.5 py-1 mb-2 text-white text-[11px] font-medium">
-              🔄 Rescheduling — pick a new time below
-            </div>
-          )}
           <h1 className="text-white font-bold text-base">{service}</h1>
           <span className="text-white text-[11px] opacity-80 flex items-center gap-1 mt-0.5">
             <Clock size={10} /> {duration} mins
@@ -217,9 +212,7 @@ export default function BookingPage() {
             {["Date", "Time", "Details"].map((s, i) => (
               <div key={s} className="flex items-center gap-1.5">
                 <div className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                  step > i + 1 ? "bg-white text-gray-800" :
-                  step === i + 1 ? "bg-white bg-opacity-30 text-white" :
-                  "bg-white bg-opacity-10 text-white opacity-50"
+                  step >= i + 1 ? "bg-white text-gray-800" : "bg-white bg-opacity-20 text-white opacity-60"
                 }`}>
                   {step > i + 1 ? <Check size={9} /> : null}
                   {s}
