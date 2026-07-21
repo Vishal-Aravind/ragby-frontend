@@ -90,12 +90,37 @@ const TEMPLATES = {
 
 const genId = () => `b_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
+// Registration form is a singleton block — always exactly one, never
+// manually added/removed (only reordered), so it gets a fixed id instead
+// of a generated one.
+const REGISTRATION_FORM_ID = 'registration_form'
+const ensureRegistrationFormBlock = (blocksArr) => {
+  if (blocksArr.some(b => b.type === 'registration_form')) return blocksArr
+  const formBlock = { id: REGISTRATION_FORM_ID, type: 'registration_form', props: {} }
+  const copy = [...blocksArr]
+  copy.splice(Math.min(1, copy.length), 0, formBlock)
+  return copy
+}
+
 // ─────────────────────────────────────────────────────────
 // BLOCK PREVIEW (mini render inside editor canvas)
 // ─────────────────────────────────────────────────────────
-function BlockPreview({ block, accent }) {
+function BlockPreview({ block, accent, formFields }) {
   const p = block.props
   switch (block.type) {
+    case 'registration_form':
+      return (
+        <div className="bg-gray-50 rounded-lg p-3">
+          <p className="text-xs font-semibold text-gray-600 mb-2">📋 Registration Form</p>
+          <div className="space-y-2">
+            {formFields.map(f => (
+              <div key={f.id} className="bg-white border rounded-lg px-3 py-2 text-xs text-gray-400">
+                {f.label}{f.required ? ' *' : ''}
+              </div>
+            ))}
+          </div>
+        </div>
+      )
     case 'hero':
       return (
         <div className="relative rounded-lg overflow-hidden" style={{ minHeight: 140, background: p.image_url ? `url(${p.image_url}) center/cover` : '#e5e7eb' }}>
@@ -187,6 +212,8 @@ function BlockEditPanel({ block, onChange, onUploadImage }) {
   }
 
   switch (block.type) {
+    case 'registration_form':
+      return <p className="text-xs text-muted-foreground">Edit this form's fields in the "Form Fields" tab.</p>
     case 'hero':
       return (
         <div className="space-y-3">
@@ -336,8 +363,7 @@ function FormFieldsEditor({ fields, onChange }) {
     <div className="space-y-2">
       {fields.map((field, i) => (
         <div key={field.id} className="border rounded-lg p-3 space-y-2 bg-white">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-mono">{field.id}</span>
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-1">
               <button onClick={() => moveField(i, -1)} disabled={i === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30"><ChevronUp size={12} /></button>
               <button onClick={() => moveField(i, 1)} disabled={i === fields.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30"><ChevronDown size={12} /></button>
@@ -442,7 +468,7 @@ function ImageUploadField({ label, value, onChange, onUploadImage, compact }) {
 // ─────────────────────────────────────────────────────────
 export default function PageBuilder({ event, onSave, onClose }) {
   const [showTemplatePicker, setShowTemplatePicker] = useState(!event?.page_json?.length)
-  const [blocks, setBlocks] = useState(event?.page_json || [])
+  const [blocks, setBlocks] = useState(() => ensureRegistrationFormBlock(event?.page_json || []))
   const [formFields, setFormFields] = useState(event?.form_schema || [
     { id: 'name', type: 'text', label: 'Your name', required: true },
     { id: 'phone', type: 'phone', label: 'WhatsApp number', required: true },
@@ -485,7 +511,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
       }
       return newBlock
     })
-    setBlocks(blocks)
+    setBlocks(ensureRegistrationFormBlock(blocks))
     setShowTemplatePicker(false)
   }
 
@@ -633,42 +659,35 @@ export default function PageBuilder({ event, onSave, onClose }) {
                 No blocks yet. Add one from the right panel.
               </div>
             ) : (
-              blocks.map((block, idx) => (
-                <div key={block.id}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragOver={e => handleDragOver(e, idx)}
-                  onDragEnd={handleDragEnd}
-                  onClick={() => { setSelectedBlockId(block.id); setRightPanel('edit') }}
-                  className={`relative group p-3 cursor-pointer border-2 transition-colors ${
-                    selectedBlockId === block.id ? 'border-indigo-400' : 'border-transparent hover:border-gray-200'
-                  }`}>
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center pr-1">
-                    <GripVertical size={14} className="text-gray-300 cursor-grab" />
-                  </div>
-                  <BlockPreview block={block} accent={accent} />
-                  {selectedBlockId === block.id && (
-                    <div className="absolute top-1 right-1 flex items-center gap-1 bg-white border rounded-lg shadow-sm">
-                      <button onClick={e => { e.stopPropagation(); moveBlock(idx, -1) }} className="p-1.5 hover:bg-muted"><ChevronUp size={12} /></button>
-                      <button onClick={e => { e.stopPropagation(); moveBlock(idx, 1) }} className="p-1.5 hover:bg-muted"><ChevronDown size={12} /></button>
-                      <button onClick={e => { e.stopPropagation(); removeBlock(block.id) }} className="p-1.5 hover:bg-red-50 text-red-500"><Trash2 size={12} /></button>
+              blocks.map((block, idx) => {
+                const isForm = block.type === 'registration_form'
+                return (
+                  <div key={block.id}
+                    draggable
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragOver={e => handleDragOver(e, idx)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => { setSelectedBlockId(block.id); setRightPanel(isForm ? 'form' : 'edit') }}
+                    className={`relative group p-3 cursor-pointer border-2 transition-colors ${
+                      selectedBlockId === block.id ? 'border-indigo-400' : 'border-transparent hover:border-gray-200'
+                    }`}>
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center pr-1">
+                      <GripVertical size={14} className="text-gray-300 cursor-grab" />
                     </div>
-                  )}
-                </div>
-              ))
-            )}
-
-            {/* Form preview at bottom — always shown */}
-            <div className="p-4 border-t bg-gray-50">
-              <p className="text-xs font-semibold text-gray-600 mb-2">📋 Registration Form</p>
-              <div className="space-y-2">
-                {formFields.map(f => (
-                  <div key={f.id} className="bg-white border rounded-lg px-3 py-2 text-xs text-gray-400">
-                    {f.label}{f.required ? ' *' : ''}
+                    <BlockPreview block={block} accent={accent} formFields={formFields} />
+                    {selectedBlockId === block.id && (
+                      <div className="absolute top-1 right-1 flex items-center gap-1 bg-white border rounded-lg shadow-sm">
+                        <button onClick={e => { e.stopPropagation(); moveBlock(idx, -1) }} className="p-1.5 hover:bg-muted"><ChevronUp size={12} /></button>
+                        <button onClick={e => { e.stopPropagation(); moveBlock(idx, 1) }} className="p-1.5 hover:bg-muted"><ChevronDown size={12} /></button>
+                        {!isForm && (
+                          <button onClick={e => { e.stopPropagation(); removeBlock(block.id) }} className="p-1.5 hover:bg-red-50 text-red-500"><Trash2 size={12} /></button>
+                        )}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
+                )
+              })
+            )}
           </div>
         </div>
 

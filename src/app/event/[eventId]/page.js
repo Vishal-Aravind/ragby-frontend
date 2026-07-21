@@ -43,12 +43,29 @@ function Countdown({ targetDate, label, accent }) {
   );
 }
 
-function BlockRenderer({ blocks, accent }) {
+function BlockRenderer({ blocks, accent, formFields, onSubmit, submitting, spotsFull, registrationClosed, contactPhone }) {
   return (
     <div>
       {(blocks || []).map(block => {
         const p = block.props;
         switch (block.type) {
+          case "registration_form":
+            return (
+              <div key={block.id} className="px-4 py-4">
+                {spotsFull || registrationClosed ? (
+                  <div className="bg-gray-50 rounded-2xl border p-6 text-center space-y-2">
+                    <p className="text-gray-600 font-medium text-sm">{spotsFull ? "This event is fully booked" : "Registration is closed"}</p>
+                    {contactPhone && <p className="text-xs text-gray-400">Call {contactPhone} for more info</p>}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-2xl border p-4">
+                    <p className="font-semibold text-sm text-gray-800 mb-3">Register now</p>
+                    <DynamicForm fields={formFields} accent={accent} onSubmit={onSubmit} submitting={submitting} />
+                  </div>
+                )}
+              </div>
+            );
+
           case "hero":
             return (
               <div key={block.id} className="relative" style={{ minHeight: 200, background: p.image_url ? `url(${p.image_url}) center/cover` : accent }}>
@@ -308,6 +325,10 @@ export default function EventRegistrationPage() {
   const spotsFull = event.capacity && event.spots_left <= 0;
   const registrationClosed = event.registration_open === false;
   const hasCustomPage = Array.isArray(event?.page_json) && event.page_json.length > 0;
+  // Older custom pages saved before the registration form became a real,
+  // reorderable block won't have one in page_json — fall back to the fixed
+  // section below for those, so they don't lose their form entirely.
+  const hasRegistrationFormBlock = hasCustomPage && event.page_json.some(b => b.type === "registration_form");
   const formFields = Array.isArray(event?.form_schema) && event.form_schema.length > 0
     ? event.form_schema
     : [
@@ -320,7 +341,16 @@ export default function EventRegistrationPage() {
 
       {hasCustomPage ? (
         <div className="max-w-md mx-auto bg-white">
-          <BlockRenderer blocks={event.page_json} accent={accent} />
+          <BlockRenderer
+            blocks={event.page_json}
+            accent={accent}
+            formFields={formFields}
+            onSubmit={handleSubmit}
+            submitting={submitting}
+            spotsFull={spotsFull}
+            registrationClosed={registrationClosed}
+            contactPhone={event.contact_phone}
+          />
         </div>
       ) : (
         <>
@@ -362,17 +392,21 @@ export default function EventRegistrationPage() {
           )}
         </div>
 
-        {/* Registration form or closed message */}
-        {spotsFull || registrationClosed ? (
-          <div className="bg-white rounded-2xl shadow-sm border p-6 text-center space-y-2">
-            <p className="text-gray-600 font-medium">{spotsFull ? "This event is fully booked" : "Registration is closed"}</p>
-            {event.contact_phone && <p className="text-sm text-gray-400">Call {event.contact_phone} for more info</p>}
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-sm border p-4">
-            <p className="font-semibold text-sm text-gray-800 mb-3">Register now</p>
-            <DynamicForm fields={formFields} accent={accent} onSubmit={handleSubmit} submitting={submitting} />
-          </div>
+        {/* Registration form or closed message — skipped when the custom
+            page already renders it inline as a registration_form block,
+            to avoid showing the form twice */}
+        {!hasRegistrationFormBlock && (
+          spotsFull || registrationClosed ? (
+            <div className="bg-white rounded-2xl shadow-sm border p-6 text-center space-y-2">
+              <p className="text-gray-600 font-medium">{spotsFull ? "This event is fully booked" : "Registration is closed"}</p>
+              {event.contact_phone && <p className="text-sm text-gray-400">Call {event.contact_phone} for more info</p>}
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl shadow-sm border p-4">
+              <p className="font-semibold text-sm text-gray-800 mb-3">Register now</p>
+              <DynamicForm fields={formFields} accent={accent} onSubmit={handleSubmit} submitting={submitting} />
+            </div>
+          )
         )}
       </div>
     </div>
