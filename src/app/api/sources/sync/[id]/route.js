@@ -15,7 +15,12 @@ export async function POST(req, { params }) {
     method: "POST",
     headers: { "Authorization": `Bearer ${session.access_token}` },
   });
- 
+
+  if (!res.ok) {
+    const err = await res.text();
+    return NextResponse.json({ error: err }, { status: res.status });
+  }
+
   return NextResponse.json(await res.json());
 }
  

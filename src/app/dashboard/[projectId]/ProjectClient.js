@@ -256,7 +256,11 @@ export default function ProjectClient({ project }) {
   // RELOAD / REUPLOAD / DELETE SOURCE
   // --------------------------------------------------
   const handleReloadSource = async (id) => {
-    await fetch(`/api/sources/sync/${id}`, { method: "POST" });
+    const res = await fetch(`/api/sources/sync/${id}`, { method: "POST" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Failed to refresh this source.");
+    }
     await fetchSources();
   };
 
