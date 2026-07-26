@@ -120,6 +120,17 @@ export default function Dashboard() {
       }
 
       const data = await res.json();
+
+      // Most accounts only ever have exactly one project (their own
+      // business) — showing a "pick a project" page with a single card to
+      // click is a pointless extra step. Only genuinely show this page
+      // when there's a real choice to make (e.g. someone who's a team
+      // member on more than one business's project).
+      if (data && data.length === 1) {
+        router.replace(`/dashboard/${data[0].id}`);
+        return;
+      }
+
       setProjects(data || []);
       setLoading(false);
     };
