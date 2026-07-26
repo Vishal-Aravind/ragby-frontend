@@ -7,10 +7,15 @@ import { NextResponse } from "next/server";
  
 export async function POST(req) {
   const { projectId, message, sessionId } = await req.json();
- 
+
+  // This route just proxies straight to FastAPI, so without forwarding it
+  // explicitly, the backend would only ever see Vercel's own outbound IP
+  // for every visitor — making any per-visitor rate limiting there useless.
+  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+
   const res = await fetch(`${process.env.BACKEND_BASE_URL}/public/chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
     body: JSON.stringify({ projectId, message, sessionId }),
   });
  

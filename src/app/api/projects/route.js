@@ -76,3 +76,73 @@ export async function GET(req) {
 
   return NextResponse.json(all);
 }
+
+export async function POST(req) {
+  const response = NextResponse.next();
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get: (name) => req.cookies.get(name)?.value,
+        set: (name, value, options) =>
+          response.cookies.set({ name, value, ...options }),
+        remove: (name, options) =>
+          response.cookies.set({ name, value: "", ...options }),
+      },
+    }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // One business = one account — enforced here server-side, not just in the
+  // UI, since a direct client-side insert could otherwise bypass any
+  // frontend-only check. Only checks projects this user OWNS — being a team
+  // member on someone else's project (e.g. an employee) doesn't count
+  // against this.
+  const { count, error: countError } = await supabaseAdmin
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  if (countError) {
+    return NextResponse.json({ error: countError.message }, { status: 500 });
+  }
+  if ((count || 0) >= 1) {
+    return NextResponse.json(
+      { error: "Your account already has a business connected. Each account supports one business." },
+      { status: 403 }
+    );
+  }
+
+  const body = await req.json();
+  const { name, domain, logo_url } = body;
+
+  if (!name || !name.trim()) {
+    return NextResponse.json({ error: "Project name is required" }, { status: 400 });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("projects")
+    .insert({
+      name: name.trim(),
+      domain: domain || null,
+      user_id: user.id,
+      logo_url: logo_url || null,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json(data);
+}

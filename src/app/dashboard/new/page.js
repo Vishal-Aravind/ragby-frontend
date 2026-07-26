@@ -86,19 +86,15 @@ export function NewProjectForm() {
       ? customDomain.trim()
       : domain;
 
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({
-        name,
-        domain: finalDomain || null,
-        user_id: user.id,
-        logo_url,
-      })
-      .select()
-      .single();
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, domain: finalDomain || null, logo_url }),
+    });
+    const data = await res.json();
 
-    if (error) {
-      setError(error.message);
+    if (!res.ok) {
+      setError(data.error || "Failed to create project");
       setLoading(false);
       return;
     }

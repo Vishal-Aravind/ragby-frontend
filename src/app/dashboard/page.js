@@ -159,9 +159,14 @@ export default function Dashboard() {
         <div className="px-6">
           <div className="flex justify-between mb-6">
             <h1 className="text-2xl font-semibold">Projects</h1>
-            <Button onClick={() => setShowNewProject(true)}>
-              + New project
-            </Button>
+            {/* One business per account — once you own one, there's no
+                second one to create. Being a team member on someone else's
+                project doesn't count against this. */}
+            {!projects.some(p => p.myRole === "owner") && (
+              <Button onClick={() => setShowNewProject(true)}>
+                + New project
+              </Button>
+            )}
           </div>
 
           {projects.length === 0 ? (
