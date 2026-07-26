@@ -22,13 +22,11 @@ const PLAN_COLORS = {
 const PLAN_FEATURES = {
   free: [
     "300 messages / month",
-    "1 project",
     "Website widget & shareable link",
     "Telegram & Slack",
   ],
   pro: [
     "5,000 messages / month",
-    "3 projects",
     "All channels incl. WhatsApp",
     "No Askzavo branding",
     "Lead capture widget",
@@ -36,7 +34,6 @@ const PLAN_FEATURES = {
   ],
   business: [
     "25,000 messages / month",
-    "Unlimited projects",
     "All channels incl. WhatsApp",
     "No Askzavo branding",
     "Priority support",
