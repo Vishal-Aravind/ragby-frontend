@@ -4,18 +4,32 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
- 
+
+const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export async function POST(req) {
   const { name, email, password } = await req.json();
- 
+
   if (!name || !email || !password) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
- 
+
   if (password.length < 6) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
   }
- 
+
+  // Checked first, before touching Supabase Auth at all — nothing here
+  // previously stopped scripted mass fake-account creation.
+  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const rateCheck = await fetch(`${BACKEND}/auth/rate-limit-check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+    body: JSON.stringify({ action: "signup" }),
+  });
+  if (!rateCheck.ok) {
+    return NextResponse.json({ error: "Too many signup attempts — please wait and try again." }, { status: 429 });
+  }
+
   const response = NextResponse.json({ success: true });
  
   const supabase = createServerClient(

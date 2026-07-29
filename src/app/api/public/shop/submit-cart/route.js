@@ -10,9 +10,10 @@ export async function POST(req) {
       return NextResponse.json({ error: "Backend not configured" }, { status: 500 });
     }
 
+    const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     const res = await fetch(`${backendUrl}/public/shop/submit-cart`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
       body: JSON.stringify(body),
     });
 

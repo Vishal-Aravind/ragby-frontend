@@ -78,6 +78,8 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
 
     if (res.ok) {
       setUnlocked(true);
+    } else if (res.status === 429) {
+      setPasswordError("Too many attempts — please wait a few minutes and try again.");
     } else {
       setPasswordError("Incorrect password. Please try again.");
     }

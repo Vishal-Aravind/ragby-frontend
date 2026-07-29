@@ -5,9 +5,23 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
  
+const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+
 export async function POST(req) {
   const { email, password } = await req.json();
- 
+
+  // Checked first, before touching Supabase Auth at all — nothing here
+  // previously stopped scripted credential-stuffing against this route.
+  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const rateCheck = await fetch(`${BACKEND}/auth/rate-limit-check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+    body: JSON.stringify({ action: "login" }),
+  });
+  if (!rateCheck.ok) {
+    return NextResponse.json({ error: "Too many login attempts — please wait and try again." }, { status: 429 });
+  }
+
   // Must return a response object to set cookies on
   const response = NextResponse.json({ success: true });
  
