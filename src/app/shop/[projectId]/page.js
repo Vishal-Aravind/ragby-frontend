@@ -123,6 +123,10 @@ export default function ShopPage() {
             price: item.price,
             quantity: item.quantity,
             image_url: item.image_url || null,
+            // Captured so a later Shopify order write-back knows which
+            // real Shopify variant this was — item.id is our own internal
+            // row id, not something Shopify's API understands.
+            shopify_variant_id: item.shopify_variant_id || null,
           })),
           delivery_type: deliveryType,
         }),

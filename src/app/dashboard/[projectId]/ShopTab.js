@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Plus, Trash2, Loader2, ShoppingBag, Settings,
   Package, ClipboardList, ChevronLeft, Upload,
-  ToggleLeft, ToggleRight, Eye, EyeOff
+  ToggleLeft, ToggleRight, Eye, EyeOff, Lock
 } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
 
@@ -251,6 +251,13 @@ export default function ShopTab({ project }) {
     ? orders
     : orders.filter(o => o.status === orderFilter);
 
+  // Products synced from a connected Shopify store — name/description/price/
+  // image/availability are overwritten on every sync (see
+  // backend/sources/shopify.py's field-ownership split), so editing them
+  // here would just get silently clobbered next sync. Category/GST%/sort
+  // order stay merchant-owned and editable either way.
+  const isShopifyManaged = !!(editingProduct && editingProduct.shopify_product_id);
+
   if (!config) return (
     <div className="flex items-center justify-center h-40">
       <Loader2 size={20} className="animate-spin text-gray-400" />
@@ -302,7 +309,7 @@ export default function ShopTab({ project }) {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Currency</label>
+                    <label className="text-xs text-gray-500 mb-1 block">Currency Symbol</label>
                     <Input placeholder="₹"
                       value={config.currency || "₹"}
                       onChange={e => setConfig(c => ({ ...c, currency: e.target.value }))} />
@@ -313,6 +320,16 @@ export default function ShopTab({ project }) {
                       value={config.gst_percent ?? 0}
                       onChange={e => setConfig(c => ({ ...c, gst_percent: parseFloat(e.target.value) || 0 }))} />
                   </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Currency Code (for payments)</label>
+                  <Input placeholder="INR" maxLength={3}
+                    value={config.currency_code || "INR"}
+                    onChange={e => setConfig(c => ({ ...c, currency_code: e.target.value.toUpperCase() }))} />
+                  <p className="text-xs text-gray-400 mt-1">
+                    The real currency code (e.g. INR, USD) Razorpay actually charges in — separate from the ₹/$ symbol above.
+                    Auto-filled from your Shopify store's currency if you connect one before setting up Shop.
+                  </p>
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Delivery Types (comma separated)</label>
@@ -470,24 +487,34 @@ export default function ShopTab({ project }) {
                     <h3 className="font-semibold text-gray-900">
                       {editingProduct ? "Edit Product" : "Add Product"}
                     </h3>
+                    {isShopifyManaged && (
+                      <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                        <Lock size={13} className="text-blue-500 mt-0.5 shrink-0" />
+                        <p className="text-xs text-blue-700">
+                          Name, description, price, image, and availability are managed by Shopify —
+                          edit them in your Shopify admin and they'll sync here automatically.
+                          Category, GST %, and sort order are yours to set.
+                        </p>
+                      </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-3">
                         <div>
                           <label className="text-xs text-gray-500 mb-1 block">Product Name *</label>
-                          <Input placeholder="e.g. Ghee Pongal"
+                          <Input placeholder="e.g. Ghee Pongal" disabled={isShopifyManaged}
                             value={productForm.name}
                             onChange={e => setProductForm(f => ({ ...f, name: e.target.value }))} />
                         </div>
                         <div>
                           <label className="text-xs text-gray-500 mb-1 block">Description</label>
-                          <Input placeholder="Short description (optional)"
+                          <Input placeholder="Short description (optional)" disabled={isShopifyManaged}
                             value={productForm.description}
                             onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))} />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs text-gray-500 mb-1 block">Price *</label>
-                            <Input type="number" min="0" placeholder="115"
+                            <Input type="number" min="0" placeholder="115" disabled={isShopifyManaged}
                               value={productForm.price}
                               onChange={e => setProductForm(f => ({ ...f, price: e.target.value }))} />
                           </div>
@@ -514,7 +541,9 @@ export default function ShopTab({ project }) {
                         </div>
                         <div className="flex items-center gap-3">
                           <label className="text-sm text-gray-700">Available</label>
-                          <button onClick={() => setProductForm(f => ({ ...f, is_available: !f.is_available }))}>
+                          <button disabled={isShopifyManaged}
+                            onClick={() => setProductForm(f => ({ ...f, is_available: !f.is_available }))}
+                            className={isShopifyManaged ? "opacity-40 cursor-not-allowed" : ""}>
                             {productForm.is_available
                               ? <ToggleRight size={24} className="text-green-600" />
                               : <ToggleLeft size={24} className="text-gray-400" />}
@@ -529,10 +558,16 @@ export default function ShopTab({ project }) {
                           <div className="relative">
                             <img src={productForm.image_url} alt="product"
                               className="w-full h-40 object-cover rounded-lg border" />
-                            <button onClick={() => setProductForm(f => ({ ...f, image_url: "" }))}
-                              className="absolute top-2 right-2 bg-white border rounded-full p-1 shadow-sm hover:bg-red-50">
-                              <Trash2 size={12} className="text-red-500" />
-                            </button>
+                            {!isShopifyManaged && (
+                              <button onClick={() => setProductForm(f => ({ ...f, image_url: "" }))}
+                                className="absolute top-2 right-2 bg-white border rounded-full p-1 shadow-sm hover:bg-red-50">
+                                <Trash2 size={12} className="text-red-500" />
+                              </button>
+                            )}
+                          </div>
+                        ) : isShopifyManaged ? (
+                          <div className="flex items-center justify-center w-full h-40 border-2 border-dashed rounded-lg text-xs text-gray-400">
+                            No image set in Shopify
                           </div>
                         ) : (
                           <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
@@ -547,12 +582,14 @@ export default function ShopTab({ project }) {
                             <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                           </label>
                         )}
-                        <div>
-                          <label className="text-xs text-gray-400 mb-1 block">Or paste image URL</label>
-                          <Input placeholder="https://..."
-                            value={productForm.image_url}
-                            onChange={e => setProductForm(f => ({ ...f, image_url: e.target.value }))} />
-                        </div>
+                        {!isShopifyManaged && (
+                          <div>
+                            <label className="text-xs text-gray-400 mb-1 block">Or paste image URL</label>
+                            <Input placeholder="https://..."
+                              value={productForm.image_url}
+                              onChange={e => setProductForm(f => ({ ...f, image_url: e.target.value }))} />
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -591,7 +628,12 @@ export default function ShopTab({ project }) {
                           </div>
                       }
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-sm">{product.name}</p>
+                        <p className="font-medium text-gray-900 text-sm flex items-center gap-1.5">
+                          {product.name}
+                          {product.shopify_product_id && (
+                            <span title="Synced from Shopify"><Lock size={11} className="text-gray-300" /></span>
+                          )}
+                        </p>
                         <p className="text-xs text-gray-400">{product.category} · {config.currency || "₹"}{product.price}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -618,11 +660,19 @@ export default function ShopTab({ project }) {
                         }}>
                           ✏️
                         </Button>
-                        <Button variant="ghost" size="sm"
-                          onClick={() => { setProductToDelete(product); setDeleteProductOpen(true); }}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50">
-                          <Trash2 size={13} />
-                        </Button>
+                        {product.shopify_product_id ? (
+                          <span title="Remove it in Shopify instead — deleting here would just be re-added on the next sync">
+                            <Button variant="ghost" size="sm" disabled className="text-gray-300 cursor-not-allowed">
+                              <Trash2 size={13} />
+                            </Button>
+                          </span>
+                        ) : (
+                          <Button variant="ghost" size="sm"
+                            onClick={() => { setProductToDelete(product); setDeleteProductOpen(true); }}
+                            className="text-red-400 hover:text-red-600 hover:bg-red-50">
+                            <Trash2 size={13} />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -666,7 +716,14 @@ export default function ShopTab({ project }) {
                             <ShoppingBag size={16} className="text-gray-500" />
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-900 text-sm">{catalog.name}</p>
+                            <p className="font-semibold text-gray-900 text-sm flex items-center gap-1.5">
+                              {catalog.name}
+                              {catalog.source === "shopify" && (
+                                <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                                  <Lock size={9} /> Synced
+                                </span>
+                              )}
+                            </p>
                             {catalog.description && (
                               <p className="text-xs text-gray-400">{catalog.description}</p>
                             )}
@@ -680,11 +737,13 @@ export default function ShopTab({ project }) {
                           }`}>
                             {catalog.is_active ? "Active" : "Inactive"}
                           </span>
-                          <Button variant="ghost" size="sm"
-                            onClick={() => { setCatalogToDelete(catalog); setDeleteCatalogOpen(true); }}
-                            className="text-red-400 hover:text-red-600 hover:bg-red-50">
-                            <Trash2 size={13} />
-                          </Button>
+                          {catalog.source !== "shopify" && (
+                            <Button variant="ghost" size="sm"
+                              onClick={() => { setCatalogToDelete(catalog); setDeleteCatalogOpen(true); }}
+                              className="text-red-400 hover:text-red-600 hover:bg-red-50">
+                              <Trash2 size={13} />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Copy, Check, Link, Lock, Eye, EyeOff, Loader2, ChevronDown } from "lucide-react";
+import { Copy, Check, Link, Lock, Eye, EyeOff, Loader2, ChevronDown, RefreshCw } from "lucide-react";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -92,6 +92,9 @@ export default function IntegrationsTab({ projectId }) {
 
       {/* Slack */}
       <SlackItem projectId={projectId} />
+
+      {/* Shopify */}
+      <ShopifyItem projectId={projectId} />
 
       {/* WhatsApp */}
       <WhatsAppItem projectId={projectId} />
@@ -706,6 +709,170 @@ function SlackItem({ projectId }) {
           </div>
           <Button onClick={handleConnect} disabled={loading} className="w-full">
             {loading ? <><Loader2 size={13} className="animate-spin mr-2" />Connecting...</> : "Connect Slack Workspace"}
+          </Button>
+        </div>
+      )}
+    </IntegrationItem>
+  );
+}
+
+// ── Shopify Item ───────────────────────────────────────────
+function ShopifyItem({ projectId }) {
+  const [connected, setConnected] = useState(false);
+  const [shopDomain, setShopDomain] = useState("");
+  const [domainInput, setDomainInput] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [lastSyncError, setLastSyncError] = useState(null);
+  const [sourceId, setSourceId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  async function checkStatus() {
+    try {
+      const res = await fetch(`/api/shopify/status/${projectId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setConnected(data.connected);
+        if (data.shop_domain) setShopDomain(data.shop_domain);
+        setLastSyncedAt(data.last_synced_at || null);
+        setLastSyncError(data.last_sync_error || null);
+        setSourceId(data.source_id || null);
+      }
+    } catch {}
+    setChecking(false);
+  }
+
+  useEffect(() => {
+    checkStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  // Mirrors AppointmentsTab.js's Google Calendar popup pattern — the OAuth
+  // callback (backend/shopify_oauth.py) closes its own popup and posts a
+  // SHOPIFY_AUTH message back here, rather than the frontend polling.
+  useEffect(() => {
+    const handler = (event) => {
+      if (event.data?.type !== "SHOPIFY_AUTH") return;
+      if (event.data.event === "FINISH") {
+        setLoading(false);
+        toast.success("Shopify connected! Syncing your catalog now...");
+        checkStatus();
+      } else if (event.data.event === "ERROR") {
+        setLoading(false);
+        toast.error(event.data.error || "Shopify connection failed.");
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  async function handleConnect() {
+    const shop = domainInput.trim().toLowerCase();
+    if (!shop) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/shopify/connect?projectId=${projectId}&shop=${encodeURIComponent(shop)}`);
+      const data = await res.json();
+      if (!res.ok || !data.auth_url) {
+        toast.error(data.error || "Failed to start Shopify connection.");
+        setLoading(false);
+        return;
+      }
+      window.open(data.auth_url, "shopify-auth", "width=500,height=700");
+    } catch {
+      toast.error("Something went wrong.");
+      setLoading(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setLoading(true);
+    try {
+      await fetch(`/api/shopify/disconnect/${projectId}`, { method: "DELETE" });
+      setConnected(false);
+      setShopDomain("");
+      setSourceId(null);
+      toast.success("Shopify disconnected.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSyncNow() {
+    if (!sourceId) return;
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/sources/sync/${sourceId}`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Sync failed.");
+      } else {
+        toast.success("Catalog synced.");
+        checkStatus();
+      }
+    } catch {
+      toast.error("Sync failed.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const shopifyIcon = (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path d="M16.5 4.5c-.2-.1-.5-.1-.7 0l-1.1.4c-.2-.6-.6-1.4-1.2-2-.5-.5-1.1-.7-1.7-.7-.2-.3-.5-.4-.8-.4-1.6 0-2.4 2-2.6 3l-1.7.5c-.5.2-.5.2-.6.7L4.5 19.8 16.8 22l4.7-1c0-.1-4.7-16.3-5-16.5z" fill="#95BF47"/>
+      <path d="M15.8 4.9c0-.1 0-.1-.1-.2C13.7 3.4 12.6 3 11.9 3c-.2-.3-.5-.4-.8-.4-.5 0-.9.2-1.3.5.6 0 1.2.2 1.7.7.6.6 1 1.4 1.2 2l1.1-.4c.2-.1.5-.1.7 0z" fill="#5E8E3E"/>
+      <path d="M11.4 8.7l-.5 1.9s-.6-.3-1.3-.2c-1 0-1 .6-1 .8.1.9 2.4 1.1 2.5 3.2.1 1.6-.9 2.7-2.2 2.8-1.6.1-2.5-.8-2.5-.8l.3-1.5s.9.7 1.7.6c.5 0 .7-.4.6-.7-.1-1.2-2-1.1-2.1-3-.1-1.6 1-3.2 3.2-3.3.9-.1 1.3.2 1.3.2z" fill="#fff"/>
+    </svg>
+  );
+
+  return (
+    <IntegrationItem
+      icon={shopifyIcon}
+      title="Shopify Integration"
+      badge={!checking && connected ? "Connected" : undefined}
+    >
+      {checking ? (
+        <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+      ) : connected ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm bg-white border rounded-xl px-4 py-3">
+            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <span>Connected to <strong>{shopDomain}</strong></span>
+          </div>
+          <div className="bg-white border rounded-xl px-4 py-3 space-y-1 text-xs text-muted-foreground">
+            {lastSyncError ? (
+              <p className="text-red-600">Last sync failed: {lastSyncError}</p>
+            ) : lastSyncedAt ? (
+              <p>Last synced {new Date(lastSyncedAt).toLocaleString()}</p>
+            ) : (
+              <p>First sync in progress — this can take a minute for large catalogs.</p>
+            )}
+            <p>Products sync automatically when you add, edit, or remove them in Shopify.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleSyncNow} disabled={syncing || !sourceId}>
+              {syncing ? <><Loader2 size={13} className="animate-spin mr-2" />Syncing...</> : <><RefreshCw size={13} className="mr-2" />Sync now</>}
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleDisconnect} disabled={loading}>
+              {loading ? "Disconnecting..." : "Disconnect"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Connect your Shopify store to sell your real catalog through WhatsApp and answer product questions in chat.
+          </p>
+          <Input
+            placeholder="mystore.myshopify.com"
+            value={domainInput}
+            onChange={e => setDomainInput(e.target.value)}
+            className="bg-white text-sm"
+          />
+          <Button onClick={handleConnect} disabled={loading || !domainInput.trim()} className="w-full">
+            {loading ? <><Loader2 size={13} className="animate-spin mr-2" />Connecting...</> : "Connect Shopify Store"}
           </Button>
         </div>
       )}
