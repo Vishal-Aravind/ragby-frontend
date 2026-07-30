@@ -28,42 +28,93 @@ export async function GET(req) {
   const project_id = searchParams.get("project_id");
   if (!project_id) return NextResponse.json({ error: "project_id required" }, { status: 400 });
 
-  // Get all chats for this project
+  const cutoffISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Every real customer-facing channel — excludes "inapp" (the internal Test
+  // Chat tool), matching the convention already used in
+  // unanswered-questions/route.js and chats/route.js. Previously this only
+  // counted "whatsapp", making Telegram/Slack/website-widget activity
+  // invisible here.
   const { data: chats } = await supabase
     .from("chats")
-    .select("id, created_at")
+    .select("id")
     .eq("project_id", project_id)
-    .eq("channel", "whatsapp");
+    .neq("channel", "inapp");
 
   const chatIds = (chats || []).map(c => c.id);
 
-  if (chatIds.length === 0) {
-    return NextResponse.json({
-      stats: {
-        total_conversations: 0, total_messages: 0,
-        user_messages: 0, bot_messages: 0,
-        flow_triggers: 0, handoffs: 0,
-      },
-      chart: [],
-    });
-  }
+  // Orders/appointments/registrations can exist with ZERO associated chats
+  // (the public storefront/booking/registration pages are unauthenticated
+  // and don't require a conversation first) — so these must always run,
+  // never gated behind "does this project have any chats."
+  const [messagesRes, ordersRes, apptRes, regRes, shopConfigRes] = await Promise.all([
+    chatIds.length
+      ? supabase.from("chat_messages")
+          .select("id, role, content, created_at, chat_id")
+          .in("chat_id", chatIds)
+          .gte("created_at", cutoffISO)
+      : Promise.resolve({ data: [] }),
 
-  // Get all messages
-  const { data: messages } = await supabase
-    .from("chat_messages")
-    .select("id, role, content, created_at, chat_id")
-    .in("chat_id", chatIds)
-    .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+    // Revenue = only orders actually PAID for. status and payment_status are
+    // independently settable, so .neq("status","cancelled") guards against a
+    // cancelled-but-still-flagged-paid edge case (e.g. a refund in progress).
+    supabase.from("orders")
+      .select("total")
+      .eq("project_id", project_id)
+      .eq("payment_status", "paid")
+      .neq("status", "cancelled")
+      .gte("created_at", cutoffISO),
 
-  const msgs = messages || [];
+    // Note: a reschedule marks the OLD row "rescheduled" and inserts a new
+    // "confirmed" row, so a single reschedule can count as 2 "bookings"
+    // here — an accepted approximation, consistent with this whole panel
+    // being an honest aggregate estimate rather than precise attribution.
+    supabase.from("appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project_id)
+      .neq("status", "cancelled")
+      .gte("created_at", cutoffISO),
 
-  // Stats
-  const total_conversations = chatIds.length;
+    supabase.from("event_registrations")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", project_id)
+      .neq("status", "cancelled")
+      .gte("created_at", cutoffISO),
+
+    supabase.from("shop_config")
+      .select("currency")
+      .eq("project_id", project_id)
+      .maybeSingle(),
+  ]);
+
+  const msgs = messagesRes.data || [];
+
+  // Derived from messages actually IN the 30-day window, not from the
+  // undated chats query above — previously this was silently all-time
+  // while the header said "Last 30 days," and the new conversion-rate
+  // metric needs a same-window denominator or it would understate
+  // conversion for any project with history older than 30 days.
+  const total_conversations = new Set(msgs.map(m => m.chat_id)).size;
   const total_messages = msgs.length;
   const user_messages = msgs.filter(m => m.role === "user").length;
   const bot_messages = msgs.filter(m => m.role === "assistant").length;
-  const flow_triggers = msgs.filter(m => m.role === "user" && ["hi","hello","hey","start","menu"].includes(m.content?.toLowerCase()?.trim())).length;
-  const handoffs = msgs.filter(m => m.content?.includes("[tapped: talk_to_human]") || m.content?.includes("Connecting you to our team")).length;
+  // "Connecting you to our team..." is a merchant-editable flow-node body —
+  // this half of the match can undercount if a merchant rewords their
+  // handoff node. [tapped: talk_to_human] is the reliable half (derived
+  // from a reserved, non-customizable trigger ID).
+  const handoffs = msgs.filter(m =>
+    m.content?.includes("[tapped: talk_to_human]") ||
+    m.content?.includes("Connecting you to our team")
+  ).length;
+
+  const revenue = (ordersRes.data || []).reduce((sum, o) => sum + (o.total || 0), 0);
+  const order_count = (ordersRes.data || []).length;
+  const appointment_count = apptRes.count || 0;
+  const registration_count = regRes.count || 0;
+  const currency = shopConfigRes.data?.currency || "₹";
+
+  const outcomeTotal = order_count + appointment_count + registration_count;
+  const conversion_rate = total_conversations > 0 ? outcomeTotal / total_conversations : null;
 
   // Chart data — messages per day last 14 days
   const chartMap = {};
@@ -84,7 +135,16 @@ export async function GET(req) {
   });
 
   return NextResponse.json({
-    stats: { total_conversations, total_messages, user_messages, bot_messages, flow_triggers, handoffs },
+    stats: { total_conversations, total_messages, user_messages, bot_messages, handoffs },
     chart: Object.values(chartMap),
+    outcomes: {
+      window_days: 30,
+      currency,
+      revenue,
+      order_count,
+      appointment_count,
+      registration_count,
+      conversion_rate,
+    },
   });
 }

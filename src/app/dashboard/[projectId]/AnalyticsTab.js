@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { MessageSquare, Users, Bot, GitBranch, PhoneCall, TrendingUp, HelpCircle, Check, Sparkles, Loader2 } from 'lucide-react'
+import { HelpCircle, Check, Sparkles, Loader2, Wallet, Target, ShoppingBag, Calendar, Ticket } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 export default function AnalyticsTab({ project }) {
   const projectId = project?.id || project
   const [stats, setStats]       = useState(null)
   const [chartData, setChartData] = useState([])
+  const [outcomes, setOutcomes] = useState(null)
   const [loading, setLoading]   = useState(true)
 
   // ── Unanswered questions ──────────────────────────────────
@@ -30,6 +31,7 @@ export default function AnalyticsTab({ project }) {
       const data = await res.json()
       setStats(data.stats)
       setChartData(data.chart)
+      setOutcomes(data.outcomes || null)
     }
     setLoading(false)
   }
@@ -94,24 +96,6 @@ export default function AnalyticsTab({ project }) {
     <div className="p-6 text-sm text-muted-foreground">No data yet. Start receiving WhatsApp messages to see analytics.</div>
   )
 
-  const statCards = [
-    { label: "Total Conversations", value: stats.total_conversations, icon: Users, color: "blue" },
-    { label: "Total Messages", value: stats.total_messages, icon: MessageSquare, color: "purple" },
-    { label: "Bot Replies", value: stats.bot_messages, icon: Bot, color: "green" },
-    { label: "User Messages", value: stats.user_messages, icon: TrendingUp, color: "orange" },
-    { label: "Flow Triggers", value: stats.flow_triggers, icon: GitBranch, color: "indigo" },
-    { label: "Handoffs", value: stats.handoffs, icon: PhoneCall, color: "red" },
-  ]
-
-  const colorMap = {
-    blue:   { bg: "bg-blue-50",   text: "text-blue-700",   icon: "text-blue-500"   },
-    purple: { bg: "bg-purple-50", text: "text-purple-700", icon: "text-purple-500" },
-    green:  { bg: "bg-green-50",  text: "text-green-700",  icon: "text-green-500"  },
-    orange: { bg: "bg-orange-50", text: "text-orange-700", icon: "text-orange-500" },
-    indigo: { bg: "bg-indigo-50", text: "text-indigo-700", icon: "text-indigo-500" },
-    red:    { bg: "bg-red-50",    text: "text-red-700",    icon: "text-red-500"    },
-  }
-
   const unresolvedGaps = gaps.filter(g => !g.resolved)
   const resolvedGaps = gaps.filter(g => g.resolved)
   const visibleGaps = gapsTab === 'unresolved' ? unresolvedGaps : resolvedGaps
@@ -123,22 +107,87 @@ export default function AnalyticsTab({ project }) {
         <p className="text-sm text-muted-foreground">Last 30 days</p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {statCards.map((card) => {
-          const c = colorMap[card.color]
-          const Icon = card.icon
-          return (
-            <div key={card.label} className={`${c.bg} border rounded-xl p-4`}>
+      {/* Business Outcomes — top billing, since these are the numbers a
+          merchant can actually act on (revenue, conversion), unlike raw
+          activity counts below. */}
+      {outcomes && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold">Business Outcomes</h3>
+            <span className="text-xs text-muted-foreground">Last {outcomes.window_days} days · estimate</span>
+          </div>
+
+          {/* Primary pair */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="bg-emerald-50 border rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-muted-foreground font-medium">{card.label}</p>
-                <Icon size={16} className={c.icon} />
+                <p className="text-xs text-muted-foreground font-medium">Revenue (paid orders)</p>
+                <Wallet size={16} className="text-emerald-500" />
               </div>
-              <p className={`text-2xl font-bold ${c.text}`}>{(card.value || 0).toLocaleString()}</p>
+              <p className="text-3xl font-bold text-emerald-700">
+                {outcomes.currency}{Number(outcomes.revenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
             </div>
-          )
-        })}
+            <div className="bg-teal-50 border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground font-medium">Est. conversion rate</p>
+                <Target size={16} className="text-teal-500" />
+              </div>
+              <p className="text-3xl font-bold text-teal-700">
+                {outcomes.conversion_rate == null ? "—" : `${(outcomes.conversion_rate * 100).toFixed(1)}%`}
+              </p>
+            </div>
+          </div>
+
+          {/* Secondary trio */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-sky-50 border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground font-medium">Orders</p>
+                <ShoppingBag size={16} className="text-sky-500" />
+              </div>
+              <p className="text-2xl font-bold text-sky-700">{outcomes.order_count.toLocaleString()}</p>
+              {outcomes.order_count > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Avg {outcomes.currency}{(outcomes.revenue / outcomes.order_count).toFixed(2)}
+                </p>
+              )}
+            </div>
+            <div className="bg-violet-50 border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground font-medium">Appointments booked</p>
+                <Calendar size={16} className="text-violet-500" />
+              </div>
+              <p className="text-2xl font-bold text-violet-700">{outcomes.appointment_count.toLocaleString()}</p>
+            </div>
+            <div className="bg-rose-50 border rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground font-medium">Event sign-ups</p>
+                <Ticket size={16} className="text-rose-500" />
+              </div>
+              <p className="text-2xl font-bold text-rose-700">{outcomes.registration_count.toLocaleString()}</p>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-2">
+            Estimate = (orders + appointments + sign-ups) ÷ conversations in the last {outcomes.window_days} days.
+            Orders, bookings, and sign-ups aren't linked to a specific conversation, so this is a rough
+            aggregate — not an exact per-chat funnel.
+          </p>
+        </div>
+      )}
+
+      {/* Legacy activity counters — demoted to a slim inline strip rather
+          than their own bordered cards, so the card treatment is reserved
+          for the outcomes above. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground border-t pt-3">
+        <span><strong className="text-foreground">{(stats.total_conversations || 0).toLocaleString()}</strong> conversations</span>
+        <span><strong className="text-foreground">{(stats.total_messages || 0).toLocaleString()}</strong> messages</span>
+        <span><strong className="text-foreground">{(stats.user_messages || 0).toLocaleString()}</strong> from users</span>
+        <span><strong className="text-foreground">{(stats.bot_messages || 0).toLocaleString()}</strong> bot replies</span>
+        <span><strong className="text-foreground">{(stats.handoffs || 0).toLocaleString()}</strong> handoffs*</span>
       </div>
+      <p className="text-[11px] text-muted-foreground -mt-4">*Detected from bot flow triggers/keywords — may undercount handoffs the bot's flow doesn't tag.</p>
 
       {/* Messages per day chart */}
       {chartData.length > 0 && (
