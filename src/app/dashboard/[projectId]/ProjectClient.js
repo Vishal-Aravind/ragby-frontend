@@ -22,7 +22,8 @@ import { Button } from "@/components/ui/button";
 import AppAlertDialog from "@/components/alertdialog";
 import {
   FileText, Plug, Users, GitBranch,
-  Inbox, BarChart2, Key, Megaphone, Sparkles, ShoppingBag, CalendarDays, CalendarRange, UserCog
+  Inbox, BarChart2, Key, Megaphone, Sparkles, ShoppingBag, CalendarDays, CalendarRange, UserCog,
+  X, ArrowRight, PartyPopper
 } from "lucide-react";
 
 // Guided tour copy — kept short and benefit-oriented on purpose (covers the
@@ -35,42 +36,49 @@ const TOUR_STEPS = [
   {
     target: "body",
     placement: "center",
-    title: "Welcome to Zavo 👋",
+    icon: Sparkles,
+    title: "Welcome to Zavo",
     content: "Let's take a 60-second look around your dashboard.",
     access: null,
   },
   {
     target: '[data-tour="tab-documents"]',
+    icon: FileText,
     title: "Documents",
     content: "This is where your bot learns — connect a website, PDF, spreadsheet, or your Shopify catalog.",
     access: "documents",
   },
   {
     target: '[data-tour="tab-integrations"]',
+    icon: Plug,
     title: "Integrations",
     content: "Go live by connecting WhatsApp, Slack, Telegram, or Shopify here.",
     access: "integrations",
   },
   {
     target: '[data-tour="tab-flows"]',
+    icon: GitBranch,
     title: "Flows",
     content: "Build automated conversation flows — no code needed.",
     access: "flows",
   },
   {
     target: '[data-tour="tab-shop"]',
+    icon: ShoppingBag,
     title: "Shop",
     content: "Sell products and take orders directly inside chat.",
     access: "shop",
   },
   {
     target: '[data-tour="tab-conversations"]',
+    icon: Inbox,
     title: "Conversations",
     content: "Every real customer conversation lands here — reply anytime.",
     access: null,
   },
   {
     target: '[data-tour="tab-analytics"]',
+    icon: BarChart2,
     title: "Analytics",
     content: "Track usage and see what your bot couldn't answer.",
     access: "analytics",
@@ -78,38 +86,79 @@ const TOUR_STEPS = [
   {
     target: "body",
     placement: "center",
+    icon: PartyPopper,
     title: "That's the tour!",
-    content: "Click ✨ Tour anytime to see it again.",
+    content: "Click Tour anytime to see it again.",
     access: null,
   },
 ];
 
+// Custom tooltip — react-joyride's default card is plain (system font,
+// square corners, generic buttons). This reuses the app's own Button
+// component and icon set so the tour reads as part of Zavo's own design
+// system rather than a bolted-on library widget.
+function TourTooltip({ index, size, step, isLastStep, backProps, closeProps, primaryProps, skipProps }) {
+  const Icon = step.icon || Sparkles;
+  return (
+    <div className="w-[340px] rounded-2xl border bg-white p-5 shadow-2xl shadow-black/10">
+      <div className="flex items-start justify-between">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-neutral-800 to-neutral-950 text-white">
+          <Icon size={17} />
+        </div>
+        <button
+          {...closeProps}
+          className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-neutral-100 hover:text-foreground"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      <h3 className="mt-3 text-[15px] font-semibold text-foreground">{step.title}</h3>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{step.content}</p>
+
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex gap-1">
+          {Array.from({ length: size }).map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index ? "w-4 bg-neutral-900" : "w-1.5 bg-neutral-200"
+              }`}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {index > 0 && (
+            <button {...backProps} className="text-[13px] font-medium text-muted-foreground hover:text-foreground">
+              Back
+            </button>
+          )}
+          {!isLastStep && (
+            <button {...skipProps} className="text-[13px] font-medium text-muted-foreground/70 hover:text-foreground">
+              Skip
+            </button>
+          )}
+          <Button {...primaryProps} size="sm" className="gap-1.5">
+            {isLastStep ? "Done" : "Next"}
+            {!isLastStep && <ArrowRight size={13} />}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TOUR_STYLES = {
   options: {
-    primaryColor: "oklch(0.205 0 0)",
-    backgroundColor: "oklch(1 0 0)",
-    arrowColor: "oklch(1 0 0)",
-    textColor: "oklch(0.145 0 0)",
-    overlayColor: "rgba(0, 0, 0, 0.5)",
+    overlayColor: "rgba(15, 15, 15, 0.55)",
     zIndex: 10000,
   },
-  tooltip: {
-    borderRadius: 12,
-    boxShadow: "0 10px 40px rgba(0, 0, 0, 0.18)",
+  overlay: {
+    backdropFilter: "blur(1.5px)",
   },
-  tooltipTitle: {
-    fontWeight: 600,
-    marginBottom: 4,
-  },
-  buttonNext: {
-    borderRadius: 8,
-    padding: "8px 14px",
-  },
-  buttonBack: {
-    color: "oklch(0.45 0 0)",
-  },
-  buttonSkip: {
-    color: "oklch(0.55 0 0)",
+  spotlight: {
+    borderRadius: 10,
   },
 };
 
@@ -428,7 +477,7 @@ export default function ProjectClient({ project }) {
         showSkipButton
         disableScrolling={false}
         onEvent={handleTourCallback}
-        locale={{ last: "Done" }}
+        tooltipComponent={TourTooltip}
         styles={TOUR_STYLES}
       />
 
