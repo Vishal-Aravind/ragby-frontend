@@ -153,7 +153,14 @@ export default function ProjectClient({ project }) {
     [myPermissions, isOwnerOrAdmin]
   );
   const [runTour, setRunTour] = useState(false);
-  const [tourStepIndex, setTourStepIndex] = useState(0);
+  // Remounts <Joyride> on replay (see restartTour) so its internal step
+  // cursor resets cleanly — deliberately NOT passing a controlled
+  // `stepIndex` prop alongside `continuous`. That combination is a known
+  // react-joyride footgun: manually advancing stepIndex from the callback
+  // can double-advance or desync from Joyride's own internal state,
+  // leaving the dark overlay stuck on screen with no tooltip and blocking
+  // all further clicks (reproduced this exact failure while testing).
+  const [tourKey, setTourKey] = useState(0);
   const tourSeenKey = `zavo_tour_seen_${project.id}_${myRole}`;
 
   useEffect(() => {
@@ -168,19 +175,15 @@ export default function ProjectClient({ project }) {
   }, [tourSeenKey]);
 
   const handleTourCallback = (data) => {
-    const { status, index, action, type } = data;
-    if (type === "step:after" || type === "target:notFound") {
-      setTourStepIndex(index + (action === "prev" ? -1 : 1));
-    }
+    const { status } = data;
     if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
       setRunTour(false);
-      setTourStepIndex(0);
       window.localStorage.setItem(tourSeenKey, "1");
     }
   };
 
   const restartTour = () => {
-    setTourStepIndex(0);
+    setTourKey((k) => k + 1);
     setRunTour(true);
   };
   const [files, setFiles] = useState([]);
@@ -417,14 +420,15 @@ export default function ProjectClient({ project }) {
     <div className="space-y-6">
 
       <Joyride
+        key={tourKey}
         steps={tourSteps}
         run={runTour}
-        stepIndex={tourStepIndex}
         continuous
         showProgress
         showSkipButton
         disableScrolling={false}
-        callback={handleTourCallback}
+        onEvent={handleTourCallback}
+        locale={{ last: "Done" }}
         styles={TOUR_STYLES}
       />
 
