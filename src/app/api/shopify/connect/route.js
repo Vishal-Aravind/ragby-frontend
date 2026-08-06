@@ -2,7 +2,7 @@
 // app/api/shopify/connect/route.js — gets the Shopify OAuth URL
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase-api";
+import { getSupabase, getProjectRole } from "@/lib/supabase-api";
 
 export async function GET(req) {
   const { supabase } = getSupabase(req);
@@ -11,6 +11,12 @@ export async function GET(req) {
 
   const projectId = req.nextUrl.searchParams.get("projectId");
   const shop = req.nextUrl.searchParams.get("shop");
+
+  // FIX: previously any logged-in user could pass any project_id here and
+  // connect their own Shopify store to a project they don't own — this
+  // requires the caller to actually have a role on the project first.
+  const role = await getProjectRole(session.user.id, projectId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const res = await fetch(
     `${process.env.BACKEND_BASE_URL}/shopify/oauth/start?project_id=${encodeURIComponent(projectId)}&shop=${encodeURIComponent(shop)}`,

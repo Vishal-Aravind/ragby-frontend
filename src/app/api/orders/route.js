@@ -1,6 +1,7 @@
 // src/app/api/orders/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getProjectRole } from "@/lib/supabase-api";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -26,6 +27,11 @@ export async function GET(req) {
 
   const { searchParams } = new URL(req.url);
   const project_id = searchParams.get("project_id");
+
+  // FIX: previously any logged-in user could list any project's orders by
+  // passing an arbitrary project_id.
+  const role = await getProjectRole(user.id, project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { data, error } = await supabase
     .from("orders")

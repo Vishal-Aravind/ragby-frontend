@@ -1,6 +1,7 @@
 // src/app/api/shop-config/[projectId]/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getProjectRole } from "@/lib/supabase-api";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -25,6 +26,11 @@ export async function GET(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // FIX: previously any logged-in user could read another project's shop
+  // config here — including its Razorpay key/secret in plaintext.
+  const role = await getProjectRole(user.id, projectId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const { data, error } = await supabase
     .from("shop_config")
     .select("*")
@@ -40,6 +46,9 @@ export async function PUT(req, { params }) {
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const role = await getProjectRole(user.id, projectId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
 

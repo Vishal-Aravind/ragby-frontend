@@ -1,6 +1,7 @@
 // src/app/api/flows/[flowId]/nodes/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getProjectRole } from "@/lib/supabase-api";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -26,6 +27,11 @@ export async function GET(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { data: flow } = await supabase.from("flows").select("project_id").eq("id", flowId).maybeSingle();
+  if (!flow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const role = await getProjectRole(user.id, flow.project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const [{ data: nodes }, { data: edges }] = await Promise.all([
     supabase.from("flow_nodes").select("*").eq("flow_id", flowId).order("created_at", { ascending: true }),
     supabase.from("flow_edges").select("*").eq("flow_id", flowId),
@@ -39,6 +45,11 @@ export async function POST(req, { params }) {
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: flow } = await supabase.from("flows").select("project_id").eq("id", flowId).maybeSingle();
+  if (!flow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const role = await getProjectRole(user.id, flow.project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const { data, error } = await supabase

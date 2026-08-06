@@ -22,6 +22,7 @@ export default function ShopPage() {
   const [submitted, setSubmitted] = useState(false);
   const [deliveryType, setDeliveryType] = useState("");
   const [deliverySelected, setDeliverySelected] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     if (!projectId) return;
@@ -108,6 +109,7 @@ export default function ShopPage() {
   const handleSubmit = async () => {
     if (!phone || cartItems.length === 0) return;
     setSubmitting(true);
+    setSubmitError("");
     try {
       const res = await fetch("/api/public/shop/submit-cart", {
         method: "POST",
@@ -132,8 +134,15 @@ export default function ShopPage() {
         }),
       });
       if (res.ok) { setSubmitted(true); setCartOpen(false); }
-      else { const err = await res.json(); console.error("Submit error:", err); }
-    } catch (e) { console.error("Submit error:", e); }
+      else {
+        const err = await res.json().catch(() => ({}));
+        console.error("Submit error:", err);
+        setSubmitError("Something went wrong placing your order. Please try again.");
+      }
+    } catch (e) {
+      console.error("Submit error:", e);
+      setSubmitError("Network error. Please check your connection and try again.");
+    }
     setSubmitting(false);
   };
 
@@ -228,6 +237,12 @@ export default function ShopPage() {
           <p className="text-white text-xs opacity-80 mt-2">✓ Your previous cart has been restored</p>
         )}
       </div>
+
+      {!phone && (
+        <div className="px-4 py-2 text-center text-xs font-medium" style={{ background: "#fef3c7", color: "#92400e" }}>
+          ⚠️ Open this menu from your WhatsApp chat to place an order — you can browse below, but checkout needs WhatsApp.
+        </div>
+      )}
 
       {categories.length > 1 && (
         <div className="flex gap-2 px-4 py-3 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
@@ -392,6 +407,9 @@ export default function ShopPage() {
               </button>
               {!phone && (
                 <p className="text-xs text-red-500 text-center">Please open this link from WhatsApp</p>
+              )}
+              {submitError && (
+                <p className="text-xs text-red-500 text-center">{submitError}</p>
               )}
             </div>
           </div>

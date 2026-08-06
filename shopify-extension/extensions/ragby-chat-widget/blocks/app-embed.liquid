@@ -1,0 +1,35 @@
+{% comment %}
+  App Embed Block — invisible/floating (target: body), toggled on from the
+  merchant's theme editor under Online Store → Themes → Customize → App
+  Embeds. Mirrors backend/static/widget.js's script-tag pattern
+  (data-project read via document.currentScript.dataset.project) so the
+  same JS file's project-detection logic works unchanged.
+{% endcomment %}
+<script
+  src="{{ 'ragby-chat-widget.js' | asset_url }}"
+  data-project="{{ block.settings.project_id }}"
+  data-backend="{{ block.settings.backend_url }}"
+  defer
+></script>
+
+{% schema %}
+{
+  "name": "Ragby Chat Widget",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "project_id",
+      "label": "Ragby Project ID",
+      "info": "Find this in your Ragby dashboard's URL."
+    },
+    {
+      "type": "text",
+      "id": "backend_url",
+      "label": "Ragby Backend URL",
+      "default": "https://ragby-backend.onrender.com",
+      "info": "Only change this if your Ragby backend is hosted elsewhere."
+    }
+  ]
+}
+{% endschema %}

@@ -1,6 +1,7 @@
 // src/app/api/flows/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getProjectRole } from "@/lib/supabase-api";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -29,6 +30,9 @@ export async function GET(req) {
   const project_id = searchParams.get("project_id");
   if (!project_id) return NextResponse.json({ error: "project_id required" }, { status: 400 });
 
+  const role = await getProjectRole(user.id, project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const { data, error } = await supabase
     .from("flows")
     .select("id, name, is_active, trigger_keywords, free_questions, created_at")
@@ -45,6 +49,9 @@ export async function POST(req) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
+  const role = await getProjectRole(user.id, body.project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const { data, error } = await supabase
     .from("flows")
     .insert({

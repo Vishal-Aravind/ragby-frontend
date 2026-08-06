@@ -1,6 +1,7 @@
 // src/app/api/products/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getProjectRole } from "@/lib/supabase-api";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -28,6 +29,9 @@ export async function GET(req) {
   const project_id = searchParams.get("project_id");
   const catalog_id = searchParams.get("catalog_id");
 
+  const role = await getProjectRole(user.id, project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   let query = supabase.from("products").select("*").eq("project_id", project_id).order("sort_order", { ascending: true });
   if (catalog_id) query = query.eq("catalog_id", catalog_id);
 
@@ -42,6 +46,9 @@ export async function POST(req) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
+  const role = await getProjectRole(user.id, body.project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const { data, error } = await supabase
     .from("products")
     .insert({

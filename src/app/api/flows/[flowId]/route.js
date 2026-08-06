@@ -1,6 +1,7 @@
 // src/app/api/flows/[flowId]/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getProjectRole } from "@/lib/supabase-api";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -26,6 +27,11 @@ export async function PUT(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const { data: existingFlow } = await supabase.from("flows").select("project_id").eq("id", flowId).maybeSingle();
+  if (!existingFlow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const role = await getProjectRole(user.id, existingFlow.project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const body = await req.json();
   const update = {};
   if ("name" in body) update.name = body.name;
@@ -34,10 +40,7 @@ export async function PUT(req, { params }) {
   if ("free_questions" in body) update.free_questions = body.free_questions;
 
   if (body.is_active === true) {
-    const { data: flow } = await supabase.from("flows").select("project_id").eq("id", flowId).single();
-    if (flow) {
-      await supabase.from("flows").update({ is_active: false }).eq("project_id", flow.project_id).neq("id", flowId);
-    }
+    await supabase.from("flows").update({ is_active: false }).eq("project_id", existingFlow.project_id).neq("id", flowId);
   }
 
   const { data, error } = await supabase.from("flows").update(update).eq("id", flowId).select().single();
@@ -50,6 +53,11 @@ export async function DELETE(req, { params }) {
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { data: existingFlow } = await supabase.from("flows").select("project_id").eq("id", flowId).maybeSingle();
+  if (!existingFlow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const role = await getProjectRole(user.id, existingFlow.project_id);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   await supabase.from("flows").delete().eq("id", flowId);
   return NextResponse.json({ status: "deleted" });

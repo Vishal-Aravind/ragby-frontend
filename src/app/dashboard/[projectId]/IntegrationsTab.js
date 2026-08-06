@@ -863,7 +863,9 @@ function ShopifyItem({ projectId }) {
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Connect your Shopify store to sell your real catalog through WhatsApp and answer product questions in chat.
+            Connect your Shopify store to sync your real catalog — sell through WhatsApp, answer product
+            questions in chat, and (with the storefront chat widget installed) let customers check out
+            directly on your own site.
           </p>
           <Input
             placeholder="mystore.myshopify.com"

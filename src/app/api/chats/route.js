@@ -1,7 +1,7 @@
 //app\api\chats\route.js
 
 import { NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase-api";
+import { getSupabase, getProjectRole } from "@/lib/supabase-api";
 
 export async function GET(req) {
   const { supabase } = getSupabase(req);
@@ -10,6 +10,9 @@ export async function GET(req) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const role = await getProjectRole(user.id, projectId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Only the internal test-chat channel — real customer conversations
   // (whatsapp/telegram/slack/public) belong in the Conversations tab, not here.
@@ -30,6 +33,9 @@ export async function POST(req) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const role = await getProjectRole(user.id, projectId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { data, error } = await supabase
   .from("chats")

@@ -1,0 +1,5 @@
+# Theme App Extension config — see ../../README.md for how to actually
+# plug this into a Shopify CLI app project (couldn't be scaffolded/validated
+# via the CLI directly, so treat this as a best-effort starting point).
+name = "Ragby Chat Widget"
+type = "theme"

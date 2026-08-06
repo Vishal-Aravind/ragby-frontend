@@ -2,7 +2,8 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Joyride, STATUS } from "react-joyride";
 import DocumentsTab from "./DocumentsTab";
 import IntegrationsTab from "./IntegrationsTab";
 import LeadsTab from "./LeadsTab";
@@ -23,6 +24,94 @@ import {
   FileText, Plug, Users, GitBranch,
   Inbox, BarChart2, Key, Megaphone, Sparkles, ShoppingBag, CalendarDays, CalendarRange, UserCog
 } from "lucide-react";
+
+// Guided tour copy — kept short and benefit-oriented on purpose (covers the
+// tabs needed to get a bot live, not every tab) rather than a step per tab.
+// Praised onboarding tours (Linear, Notion) teach a handful of high-value
+// things at high attention; touring all 13 tabs on first login reads as
+// "features dumped on users," which the research consistently flags as the
+// difference between a tour people finish and one they skip.
+const TOUR_STEPS = [
+  {
+    target: "body",
+    placement: "center",
+    title: "Welcome to Zavo 👋",
+    content: "Let's take a 60-second look around your dashboard.",
+    access: null,
+  },
+  {
+    target: '[data-tour="tab-documents"]',
+    title: "Documents",
+    content: "This is where your bot learns — connect a website, PDF, spreadsheet, or your Shopify catalog.",
+    access: "documents",
+  },
+  {
+    target: '[data-tour="tab-integrations"]',
+    title: "Integrations",
+    content: "Go live by connecting WhatsApp, Slack, Telegram, or Shopify here.",
+    access: "integrations",
+  },
+  {
+    target: '[data-tour="tab-flows"]',
+    title: "Flows",
+    content: "Build automated conversation flows — no code needed.",
+    access: "flows",
+  },
+  {
+    target: '[data-tour="tab-shop"]',
+    title: "Shop",
+    content: "Sell products and take orders directly inside chat.",
+    access: "shop",
+  },
+  {
+    target: '[data-tour="tab-conversations"]',
+    title: "Conversations",
+    content: "Every real customer conversation lands here — reply anytime.",
+    access: null,
+  },
+  {
+    target: '[data-tour="tab-analytics"]',
+    title: "Analytics",
+    content: "Track usage and see what your bot couldn't answer.",
+    access: "analytics",
+  },
+  {
+    target: "body",
+    placement: "center",
+    title: "That's the tour!",
+    content: "Click ✨ Tour anytime to see it again.",
+    access: null,
+  },
+];
+
+const TOUR_STYLES = {
+  options: {
+    primaryColor: "oklch(0.205 0 0)",
+    backgroundColor: "oklch(1 0 0)",
+    arrowColor: "oklch(1 0 0)",
+    textColor: "oklch(0.145 0 0)",
+    overlayColor: "rgba(0, 0, 0, 0.5)",
+    zIndex: 10000,
+  },
+  tooltip: {
+    borderRadius: 12,
+    boxShadow: "0 10px 40px rgba(0, 0, 0, 0.18)",
+  },
+  tooltipTitle: {
+    fontWeight: 600,
+    marginBottom: 4,
+  },
+  buttonNext: {
+    borderRadius: 8,
+    padding: "8px 14px",
+  },
+  buttonBack: {
+    color: "oklch(0.45 0 0)",
+  },
+  buttonSkip: {
+    color: "oklch(0.55 0 0)",
+  },
+};
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -53,6 +142,47 @@ export default function ProjectClient({ project }) {
   const hasAccess = (tab) => isOwnerOrAdmin || myPermissions.includes(tab);
 
   const [activeTab, setActiveTab] = useState(hasAccess("documents") ? "documents" : "conversations");
+
+  // --------------------------------------------------
+  // GUIDED TOUR
+  // --------------------------------------------------
+  // Steps are filtered by hasAccess so an agent with only Conversations+
+  // Leads gets a short tour, not one pointing at tabs they can't see.
+  const tourSteps = useMemo(
+    () => TOUR_STEPS.filter((s) => !s.access || hasAccess(s.access)),
+    [myPermissions, isOwnerOrAdmin]
+  );
+  const [runTour, setRunTour] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const tourSeenKey = `zavo_tour_seen_${project.id}_${myRole}`;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(tourSeenKey)) return;
+    // Short delay so the tab panel has actually rendered before the first
+    // spotlight target is measured — an instant tour on mount can spotlight
+    // the wrong position if layout hasn't settled yet.
+    const timer = setTimeout(() => setRunTour(true), 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourSeenKey]);
+
+  const handleTourCallback = (data) => {
+    const { status, index, action, type } = data;
+    if (type === "step:after" || type === "target:notFound") {
+      setTourStepIndex(index + (action === "prev" ? -1 : 1));
+    }
+    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+      setRunTour(false);
+      setTourStepIndex(0);
+      window.localStorage.setItem(tourSeenKey, "1");
+    }
+  };
+
+  const restartTour = () => {
+    setTourStepIndex(0);
+    setRunTour(true);
+  };
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
 
@@ -286,6 +416,18 @@ export default function ProjectClient({ project }) {
   return (
     <div className="space-y-6">
 
+      <Joyride
+        steps={tourSteps}
+        run={runTour}
+        stepIndex={tourStepIndex}
+        continuous
+        showProgress
+        showSkipButton
+        disableScrolling={false}
+        callback={handleTourCallback}
+        styles={TOUR_STYLES}
+      />
+
       {/* Project header */}
       <div className="flex items-center gap-3">
         {project.logo_url && (
@@ -296,6 +438,9 @@ export default function ProjectClient({ project }) {
           />
         )}
         <h1 className="text-2xl font-semibold">{project.name}</h1>
+        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={restartTour}>
+          <Sparkles size={13} />Tour
+        </Button>
       </div>
 
       <div className="flex gap-6 items-start">
@@ -322,12 +467,12 @@ export default function ProjectClient({ project }) {
 
           <div className="flex flex-col gap-1 border-r pr-3">
             {hasAccess("documents") && (
-              <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
+              <TabButton data-tour="tab-documents" active={activeTab === "documents"} onClick={() => setActiveTab("documents")}>
                 <FileText size={13} />Documents
               </TabButton>
             )}
             {hasAccess("integrations") && (
-              <TabButton active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
+              <TabButton data-tour="tab-integrations" active={activeTab === "integrations"} onClick={() => setActiveTab("integrations")}>
                 <Plug size={13} />Integrations
               </TabButton>
             )}
@@ -335,15 +480,15 @@ export default function ProjectClient({ project }) {
               <Users size={13} />Leads
             </TabButton>
             {hasAccess("flows") && (
-              <TabButton active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
+              <TabButton data-tour="tab-flows" active={activeTab === "flows"} onClick={() => setActiveTab("flows")}>
                 <GitBranch size={13} />Flows
               </TabButton>
             )}
-            <TabButton active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>
+            <TabButton data-tour="tab-conversations" active={activeTab === "conversations"} onClick={() => setActiveTab("conversations")}>
               <Inbox size={13} />Conversations
             </TabButton>
             {hasAccess("analytics") && (
-              <TabButton active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
+              <TabButton data-tour="tab-analytics" active={activeTab === "analytics"} onClick={() => setActiveTab("analytics")}>
                 <BarChart2 size={13} />Analytics
               </TabButton>
             )}
@@ -363,7 +508,7 @@ export default function ProjectClient({ project }) {
               </TabButton>
             )}
             {hasAccess("shop") && (
-              <TabButton active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
+              <TabButton data-tour="tab-shop" active={activeTab === "shop"} onClick={() => setActiveTab("shop")}>
                 <ShoppingBag size={13} />Shop
               </TabButton>
             )}
