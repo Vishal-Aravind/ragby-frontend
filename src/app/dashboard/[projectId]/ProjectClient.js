@@ -43,6 +43,7 @@ const TOUR_STEPS = [
   },
   {
     target: '[data-tour="tab-documents"]',
+    tourId: "documents",
     icon: FileText,
     title: "Documents",
     content: "This is where your bot learns — connect a website, PDF, spreadsheet, or your Shopify catalog.",
@@ -50,6 +51,7 @@ const TOUR_STEPS = [
   },
   {
     target: '[data-tour="tab-integrations"]',
+    tourId: "integrations",
     icon: Plug,
     title: "Integrations",
     content: "Go live by connecting WhatsApp, Slack, Telegram, or Shopify here.",
@@ -57,6 +59,7 @@ const TOUR_STEPS = [
   },
   {
     target: '[data-tour="tab-flows"]',
+    tourId: "flows",
     icon: GitBranch,
     title: "Flows",
     content: "Build automated conversation flows — no code needed.",
@@ -64,6 +67,7 @@ const TOUR_STEPS = [
   },
   {
     target: '[data-tour="tab-shop"]',
+    tourId: "shop",
     icon: ShoppingBag,
     title: "Shop",
     content: "Sell products and take orders directly inside chat.",
@@ -71,6 +75,7 @@ const TOUR_STEPS = [
   },
   {
     target: '[data-tour="tab-conversations"]',
+    tourId: "conversations",
     icon: Inbox,
     title: "Conversations",
     content: "Every real customer conversation lands here — reply anytime.",
@@ -78,6 +83,7 @@ const TOUR_STEPS = [
   },
   {
     target: '[data-tour="tab-analytics"]',
+    tourId: "analytics",
     icon: BarChart2,
     title: "Analytics",
     content: "Track usage and see what your bot couldn't answer.",
@@ -157,9 +163,6 @@ const TOUR_STYLES = {
   overlay: {
     backdropFilter: "blur(1.5px)",
   },
-  spotlight: {
-    borderRadius: 10,
-  },
 };
 
 const ALLOWED_TYPES = [
@@ -210,6 +213,16 @@ export default function ProjectClient({ project }) {
   // leaving the dark overlay stuck on screen with no tooltip and blocking
   // all further clicks (reproduced this exact failure while testing).
   const [tourKey, setTourKey] = useState(0);
+  // Which tab is currently spotlighted, if any — used below to lift that
+  // one tab above Joyride's blurred overlay. react-joyride's overlay div
+  // covers the full page and applies backdrop-filter to itself; the
+  // spotlight "hole" only cuts a transparent gap in the dark tint's SVG
+  // fill, which doesn't stop the blur (a CSS filter on the overlay div)
+  // from still sampling whatever's behind it, including the "revealed"
+  // area. Raising the actual target element's z-index above the overlay's
+  // is what makes it paint crisp — the blur simply can't affect something
+  // rendered on top of it.
+  const [activeTourTargetId, setActiveTourTargetId] = useState(null);
   const tourSeenKey = `zavo_tour_seen_${project.id}_${myRole}`;
 
   useEffect(() => {
@@ -224,9 +237,11 @@ export default function ProjectClient({ project }) {
   }, [tourSeenKey]);
 
   const handleTourCallback = (data) => {
-    const { status } = data;
+    const { status, step } = data;
+    setActiveTourTargetId(step?.tourId || null);
     if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
       setRunTour(false);
+      setActiveTourTargetId(null);
       window.localStorage.setItem(tourSeenKey, "1");
     }
   };
@@ -480,6 +495,9 @@ export default function ProjectClient({ project }) {
         tooltipComponent={TourTooltip}
         styles={TOUR_STYLES}
       />
+      {activeTourTargetId && (
+        <style>{`[data-tour="tab-${activeTourTargetId}"]{position:relative;z-index:100000;}`}</style>
+      )}
 
       {/* Project header */}
       <div className="flex items-center gap-3">
