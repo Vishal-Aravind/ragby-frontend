@@ -1,8 +1,18 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays } from 'lucide-react'
+import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays, Plus, Pencil, Trash2 } from 'lucide-react'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
+
+function emptyServiceForm() {
+  return { name: '', description: '', duration_minutes: 30, price: 0, payment_mode: 'free', is_active: true, sort_order: 0 }
+}
+
+const PAYMENT_MODE_LABELS = {
+  free: 'Free — no payment',
+  hold_to_confirm: 'Pay to confirm — slot held until paid',
+  request_after: 'Book now, pay later',
+}
 
 export default function AppointmentsTab({ project }) {
   const projectId = project?.id || project
@@ -19,6 +29,14 @@ export default function AppointmentsTab({ project }) {
   const [calendarMonth, setCalendarMonth] = useState(new Date())
   const [selectedDay, setSelectedDay] = useState(null)
 
+  // ── Services (Calendly-style event types) ─────────────
+  const [services, setServices] = useState([])
+  const [showServiceForm, setShowServiceForm] = useState(false)
+  const [editingService, setEditingService] = useState(null)
+  const [serviceForm, setServiceForm] = useState(emptyServiceForm())
+  const [savingService, setSavingService] = useState(false)
+  const [razorpayConnected, setRazorpayConnected] = useState(false)
+
   const DAYS = [
     { key: 'mon', label: 'Monday' },
     { key: 'tue', label: 'Tuesday' },
@@ -32,12 +50,14 @@ export default function AppointmentsTab({ project }) {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [apptRes, settingsRes] = await Promise.all([
+      const [apptRes, settingsRes, servicesRes] = await Promise.all([
         fetch(`/api/appointments?projectId=${projectId}`),
         fetch(`/api/appointment-settings/${projectId}`),
+        fetch(`/api/appointment-services?project_id=${projectId}`),
       ])
       if (apptRes.ok) setAppointments(await apptRes.json())
       if (settingsRes.ok) setSettings(await settingsRes.json())
+      if (servicesRes.ok) setServices(await servicesRes.json())
     } catch (e) {
       console.error(e)
     }
@@ -45,6 +65,76 @@ export default function AppointmentsTab({ project }) {
   }
 
   useEffect(() => { fetchData() }, [projectId])
+
+  useEffect(() => {
+    if (!projectId) return
+    fetch(`/api/razorpay/status/${projectId}`)
+      .then(r => r.ok ? r.json() : { connected: false })
+      .then(data => setRazorpayConnected(!!data.connected))
+      .catch(() => setRazorpayConnected(false))
+  }, [projectId])
+
+  const openNewServiceForm = () => {
+    setEditingService(null)
+    setServiceForm(emptyServiceForm())
+    setShowServiceForm(true)
+  }
+
+  const openEditServiceForm = (svc) => {
+    setEditingService(svc)
+    setServiceForm({
+      name: svc.name || '', description: svc.description || '',
+      duration_minutes: svc.duration_minutes || 30,
+      price: svc.price || 0, payment_mode: svc.payment_mode || 'free',
+      is_active: svc.is_active, sort_order: svc.sort_order || 0,
+    })
+    setShowServiceForm(true)
+  }
+
+  const saveService = async () => {
+    if (!serviceForm.name.trim()) return
+    setSavingService(true)
+    try {
+      if (editingService) {
+        await fetch(`/api/appointment-services/${editingService.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(serviceForm),
+        })
+      } else {
+        await fetch('/api/appointment-services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_id: projectId, ...serviceForm }),
+        })
+      }
+      setShowServiceForm(false)
+      fetchData()
+    } catch (e) {
+      alert('Failed to save service')
+    }
+    setSavingService(false)
+  }
+
+  const toggleServiceActive = async (svc) => {
+    await fetch(`/api/appointment-services/${svc.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: !svc.is_active }),
+    })
+    fetchData()
+  }
+
+  const deleteServiceHandler = async (svc) => {
+    if (!confirm(`Delete "${svc.name}"? This can't be undone.`)) return
+    const res = await fetch(`/api/appointment-services/${svc.id}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(data.detail || data.error || 'This service has existing bookings — deactivate it instead of deleting.')
+      return
+    }
+    fetchData()
+  }
 
   // Listen for Google OAuth popup callback
   useEffect(() => {
@@ -505,23 +595,98 @@ export default function AppointmentsTab({ project }) {
             )}
           </div>
 
-          {/* Service details */}
-          <div className="border rounded-xl p-4 bg-white space-y-4">
-            <p className="text-sm font-semibold">Service details</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1 col-span-2">
-                <label className="text-xs text-muted-foreground">Service name</label>
-                <input className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={settings.service_name || ''} onChange={e => setSettings(s => ({ ...s, service_name: e.target.value }))} />
+          {/* Services (Calendly-style event types) */}
+          <div className="border rounded-xl p-4 bg-white space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Services</p>
+                <p className="text-xs text-muted-foreground">What customers can book — each can have its own duration</p>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Duration (minutes)</label>
+              <button onClick={openNewServiceForm}
+                className="flex items-center gap-1 text-xs bg-indigo-600 text-white rounded-lg px-3 py-1.5">
+                <Plus size={12} /> Add Service
+              </button>
+            </div>
+
+            {services.some(s => s.payment_mode !== 'free') && !razorpayConnected && (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                One or more services collect payment, but Razorpay isn't connected yet — connect it in the
+                Integrations tab so customers can actually pay.
+              </p>
+            )}
+
+            {services.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-2">No services yet — add one so customers can book.</p>
+            ) : (
+              <div className="space-y-2">
+                {services.map(svc => (
+                  <div key={svc.id} className="flex items-center justify-between border rounded-lg px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        {svc.name}
+                        {!svc.is_active && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Inactive</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {svc.duration_minutes} min
+                        {svc.payment_mode !== 'free' ? ` · ₹${svc.price} (${svc.payment_mode === 'hold_to_confirm' ? 'pay to confirm' : 'pay after'})` : ' · Free'}
+                        {svc.description ? ` · ${svc.description}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => openEditServiceForm(svc)} title="Edit" className="text-gray-400 hover:text-gray-700"><Pencil size={13} /></button>
+                      <button onClick={() => toggleServiceActive(svc)} className="text-xs text-gray-500 hover:underline">
+                        {svc.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button onClick={() => deleteServiceHandler(svc)} title="Delete" className="text-gray-400 hover:text-red-600"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {showServiceForm && (
+              <div className="border rounded-lg p-3 space-y-2 bg-gray-50">
+                <input placeholder="Service name" className="w-full border rounded-lg px-3 py-2 text-sm"
+                  value={serviceForm.name} onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))} autoFocus />
+                <textarea placeholder="Description (optional)" rows={2} className="w-full border rounded-lg px-3 py-2 text-sm resize-none"
+                  value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} />
                 <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                  value={settings.duration_minutes}
-                  onChange={e => setSettings(s => ({ ...s, duration_minutes: parseInt(e.target.value) }))}>
+                  value={serviceForm.duration_minutes}
+                  onChange={e => setServiceForm(f => ({ ...f, duration_minutes: parseInt(e.target.value) }))}>
                   {[15, 20, 30, 45, 60, 90, 120].map(d => <option key={d} value={d}>{d} min</option>)}
                 </select>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Payment</label>
+                  <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                    value={serviceForm.payment_mode}
+                    onChange={e => setServiceForm(f => ({ ...f, payment_mode: e.target.value }))}>
+                    {Object.entries(PAYMENT_MODE_LABELS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+                  </select>
+                </div>
+                {serviceForm.payment_mode !== 'free' && (
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Price (₹)</label>
+                    <input type="number" min="0" step="0.01" className="w-full border rounded-lg px-3 py-2 text-sm"
+                      value={serviceForm.price}
+                      onChange={e => setServiceForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button onClick={saveService}
+                    disabled={savingService || !serviceForm.name.trim() || (serviceForm.payment_mode !== 'free' && !(serviceForm.price > 0))}
+                    className="text-xs bg-indigo-600 text-white rounded-lg px-3 py-1.5 disabled:opacity-50">
+                    {savingService ? 'Saving...' : editingService ? 'Save Changes' : 'Add Service'}
+                  </button>
+                  <button onClick={() => setShowServiceForm(false)} className="text-xs border rounded-lg px-3 py-1.5">Cancel</button>
+                </div>
               </div>
+            )}
+          </div>
+
+          {/* Availability */}
+          <div className="border rounded-xl p-4 bg-white space-y-4">
+            <p className="text-sm font-semibold">Availability</p>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Buffer between slots</label>
                 <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"

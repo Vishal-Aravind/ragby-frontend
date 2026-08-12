@@ -7,9 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Plus, Trash2, Loader2, ShoppingBag, Settings,
   Package, ClipboardList, ChevronLeft, Upload,
-  ToggleLeft, ToggleRight, Eye, EyeOff, Lock
+  ToggleLeft, ToggleRight, Lock
 } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
+import RazorpayConnectCard from "@/components/RazorpayConnectCard";
 
 const TABS = [
   { id: "settings",  label: "Settings",  icon: Settings },
@@ -39,7 +40,7 @@ export default function ShopTab({ project }) {
   const [config, setConfig] = useState(null);
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
-  const [showSecret, setShowSecret] = useState(false);
+  const [razorpayConnected, setRazorpayConnected] = useState(false);
 
   // ── Catalogs ──────────────────────────────────────────
   const [catalogs, setCatalogs] = useState([]);
@@ -355,39 +356,23 @@ export default function ShopTab({ project }) {
             <CardContent className="p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-gray-900">Payment (Razorpay)</h3>
-                <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noreferrer"
-                  className="text-xs text-blue-600 hover:underline">Get API keys →</a>
               </div>
-              <p className="text-xs text-gray-400">
-                Your customers pay directly into your Razorpay account. We never touch the money.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Key ID (rzp_live_...)</label>
-                  <Input placeholder="rzp_live_xxxxxxxxxx"
-                    value={config.razorpay_key_id || ""}
-                    onChange={e => setConfig(c => ({ ...c, razorpay_key_id: e.target.value }))} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Key Secret</label>
-                  <div className="relative">
-                    <Input
-                      type={showSecret ? "text" : "password"}
-                      placeholder="••••••••••••••••"
-                      value={config.razorpay_key_secret || ""}
-                      onChange={e => setConfig(c => ({ ...c, razorpay_key_secret: e.target.value }))}
-                      className="pr-10"
-                    />
-                    <button type="button" onClick={() => setShowSecret(s => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-400">
-                  ⚠️ Leave empty to skip payment — orders will be confirmed without collecting payment.
+              <RazorpayConnectCard
+                projectId={projectId}
+                compact
+                onStatusChange={setRazorpayConnected}
+              />
+              {!razorpayConnected && (config.razorpay_key_id || config.razorpay_key_secret) && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  You're still using an older manual API key setup — connect with Razorpay above to switch to the
+                  new, more secure OAuth connection. Your existing setup keeps working until you do.
                 </p>
-              </div>
+              )}
+              {!razorpayConnected && !(config.razorpay_key_id || config.razorpay_key_secret) && (
+                <p className="text-xs text-gray-400">
+                  ⚠️ Connect Razorpay to collect payment — orders will be confirmed without collecting payment until then.
+                </p>
+              )}
 
               {/* Shop enabled toggle */}
               <div className="flex items-center justify-between pt-2 border-t">

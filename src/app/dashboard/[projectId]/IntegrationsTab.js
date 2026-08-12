@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Copy, Check, Link, Lock, Eye, EyeOff, Loader2, ChevronDown, RefreshCw } from "lucide-react";
+import RazorpayConnectCard from "@/components/RazorpayConnectCard";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -95,6 +96,9 @@ export default function IntegrationsTab({ projectId }) {
 
       {/* Shopify */}
       <ShopifyItem projectId={projectId} />
+
+      {/* Razorpay */}
+      <RazorpayPartnerItem projectId={projectId} />
 
       {/* WhatsApp */}
       <WhatsAppItem projectId={projectId} />
@@ -878,6 +882,32 @@ function ShopifyItem({ projectId }) {
           </Button>
         </div>
       )}
+    </IntegrationItem>
+  );
+}
+
+// ── Razorpay Item ──────────────────────────────────────────
+function RazorpayPartnerItem({ projectId }) {
+  const [connected, setConnected] = useState(false);
+  const [checked, setChecked] = useState(false);
+
+  const razorpayIcon = (
+    <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
+      <path d="M18.9 3L8.4 29h6.3l7.9-19.9L18.9 3z" fill="#072654"/>
+      <path d="M23.6 3l-6.4 16.1 3.5 8.8L29.9 3H23.6z" fill="#3395FF"/>
+    </svg>
+  );
+
+  return (
+    <IntegrationItem
+      icon={razorpayIcon}
+      title="Razorpay Payments"
+      badge={checked && connected ? "Connected" : undefined}
+    >
+      <RazorpayConnectCard
+        projectId={projectId}
+        onStatusChange={(isConnected) => { setConnected(isConnected); setChecked(true); }}
+      />
     </IntegrationItem>
   );
 }
