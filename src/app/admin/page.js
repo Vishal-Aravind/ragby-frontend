@@ -177,7 +177,7 @@ export default function AdminPage() {
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Usage this month</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Projects</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Joined</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Stripe</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Razorpay</th>
               </tr>
             </thead>
             <tbody>
@@ -248,11 +248,11 @@ export default function AdminPage() {
                         })}
                       </td>
 
-                      {/* Stripe */}
+                      {/* Razorpay */}
                       <td className="px-5 py-4">
-                        {user.stripe_customer_id ? (
+                        {user.razorpay_customer_id ? (
                           <a
-                            href={`https://dashboard.stripe.com/test/customers/${user.stripe_customer_id}`}
+                            href={`https://dashboard.razorpay.com/app/customers/${user.razorpay_customer_id}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-blue-600 hover:underline"

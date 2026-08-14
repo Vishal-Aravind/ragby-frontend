@@ -10,8 +10,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, User, Zap, CreditCard, Loader2, LayoutDashboard, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
+import { LogOut, User, Zap, CreditCard, LayoutDashboard, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 
 
@@ -29,7 +28,6 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [plan, setPlan] = useState("free");
   const [hasSubscription, setHasSubscription] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -41,7 +39,7 @@ export default function Navbar() {
 
     const loadPlan = async () => {
       try {
-        const res = await fetch("/api/stripe/plan");
+        const res = await fetch("/api/billing/plan");
         if (res.ok) {
           const data = await res.json();
           setPlan(data.plan || "free");
@@ -57,23 +55,6 @@ export default function Navbar() {
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.replace("/login");
-  };
-
-  const openPortal = async () => {
-    setPortalLoading(true);
-    try {
-      const res = await fetch("/api/stripe/portal", { method: "POST" });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        toast.error("Could not open billing portal.");
-      }
-    } catch {
-      toast.error("Something went wrong.");
-    } finally {
-      setPortalLoading(false);
-    }
   };
 
   return (
@@ -158,17 +139,15 @@ export default function Navbar() {
                   Account & billing
                 </button>
 
-                {/* Manage subscription — paid users only */}
+                {/* Manage subscription — paid users only. No hosted portal to
+                    redirect to (unlike Stripe) — /account is the self-built
+                    manage-billing UI now. */}
                 {hasSubscription && (
                   <button
-                    onClick={openPortal}
-                    disabled={portalLoading}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors text-left disabled:opacity-60"
+                    onClick={() => router.push("/account")}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors text-left"
                   >
-                    {portalLoading
-                      ? <Loader2 size={15} className="text-gray-400 animate-spin" />
-                      : <CreditCard size={15} className="text-gray-400" />
-                    }
+                    <CreditCard size={15} className="text-gray-400" />
                     Manage subscription
                   </button>
                 )}

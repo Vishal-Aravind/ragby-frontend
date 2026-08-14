@@ -44,7 +44,7 @@ export async function GET(req) {
   // Get all profiles
   const { data: profiles } = await supabaseAdmin
     .from("profiles")
-    .select("id, name, email, plan, stripe_customer_id, created_at")
+    .select("id, name, email, plan, razorpay_customer_id, created_at")
     .order("created_at", { ascending: false });
 
   if (!profiles) return NextResponse.json([]);

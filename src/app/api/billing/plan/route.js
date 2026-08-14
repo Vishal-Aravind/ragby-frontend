@@ -1,21 +1,19 @@
-
 // ─────────────────────────────────────────────────────────
-// app/api/stripe/portal/route.js
+// app/api/billing/plan/route.js
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
- 
-export async function POST(req) {
+
+export async function GET(req) {
   const { supabase } = getSupabase(req);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- 
-  const res = await fetch(`${process.env.BACKEND_BASE_URL}/stripe/portal`, {
-    method: "POST",
+
+  const res = await fetch(`${process.env.BACKEND_BASE_URL}/billing/plan`, {
     headers: {
       "Authorization": `Bearer ${session.access_token}`,
     },
   });
- 
-  return NextResponse.json(await res.json());
+
+  return NextResponse.json(await res.json(), { status: res.status });
 }

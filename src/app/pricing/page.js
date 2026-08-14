@@ -5,17 +5,6 @@ import { useRouter } from "next/navigation";
 import { Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-const PRICE_IDS = {
-  pro: {
-    monthly: process.env.NEXT_PUBLIC_STRIPE_PRO_MONTHLY,
-    yearly: process.env.NEXT_PUBLIC_STRIPE_PRO_YEARLY,
-  },
-  business: {
-    monthly: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_MONTHLY,
-    yearly: process.env.NEXT_PUBLIC_STRIPE_BUSINESS_YEARLY,
-  },
-};
-
 const PLANS = [
   {
     key: "free",
@@ -79,8 +68,8 @@ export default function PricingPage() {
 
   const getPrice = (plan) => {
     if (plan.key === "free") return "Free";
-    const price = billing === "yearly" ? plan.monthlyINR : plan.monthlyINR;
-    // show INR as reference, USD is what Stripe charges
+    // show INR as reference, USD is the display price — Razorpay charges
+    // whatever currency/amount is set on the underlying Plan object.
     return billing === "yearly"
       ? `$${plan.yearlyUSD}`
       : `$${plan.monthlyUSD}`;
@@ -104,18 +93,12 @@ export default function PricingPage() {
       return;
     }
 
-    const priceId = PRICE_IDS[plan.key]?.[billing];
-    if (!priceId) {
-      toast.error("Price not found. Please try again.");
-      return;
-    }
-
     setLoadingPlan(plan.key);
     try {
-      const res = await fetch("/api/stripe/checkout", {
+      const res = await fetch("/api/billing/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ priceId }),
+        body: JSON.stringify({ plan: plan.key, billing }),
       });
 
       if (res.status === 401) {
@@ -127,7 +110,7 @@ export default function PricingPage() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        toast.error("Failed to create checkout session.");
+        toast.error(data.detail || "Failed to start checkout.");
       }
     } catch {
       toast.error("Something went wrong.");

@@ -38,7 +38,7 @@ export default function PrivacyPage() {
           <p>We collect information about how you use our platform, including the number of messages processed, features used, and account activity.</p>
 
           <h3 className="font-medium text-gray-800 mt-3 mb-1">2.5 Payment Information</h3>
-          <p>Payment processing is handled by Stripe. We do not store your credit card details. Stripe's privacy policy applies to payment data.</p>
+          <p>Payment processing is handled by Razorpay. We do not store your credit card details. Razorpay's privacy policy applies to payment data.</p>
         </section>
 
         <section>
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
           <ul className="list-disc ml-5 mt-2 space-y-1">
             <li><strong>OpenAI</strong> — message content is sent to OpenAI's API to generate AI responses</li>
             <li><strong>Supabase</strong> — secure database storage</li>
-            <li><strong>Stripe</strong> — payment processing</li>
+            <li><strong>Razorpay</strong> — payment processing</li>
             <li><strong>Meta/WhatsApp</strong> — to send and receive WhatsApp messages via the Business API</li>
             <li><strong>Legal authorities</strong> — when required by law</li>
           </ul>
