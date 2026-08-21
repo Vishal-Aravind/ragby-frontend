@@ -4,13 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { PLAN_PRICES } from "@/lib/pricing";
 
 const PLANS = [
   {
     key: "free",
     name: "Free",
-    monthlyUSD: 0,
-    yearlyUSD: 0,
+    ...PLAN_PRICES.free,
     monthlyINR: 0,
     yearlyINR: 0,
     features: [
@@ -27,8 +27,7 @@ const PLANS = [
   {
     key: "pro",
     name: "Pro",
-    monthlyUSD: 14,
-    yearlyUSD: 9,
+    ...PLAN_PRICES.pro,
     monthlyINR: 1299,
     yearlyINR: 899,
     features: [
@@ -45,8 +44,7 @@ const PLANS = [
   {
     key: "business",
     name: "Business",
-    monthlyUSD: 27,
-    yearlyUSD: 20,
+    ...PLAN_PRICES.business,
     monthlyINR: 2599,
     yearlyINR: 1899,
     features: [

@@ -1,26 +1,33 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Copy, RefreshCw, Eye, EyeOff, Check } from 'lucide-react'
+import { Copy, RefreshCw, Check } from 'lucide-react'
 
 export default function ApiKeysTab({ project }) {
   const projectId = project?.id || project
-  const [apiKey, setApiKey]     = useState(null)
-  const [loading, setLoading]   = useState(true)
-  const [visible, setVisible]   = useState(false)
-  const [copied, setCopied]     = useState(false)
-  const [regen, setRegen]       = useState(false)
+  const [apiKey, setApiKey]         = useState(null)
+  // Only ever set right after a fresh create/regenerate — the key is
+  // hashed at rest and shown exactly once. A normal page load never gets
+  // the raw value back, only { has_key: true }.
+  const [revealedKey, setRevealedKey] = useState(null)
+  const [loading, setLoading]       = useState(true)
+  const [copied, setCopied]         = useState(false)
+  const [regen, setRegen]           = useState(false)
 
   const fetchKey = async () => {
     setLoading(true)
     const res = await fetch(`/api/api-keys/${projectId}`)
-    if (res.ok) setApiKey(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      setApiKey(data)
+      if (data.key) setRevealedKey(data.key)
+    }
     setLoading(false)
   }
 
   useEffect(() => { fetchKey() }, [projectId])
 
   const copyKey = () => {
-    navigator.clipboard.writeText(apiKey.key)
+    navigator.clipboard.writeText(revealedKey)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -29,13 +36,19 @@ export default function ApiKeysTab({ project }) {
     if (!confirm("Regenerate API key? Your old key will stop working immediately.")) return
     setRegen(true)
     const res = await fetch(`/api/api-keys/${projectId}/regenerate`, { method: "POST" })
-    if (res.ok) await fetchKey()
+    if (res.ok) {
+      const data = await res.json()
+      setRevealedKey(data.key)
+      setApiKey(a => ({ ...a, has_key: true }))
+    }
     setRegen(false)
   }
 
-  const maskedKey = apiKey?.key
-    ? `${apiKey.key.slice(0, 8)}${"•".repeat(20)}${apiKey.key.slice(-4)}`
-    : ""
+  // Once revealed this session, show the real value; otherwise a
+  // placeholder — there's nothing to mask-and-reveal anymore since the
+  // plaintext genuinely isn't stored after the reveal moment passes.
+  const displayKey = revealedKey || "•".repeat(32)
+  const snippetKey = revealedKey || "your_api_key"
 
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
 
@@ -50,29 +63,34 @@ export default function ApiKeysTab({ project }) {
       <div className="border rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Your API Key</p>
-          <div className="flex gap-2">
-            <button onClick={() => setVisible(v => !v)}
-              className="text-xs border rounded px-2 py-1 hover:bg-muted flex items-center gap-1">
-              {visible ? <EyeOff size={12} /> : <Eye size={12} />}
-              {visible ? "Hide" : "Show"}
-            </button>
-            <button onClick={regenerate} disabled={regen}
-              className="text-xs border rounded px-2 py-1 hover:bg-muted flex items-center gap-1 text-red-600 border-red-200">
-              <RefreshCw size={12} className={regen ? "animate-spin" : ""} />
-              Regenerate
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-4 py-3">
-          <code className="flex-1 text-sm font-mono text-gray-700 break-all">
-            {visible ? apiKey?.key : maskedKey}
-          </code>
-          <button onClick={copyKey}
-            className="shrink-0 p-1.5 rounded hover:bg-muted transition-colors">
-            {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+          <button onClick={regenerate} disabled={regen}
+            className="text-xs border rounded px-2 py-1 hover:bg-muted flex items-center gap-1 text-red-600 border-red-200">
+            <RefreshCw size={12} className={regen ? "animate-spin" : ""} />
+            Regenerate
           </button>
         </div>
+
+        {revealedKey ? (
+          <>
+            <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-4 py-3">
+              <code className="flex-1 text-sm font-mono text-gray-700 break-all">{displayKey}</code>
+              <button onClick={copyKey}
+                className="shrink-0 p-1.5 rounded hover:bg-muted transition-colors">
+                {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+              </button>
+            </div>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠️ Copy this now — for your security we only show it once. If you lose it, you'll need to regenerate.
+            </p>
+          </>
+        ) : (
+          <div className="bg-muted/50 rounded-lg px-4 py-3">
+            <code className="text-sm font-mono text-gray-400">{displayKey}</code>
+            <p className="text-xs text-muted-foreground mt-2">
+              A key exists but isn't shown again after creation. Click Regenerate to get a new one (this invalidates the old one immediately).
+            </p>
+          </div>
+        )}
 
         {apiKey?.last_used_at && (
           <p className="text-xs text-muted-foreground">
@@ -94,7 +112,7 @@ export default function ApiKeysTab({ project }) {
           <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
 {`POST https://ragby-backend.onrender.com/public/send
 Headers:
-  X-API-Key: ${visible ? apiKey?.key : maskedKey}
+  X-API-Key: ${snippetKey}
   Content-Type: application/json
 
 Body:
@@ -113,7 +131,7 @@ Body:
   {
     method: "POST",
     headers: {
-      "X-API-Key": "${visible ? apiKey?.key : "your_api_key"}",
+      "X-API-Key": "${snippetKey}",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -132,7 +150,7 @@ Body:
 
 requests.post(
     "https://ragby-backend.onrender.com/public/send",
-    headers={"X-API-Key": "${visible ? apiKey?.key : "your_api_key"}"},
+    headers={"X-API-Key": "${snippetKey}"},
     json={
         "to": "+91 9876543210",
         "message": "Your order is confirmed!",
@@ -157,7 +175,7 @@ requests.post(
           <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
 {`GET https://ragby-backend.onrender.com/api/templates
 Headers:
-  X-API-Key: ${visible ? apiKey?.key : maskedKey}`}
+  X-API-Key: ${snippetKey}`}
           </pre>
         </div>
 
@@ -166,7 +184,7 @@ Headers:
           <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
 {`POST https://ragby-backend.onrender.com/api/send-template
 Headers:
-  X-API-Key: ${visible ? apiKey?.key : maskedKey}
+  X-API-Key: ${snippetKey}
   Content-Type: application/json
 
 Body:
@@ -183,7 +201,7 @@ Body:
           <pre className="bg-gray-900 text-green-400 text-xs rounded-lg p-4 overflow-x-auto">
 {`POST https://ragby-backend.onrender.com/api/send-template/bulk
 Headers:
-  X-API-Key: ${visible ? apiKey?.key : maskedKey}
+  X-API-Key: ${snippetKey}
   Content-Type: application/json
 
 Body:

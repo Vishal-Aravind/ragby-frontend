@@ -13,9 +13,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LogOut, User, Zap, CreditCard, LayoutDashboard, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 
-
-const ADMIN_EMAIL = "khavinprakash03@gmail.com";
-
 const PLAN_LABELS = { free: "Free", pro: "Pro", business: "Business" };
 const PLAN_COLORS = {
   free: "bg-gray-100 text-gray-600 border-gray-200",
@@ -28,6 +25,7 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [plan, setPlan] = useState("free");
   const [hasSubscription, setHasSubscription] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -48,8 +46,21 @@ export default function Navbar() {
       } catch {}
     };
 
+    // UI-only signal for showing the link — /admin and every /api/admin/**
+    // route independently re-check staff_roles server-side regardless.
+    const loadStaff = async () => {
+      try {
+        const res = await fetch("/api/admin/me");
+        if (res.ok) {
+          const data = await res.json();
+          setIsStaff(!!data.isStaff);
+        }
+      } catch {}
+    };
+
     loadUser();
     loadPlan();
+    loadStaff();
   }, []);
 
   const logout = async () => {
@@ -174,8 +185,8 @@ export default function Navbar() {
                   </button>
                 )}
 
-                {/* Admin — only for admin email */}
-                {user.email === ADMIN_EMAIL && (
+                {/* Admin — only for staff_roles members */}
+                {isStaff && (
                   <button
                     onClick={() => router.push("/admin")}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-purple-600 hover:bg-purple-50 transition-colors text-left"

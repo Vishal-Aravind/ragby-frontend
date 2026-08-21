@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Check, Calendar, MapPin, Users } from "lucide-react";
+import DOMPurify from "isomorphic-dompurify";
 
 // ─────────────────────────────────────────────────────────
 // PUBLIC BLOCK RENDERER — turns page_json into actual page
@@ -157,10 +158,10 @@ function BlockRenderer({ blocks, accent, formFields, onSubmit, submitting, spots
               ? <div key={block.id} className="h-8" />
               : <hr key={block.id} className="mx-4 border-gray-200" />;
 
-          case "html":
-            // Sanitized — strip script tags for safety
-            const safeHtml = (p.code || "").replace(/<script[\s\S]*?<\/script>/gi, "");
+          case "html": {
+            const safeHtml = DOMPurify.sanitize(p.code || "", { USE_PROFILES: { html: true } });
             return <div key={block.id} className="px-4 py-2" dangerouslySetInnerHTML={{ __html: safeHtml }} />;
+          }
 
           default:
             return null;

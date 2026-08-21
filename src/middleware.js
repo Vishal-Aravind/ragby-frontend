@@ -31,7 +31,7 @@ export async function middleware(request) {
     pathname.startsWith("/signup") ||
     pathname.startsWith("/verification");
 
-  const protectedPages = pathname.startsWith("/dashboard");
+  const protectedPages = pathname.startsWith("/dashboard") || pathname.startsWith("/admin");
 
   if (user && authPages) {
     return NextResponse.redirect(new URL("/dashboard", request.url));

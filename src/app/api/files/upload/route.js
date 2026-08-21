@@ -1,7 +1,7 @@
 // app/api/files/upload/route.js
 
 import { NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase-api";
+import { getSupabase, getProjectRole } from "@/lib/supabase-api";
 
 export async function POST(req) {
   const { supabase } = getSupabase(req);
@@ -22,6 +22,12 @@ export async function POST(req) {
   if (!file || !projectId) {
     return NextResponse.json({ error: "Missing file or projectId" }, { status: 400 });
   }
+
+  // FIX: previously accepted any projectId with no ownership check — a
+  // user could tag an upload to a project they don't own, triggering
+  // ingestion into that project's knowledge base.
+  const role = await getProjectRole(user.id, projectId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const path = `${projectId}/${file.name}`;
 

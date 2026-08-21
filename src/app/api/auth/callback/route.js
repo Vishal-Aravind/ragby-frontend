@@ -7,14 +7,26 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
  
+// FIX: `next` was previously concatenated straight into the redirect
+// target (`${origin}${next}`) with no validation — a value like
+// "@evil.com" produces "https://app.zavo...@evil.com", which per the
+// WHATWG URL spec parses as valid userinfo+host, silently redirecting off
+// this origin after a real login. Only ever allow a same-origin path.
+function safeNextPath(next) {
+  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//") || next.includes("://") || next.includes("\\")) {
+    return "/dashboard";
+  }
+  return next;
+}
+
 export async function GET(req) {
   const { searchParams, origin } = new URL(req.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/dashboard";
- 
+  const next = safeNextPath(searchParams.get("next") ?? "/dashboard");
+
   if (code) {
     const cookieStore = await cookies();
-    const response = NextResponse.redirect(`${origin}${next}`);
+    const response = NextResponse.redirect(new URL(next, origin));
  
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,

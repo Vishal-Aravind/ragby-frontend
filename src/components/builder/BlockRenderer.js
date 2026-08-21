@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import DOMPurify from "isomorphic-dompurify";
 
 // ─────────────────────────────────────────────────────────
 // PUBLIC BLOCK RENDERER — turns page_json into actual page
@@ -137,10 +138,15 @@ export default function BlockRenderer({ blocks, accent }) {
               ? <div key={block.id} className="h-8" />
               : <hr key={block.id} className="mx-4 border-gray-200" />;
 
-          case "html":
-            // Sanitized — strip script tags for safety
-            const safeHtml = (p.code || "").replace(/<script[\s\S]*?<\/script>/gi, "");
+          case "html": {
+            // FIX: was a regex stripping only <script> tags — trivially
+            // bypassed (<img onerror=...>, <svg onload=...>, javascript:
+            // hrefs, <iframe>, etc. all executed). Real sanitization now —
+            // strips event handlers, script-bearing tags/attrs, and
+            // dangerous URL schemes, this renders on the PUBLIC event page.
+            const safeHtml = DOMPurify.sanitize(p.code || "", { USE_PROFILES: { html: true } });
             return <div key={block.id} className="px-4 py-2" dangerouslySetInnerHTML={{ __html: safeHtml }} />;
+          }
 
           default:
             return null;

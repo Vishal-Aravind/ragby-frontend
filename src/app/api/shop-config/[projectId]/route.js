@@ -3,6 +3,12 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getProjectRole } from "@/lib/supabase-api";
 
+// FIX: razorpay_key_secret was previously returned to the browser on every
+// GET/PUT via select("*") — a live merchant secret shipped into the
+// dashboard's JS/network tab on every settings-page load. Explicit column
+// list excluding it, used by both handlers below — write-only from here on.
+const SHOP_CONFIG_SAFE_COLUMNS = "project_id, store_name, store_phone, gst_percent, currency, currency_code, accent_color, delivery_types, terms_note, razorpay_key_id, is_enabled, bot_can_assist, bot_can_order";
+
 function getSupabase(req) {
   const response = NextResponse.next();
   return {
@@ -33,7 +39,7 @@ export async function GET(req, { params }) {
 
   const { data, error } = await supabase
     .from("shop_config")
-    .select("*")
+    .select(SHOP_CONFIG_SAFE_COLUMNS)
     .eq("project_id", projectId)
     .maybeSingle();
 
@@ -69,7 +75,7 @@ export async function PUT(req, { params }) {
       bot_can_assist: body.bot_can_assist ?? false,
       bot_can_order: body.bot_can_order ?? false,
     }, { onConflict: "project_id" })
-    .select()
+    .select(SHOP_CONFIG_SAFE_COLUMNS)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
