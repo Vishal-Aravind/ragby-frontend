@@ -1,29 +1,19 @@
- 
 // ─────────────────────────────────────────────────────────
-// app/api/whatsapp/disconnect/[projectId]/route.js
+// app/api/whatsapp/coexistence-status/[projectId]/route.js
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
- 
-export async function DELETE(req, { params }) {
+
+export async function GET(req, { params }) {
   const { projectId } = await params;
   const { supabase } = getSupabase(req);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- 
+
   const res = await fetch(
-    `${process.env.BACKEND_BASE_URL}/whatsapp/disconnect/${projectId}`,
-    {
-      method: "DELETE",
-      headers: { "Authorization": `Bearer ${session.access_token}` },
-    }
+    `${process.env.BACKEND_BASE_URL}/whatsapp/coexistence-status/${projectId}`,
+    { headers: { "Authorization": `Bearer ${session.access_token}` } }
   );
 
-  // FIX: was always responding 200 regardless of the backend's actual
-  // status, which would silently swallow a blocked disconnect (e.g. the
-  // WhatsApp Coexistence safety check in backend/whatsapp.py) as a fake
-  // success — forward the real status so callers can tell the difference.
   return NextResponse.json(await res.json(), { status: res.status });
 }
- 
- 

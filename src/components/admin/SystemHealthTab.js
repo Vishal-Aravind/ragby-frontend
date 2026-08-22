@@ -7,6 +7,7 @@ const JOB_LABELS = {
   scheduled_campaigns: "Scheduled campaigns (every 30s)",
   shopify_reconciliation: "Shopify reconciliation (every 6h)",
   appointment_hold_release: "Appointment hold release (every 2m)",
+  whatsapp_sync_monitor: "WhatsApp Coexistence sync monitor (every 30m)",
 };
 
 function timeAgo(ts) {

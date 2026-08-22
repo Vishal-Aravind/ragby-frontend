@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -112,6 +112,8 @@ function WhatsAppItem({ projectId }) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [coexistence, setCoexistence] = useState(null);
+  const isCoexistenceRef = useRef(false);
 
   const whatsappIcon = (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366">
@@ -133,6 +135,26 @@ function WhatsAppItem({ projectId }) {
     }
     checkStatus();
   }, [projectId]);
+
+  // Polls the coexistence sync status while connected — only meaningful
+  // once whatsapp_onboard has actually saved a row, hence gated on
+  // `connected` rather than running unconditionally.
+  useEffect(() => {
+    if (!connected) return;
+    let cancelled = false;
+    async function poll() {
+      try {
+        const res = await fetch(`/api/whatsapp/coexistence-status/${projectId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setCoexistence(data.coexistence_enabled ? data : null);
+        }
+      } catch {}
+    }
+    poll();
+    const interval = setInterval(poll, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [connected, projectId]);
 
   // NOTE: We intentionally do NOT call /api/whatsapp/connect from the
   // postMessage "FINISH" event anymore. That event from Meta's embedded
@@ -157,6 +179,14 @@ function WhatsAppItem({ projectId }) {
           toast.error("WhatsApp setup error. Please try again.");
           setLoading(false);
         }
+        if (data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
+          // This number was already on the WhatsApp Business App — Meta
+          // sends this session event before FB.login()'s own callback
+          // fires below, so by the time that callback runs, this ref is
+          // already set and gets forwarded to /api/whatsapp/onboard so the
+          // backend knows to kick off the coexistence sync.
+          isCoexistenceRef.current = true;
+        }
         // FINISH is intentionally ignored here — /api/whatsapp/onboard
         // (triggered from the FB.login callback below) is the single
         // source of truth for saving phone_number_id / waba_id.
@@ -171,6 +201,7 @@ function WhatsAppItem({ projectId }) {
       toast.error("Facebook SDK not loaded. Please refresh the page.");
       return;
     }
+    isCoexistenceRef.current = false;
     setLoading(true);
     window.FB.login(
       (response) => {
@@ -188,6 +219,7 @@ function WhatsAppItem({ projectId }) {
           body: JSON.stringify({
             code: response.authResponse.code,
             projectId,
+            isCoexistence: isCoexistenceRef.current,
           }),
         })
           .then(async (res) => {
@@ -200,7 +232,11 @@ function WhatsAppItem({ projectId }) {
             }
             setConnected(true);
             if (d.display_phone_number) setPhoneNumber(d.display_phone_number);
-            toast.success("WhatsApp connected!");
+            toast.success(
+              d.is_coexistence
+                ? "WhatsApp connected! Syncing your existing chats and contacts now — this can take a few hours."
+                : "WhatsApp connected!"
+            );
             setLoading(false);
           })
           .catch(() => {
@@ -213,7 +249,13 @@ function WhatsAppItem({ projectId }) {
         response_type: "code",
         override_default_response_type: true,
         extras: {
-          sessionInfoVersion: 2,
+          setup: {},
+          // Additive/optional per Meta's docs — only changes behavior for
+          // numbers already on the WhatsApp Business App (offers keeping
+          // history via Coexistence instead of forcing a disconnect).
+          // Doesn't alter the plain-number signup path at all.
+          featureType: "whatsapp_business_app_onboarding",
+          sessionInfoVersion: "3",
         },
       }
     );
@@ -222,9 +264,15 @@ function WhatsAppItem({ projectId }) {
   const handleDisconnect = async () => {
     setLoading(true);
     try {
-      await fetch(`/api/whatsapp/disconnect/${projectId}`, { method: "DELETE" });
+      const res = await fetch(`/api/whatsapp/disconnect/${projectId}`, { method: "DELETE" });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(d.detail || "Failed to disconnect.");
+        return;
+      }
       setConnected(false);
       setPhoneNumber("");
+      setCoexistence(null);
       toast.success("WhatsApp disconnected.");
     } finally {
       setLoading(false);
@@ -245,6 +293,29 @@ function WhatsAppItem({ projectId }) {
             <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
             <span>Connected {phoneNumber && <>as <strong>{phoneNumber}</strong></>}</span>
           </div>
+
+          {coexistence && (
+            <div className="bg-white border rounded-xl px-4 py-3 space-y-1">
+              <p className="text-xs font-medium">Chat history sync</p>
+              {(coexistence.history_sync_status === "pending" || coexistence.history_sync_status === "in_progress") && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Loader2 size={11} className="animate-spin" /> Syncing your existing chats — this can take a few hours.
+                </p>
+              )}
+              {coexistence.history_sync_status === "declined" && (
+                <p className="text-xs text-muted-foreground">You chose not to share history — new conversations still work normally.</p>
+              )}
+              {coexistence.history_sync_status === "completed" && (
+                <p className="text-xs text-emerald-600">Your existing chats and contacts have been synced.</p>
+              )}
+              {coexistence.history_sync_status === "failed" && (
+                <p className="text-xs text-red-600">
+                  Sync failed{coexistence.last_sync_error ? `: ${coexistence.last_sync_error}` : ""} — new conversations still work normally.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="bg-white border rounded-xl px-4 py-3 space-y-2">
             <p className="text-xs font-medium">How to use:</p>
             <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
@@ -266,7 +337,7 @@ function WhatsAppItem({ projectId }) {
             <p className="text-xs font-medium">What you need:</p>
             <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
               <li>A Facebook Business account</li>
-              <li>A WhatsApp Business number (not currently on WhatsApp)</li>
+              <li>A WhatsApp Business number — already using the WhatsApp Business App? You'll get the option to keep your existing chats and contacts.</li>
             </ol>
           </div>
           <Button onClick={launchSignup} disabled={loading} className="w-full">
