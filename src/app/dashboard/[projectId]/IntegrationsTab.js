@@ -114,6 +114,7 @@ function WhatsAppItem({ projectId }) {
   const [checking, setChecking] = useState(true);
   const [coexistence, setCoexistence] = useState(null);
   const isCoexistenceRef = useRef(false);
+  const wabaIdHintRef = useRef(null);
 
   const whatsappIcon = (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366">
@@ -182,10 +183,13 @@ function WhatsAppItem({ projectId }) {
         if (data.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
           // This number was already on the WhatsApp Business App — Meta
           // sends this session event before FB.login()'s own callback
-          // fires below, so by the time that callback runs, this ref is
-          // already set and gets forwarded to /api/whatsapp/onboard so the
-          // backend knows to kick off the coexistence sync.
+          // fires below, so by the time that callback runs, these refs are
+          // already set. data.data.waba_id is Meta's own confirmed WABA id
+          // for this exact connection — more reliable than the backend's
+          // generic /me/whatsapp_business_accounts lookup, which came back
+          // empty for a real coexistence connection during testing.
           isCoexistenceRef.current = true;
+          wabaIdHintRef.current = data.data?.waba_id || null;
         }
         // FINISH is intentionally ignored here — /api/whatsapp/onboard
         // (triggered from the FB.login callback below) is the single
@@ -202,6 +206,7 @@ function WhatsAppItem({ projectId }) {
       return;
     }
     isCoexistenceRef.current = false;
+    wabaIdHintRef.current = null;
     setLoading(true);
     window.FB.login(
       (response) => {
@@ -220,6 +225,7 @@ function WhatsAppItem({ projectId }) {
             code: response.authResponse.code,
             projectId,
             isCoexistence: isCoexistenceRef.current,
+            wabaIdHint: wabaIdHintRef.current,
           }),
         })
           .then(async (res) => {
