@@ -204,6 +204,14 @@ export default function AccountPage() {
   const isNearLimit = percent >= 80;
   const isAtLimit = percent >= 100;
   const hasSubscription = planData?.has_subscription || false;
+  // Razorpay flips status to "cancelled" the moment cancel-at-cycle-end is
+  // requested, even though access keeps running until current_end — without
+  // checking this, the UI looked completely unchanged after a customer
+  // cancelled, with no way to tell it actually worked.
+  const isCancelled = planData?.status === "cancelled";
+  const cancelsOnDate = planData?.current_end
+    ? new Date(planData.current_end * 1000).toLocaleDateString("en-IN", { month: "long", day: "numeric", year: "numeric" })
+    : null;
 
   const barColor = isAtLimit ? "bg-red-500" : isNearLimit ? "bg-amber-400" : "bg-blue-500";
 
@@ -244,6 +252,15 @@ export default function AccountPage() {
             <div className="flex items-center gap-2 text-xs bg-blue-50 text-blue-700 border border-blue-100 rounded-lg px-3 py-2">
               <Loader2 size={13} className="animate-spin" />
               Waiting for payment to complete in the other tab...
+            </div>
+          )}
+
+          {isCancelled && (
+            <div className="flex items-center gap-2 text-xs bg-amber-50 text-amber-700 border border-amber-100 rounded-lg px-3 py-2">
+              <XCircle size={13} />
+              {cancelsOnDate
+                ? <>Cancelled — you'll keep {PLAN_LABELS[plan]} access until <strong>{cancelsOnDate}</strong>, then it drops to Free.</>
+                : <>Cancelled — this subscription will not renew.</>}
             </div>
           )}
 
@@ -305,13 +322,15 @@ export default function AccountPage() {
                   <CreditCard size={14} />
                   Change plan
                 </button>
-                <button
-                  onClick={() => setShowCancelConfirm(true)}
-                  className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors"
-                >
-                  <XCircle size={14} />
-                  Cancel subscription
-                </button>
+                {!isCancelled && (
+                  <button
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors"
+                  >
+                    <XCircle size={14} />
+                    Cancel subscription
+                  </button>
+                )}
               </>
             )}
           </div>
