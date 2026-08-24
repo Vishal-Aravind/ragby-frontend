@@ -1,30 +1,15 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Copy, RefreshCw, Check } from 'lucide-react'
 
-export default function ApiKeysTab({ project }) {
-  const projectId = project?.id || project
-  const [apiKey, setApiKey]         = useState(null)
+export default function ApiKeysClient({ projectId, initialApiKey }) {
+  const [apiKey, setApiKey]         = useState(initialApiKey || null)
   // Only ever set right after a fresh create/regenerate — the key is
   // hashed at rest and shown exactly once. A normal page load never gets
   // the raw value back, only { has_key: true }.
-  const [revealedKey, setRevealedKey] = useState(null)
-  const [loading, setLoading]       = useState(true)
+  const [revealedKey, setRevealedKey] = useState(initialApiKey?.key || null)
   const [copied, setCopied]         = useState(false)
   const [regen, setRegen]           = useState(false)
-
-  const fetchKey = async () => {
-    setLoading(true)
-    const res = await fetch(`/api/api-keys/${projectId}`)
-    if (res.ok) {
-      const data = await res.json()
-      setApiKey(data)
-      if (data.key) setRevealedKey(data.key)
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => { fetchKey() }, [projectId])
 
   const copyKey = () => {
     navigator.clipboard.writeText(revealedKey)
@@ -49,8 +34,6 @@ export default function ApiKeysTab({ project }) {
   // plaintext genuinely isn't stored after the reveal moment passes.
   const displayKey = revealedKey || "•".repeat(32)
   const snippetKey = revealedKey || "your_api_key"
-
-  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">

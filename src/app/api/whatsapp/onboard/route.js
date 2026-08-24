@@ -22,5 +22,5 @@ export async function POST(req) {
     body: JSON.stringify(body),
   });
  
-  return NextResponse.json(await res.json());
+  return NextResponse.json(await res.json(), { status: res.status });
 }

@@ -1,23 +1,15 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Check, Clock, Sparkles } from 'lucide-react'
 
 const INDUSTRIES = ['All', 'All businesses', 'Healthcare / Services', 'E-commerce / Retail', 'E-commerce / Delivery', 'Hotels / Travel / Services', 'B2B / Services', 'Retail / Pharmacy']
 
-export default function TemplateLibrary({ projectId, onBack }) {
-  const [templates, setTemplates]   = useState([])
-  const [loading, setLoading]       = useState(true)
+export default function TemplateLibraryClient({ projectId, initialTemplates }) {
+  const [templates, setTemplates]   = useState(initialTemplates || [])
   const [filter, setFilter]         = useState('All')
   const [adding, setAdding]         = useState({})
   const [added, setAdded]           = useState({})
   const [errors, setErrors]         = useState({})
-
-  useEffect(() => {
-    fetch('/api/template-library')
-      .then(r => r.json())
-      .then(data => { setTemplates(Array.isArray(data) ? data : []); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [])
 
   const addTemplate = async (template) => {
     setAdding(a => ({ ...a, [template.id]: true }))
@@ -47,22 +39,12 @@ export default function TemplateLibrary({ projectId, onBack }) {
     ? 'bg-purple-100 text-purple-700'
     : 'bg-blue-100 text-blue-700'
 
-  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading template library...</div>
-
   return (
     <div className="p-6 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            {onBack && (
-              <>
-                <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground">
-                  ← Campaigns
-                </button>
-                <span className="text-muted-foreground">/</span>
-              </>
-            )}
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Sparkles size={18} className="text-yellow-500" />
               Template Library

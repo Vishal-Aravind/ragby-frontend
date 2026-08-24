@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { UserPlus, Crown, Shield, Headset, Trash2, Loader2, Clock, SlidersHorizontal } from 'lucide-react'
 
 const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', agent: 'Agent' }
@@ -26,10 +26,9 @@ const PERMISSION_LABELS = {
   events: 'Registrations',
 }
 
-export default function TeamTab({ project }) {
-  const projectId = project?.id || project
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+export default function TeamClient({ projectId, initialData }) {
+  const [data, setData] = useState(initialData || null)
+  const [loading, setLoading] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('agent')
   const [inviting, setInviting] = useState(false)
@@ -46,8 +45,6 @@ export default function TeamTab({ project }) {
     } catch (e) { console.error(e) }
     setLoading(false)
   }
-
-  useEffect(() => { if (projectId) fetchTeam() }, [projectId])
 
   const handleInvite = async () => {
     if (!inviteEmail.trim()) return

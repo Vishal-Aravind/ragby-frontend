@@ -8,7 +8,8 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Same grantable set as ProjectClient.js's GRANTABLE_TABS — keep in sync.
+// Same grantable set as dashboard/[projectId]/tabs-config.js's TAB_CONFIG
+// keys (minus "team") — keep in sync.
 // Team management is deliberately excluded: granting it would let an agent
 // add/remove teammates or change roles, which is a privilege-escalation risk.
 const GRANTABLE_PERMISSIONS = [

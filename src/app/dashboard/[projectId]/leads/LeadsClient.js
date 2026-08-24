@@ -1,11 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { MessageSquare, Globe, Search, Download, RefreshCw, Tag, Loader2, X } from 'lucide-react'
 
-export default function LeadsTab({ project }) {
-  const projectId = project?.id || project
-  const [leads, setLeads]       = useState([])
-  const [loading, setLoading]   = useState(true)
+export default function LeadsClient({ projectId, initialLeads }) {
+  const [leads, setLeads]       = useState(initialLeads || [])
+  const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('all') // all | whatsapp | web
@@ -27,8 +26,6 @@ export default function LeadsTab({ project }) {
       .then(data => { setLeads(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => { setError('Failed to load.'); setLoading(false); })
   }
-
-  useEffect(() => { fetchLeads() }, [projectId])
 
   const updateLeadTags = async (lead, tags) => {
     // Optimistic update so the badges feel instant.

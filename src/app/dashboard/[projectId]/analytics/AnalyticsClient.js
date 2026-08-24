@@ -1,40 +1,20 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { HelpCircle, Check, Sparkles, Loader2, Wallet, Target, ShoppingBag, Calendar, Ticket } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
-export default function AnalyticsTab({ project }) {
-  const projectId = project?.id || project
-  const [stats, setStats]       = useState(null)
-  const [chartData, setChartData] = useState([])
-  const [outcomes, setOutcomes] = useState(null)
-  const [loading, setLoading]   = useState(true)
+export default function AnalyticsClient({ projectId, initialStats, initialChartData, initialOutcomes, initialGaps }) {
+  const [stats, setStats]       = useState(initialStats || null)
+  const [chartData, setChartData] = useState(initialChartData || [])
+  const [outcomes, setOutcomes] = useState(initialOutcomes || null)
 
   // ── Unanswered questions ──────────────────────────────────
-  const [gaps, setGaps]           = useState([])
-  const [gapsLoading, setGapsLoading] = useState(true)
+  const [gaps, setGaps]           = useState(initialGaps || [])
+  const [gapsLoading, setGapsLoading] = useState(false)
   const [gapsTab, setGapsTab]     = useState('unresolved') // unresolved | resolved
   const [expandedKey, setExpandedKey] = useState(null)
   const [answerText, setAnswerText] = useState('')
   const [savingKey, setSavingKey] = useState(null)
-
-  useEffect(() => {
-    if (!projectId) return
-    fetchAnalytics()
-    fetchGaps()
-  }, [projectId])
-
-  const fetchAnalytics = async () => {
-    setLoading(true)
-    const res = await fetch(`/api/analytics?project_id=${projectId}`)
-    if (res.ok) {
-      const data = await res.json()
-      setStats(data.stats)
-      setChartData(data.chart)
-      setOutcomes(data.outcomes || null)
-    }
-    setLoading(false)
-  }
 
   const fetchGaps = async () => {
     setGapsLoading(true)
@@ -87,10 +67,6 @@ export default function AnalyticsTab({ project }) {
     if (days < 30) return `${days}d ago`
     return new Date(ts).toLocaleDateString()
   }
-
-  if (loading) return (
-    <div className="p-6 text-sm text-muted-foreground">Loading analytics...</div>
-  )
 
   if (!stats) return (
     <div className="p-6 text-sm text-muted-foreground">No data yet. Start receiving WhatsApp messages to see analytics.</div>

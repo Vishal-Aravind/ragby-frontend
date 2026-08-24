@@ -229,8 +229,12 @@ function WhatsAppItem({ projectId }) {
           }),
         })
           .then(async (res) => {
-            if (!res.ok) throw new Error();
             const d = await res.json();
+            if (!res.ok) {
+              toast.error(d.detail || d.error || "Failed to connect WhatsApp.");
+              setLoading(false);
+              return;
+            }
             if (!d.phone_number_id) {
               toast.error("Connected, but no phone number was returned. Please try again or check your WhatsApp Business Account.");
               setLoading(false);

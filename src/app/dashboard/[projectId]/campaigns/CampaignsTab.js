@@ -1,16 +1,17 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles, RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://ragby-backend.onrender.com'
 
-// `onOpenTemplateLibrary` — Template Library now lives in its own top-level
-// tab (shared by Campaigns, the public API, and appointment reminders),
-// so this just asks the dashboard shell to switch tabs instead of
-// rendering it inline here.
-export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
+// Template Library lives at its own route now (`/dashboard/[projectId]/templates`)
+// — navigate there directly instead of a passed-in tab-switch callback.
+export default function CampaignsTab({ project }) {
   const projectId = project?.id || project
+  const router = useRouter()
+  const goToTemplateLibrary = () => router.push(`/dashboard/${projectId}/templates`)
   const [campaigns, setCampaigns]     = useState([])
   const [templates, setTemplates]     = useState([])
   const [loading, setLoading]         = useState(true)
@@ -271,7 +272,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
           <p className="text-sm text-muted-foreground">Send WhatsApp template messages to your contacts</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={onOpenTemplateLibrary}
+          <button onClick={goToTemplateLibrary}
             className="flex items-center gap-1.5 border text-sm px-4 py-2 rounded-lg hover:bg-muted">
             <Sparkles size={14} className="text-yellow-500" /> Template Library
           </button>
@@ -310,7 +311,7 @@ export default function CampaignsTab({ project, onOpenTemplateLibrary }) {
             {templates.length === 0 ? (
               <div className="border rounded-lg p-4 text-sm text-muted-foreground text-center space-y-2">
                 <p>No approved templates found.</p>
-                <p className="text-xs">Add templates via <button onClick={onOpenTemplateLibrary} className="text-blue-600 underline">Template Library</button> or click <strong>Sync from Meta</strong> if you already have approved templates.</p>
+                <p className="text-xs">Add templates via <button onClick={goToTemplateLibrary} className="text-blue-600 underline">Template Library</button> or click <strong>Sync from Meta</strong> if you already have approved templates.</p>
               </div>
             ) : (
               <div className="mt-1 space-y-2 max-h-48 overflow-y-auto">
