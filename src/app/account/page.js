@@ -78,6 +78,7 @@ export default function AccountPage() {
   const [showChangePlan, setShowChangePlan] = useState(false);
   const [changeTarget, setChangeTarget] = useState({ plan: "pro", billing: "monthly" });
   const [changingPlan, setChangingPlan] = useState(false);
+  const [upiBlocked, setUpiBlocked] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelAtCycleEnd, setCancelAtCycleEnd] = useState(true);
   const [cancelling, setCancelling] = useState(false);
@@ -146,6 +147,7 @@ export default function AccountPage() {
 
   const handleChangePlan = async () => {
     setChangingPlan(true);
+    setUpiBlocked(false);
     try {
       const res = await fetch("/api/billing/change-plan", {
         method: "POST",
@@ -157,6 +159,11 @@ export default function AccountPage() {
         toast.success("Plan change submitted — this can take a few seconds to reflect.");
         setShowChangePlan(false);
         setTimeout(loadPlan, 3000);
+      } else if ((data.detail || "").toLowerCase().includes("upi")) {
+        // A toast alone is easy to miss and forget — this needs a clear
+        // next step the customer can actually act on, not just text
+        // explaining why the button they just clicked didn't work.
+        setUpiBlocked(true);
       } else {
         toast.error(data.detail || "Could not change plan.");
       }
@@ -317,7 +324,7 @@ export default function AccountPage() {
             ) : (
               <>
                 <button
-                  onClick={() => { setChangeTarget({ plan: plan === "pro" ? "business" : "pro", billing: "monthly" }); setShowChangePlan(true); }}
+                  onClick={() => { setChangeTarget({ plan: plan === "pro" ? "business" : "pro", billing: "monthly" }); setShowChangePlan(true); setUpiBlocked(false); }}
                   className="flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
                 >
                   <CreditCard size={14} />
@@ -361,12 +368,29 @@ export default function AccountPage() {
                   </button>
                 ))}
               </div>
-              <button onClick={handleChangePlan} disabled={changingPlan}
-                className="w-full py-2 bg-gray-900 text-white rounded-lg text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-2">
-                {changingPlan && <Loader2 size={13} className="animate-spin" />}
-                Confirm change
-              </button>
-              <p className="text-xs text-muted-foreground">Takes effect immediately; any difference is charged or refunded automatically.</p>
+              {upiBlocked ? (
+                <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-amber-800">
+                    This subscription was paid via UPI — Razorpay doesn't support editing a UPI subscription's plan directly.
+                    Cancel it and subscribe to the new plan instead (or pay by card next time to change plans directly).
+                  </p>
+                  <button
+                    onClick={() => { setShowChangePlan(false); setUpiBlocked(false); router.push("/pricing"); }}
+                    className="w-full py-2 bg-gray-900 text-white rounded-lg text-xs font-medium"
+                  >
+                    Go to Pricing
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button onClick={handleChangePlan} disabled={changingPlan}
+                    className="w-full py-2 bg-gray-900 text-white rounded-lg text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-2">
+                    {changingPlan && <Loader2 size={13} className="animate-spin" />}
+                    Confirm change
+                  </button>
+                  <p className="text-xs text-muted-foreground">Takes effect immediately; any difference is charged or refunded automatically.</p>
+                </>
+              )}
             </div>
           )}
 
