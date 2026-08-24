@@ -567,6 +567,7 @@ export default function FlowsTab({ projectId }) {
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
   const [creatingFlow, setCreatingFlow] = useState(false);
   const [newFlowName, setNewFlowName]   = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFlowList, setShowFlowList] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editKeywords, setEditKeywords] = useState("");
@@ -773,6 +774,7 @@ export default function FlowsTab({ projectId }) {
     if (res.ok) {
       const flow = await res.json();
       setNewFlowName("");
+      setShowCreateModal(false);
       await fetchFlows();
       await selectFlow(flow);
     }
@@ -883,14 +885,10 @@ export default function FlowsTab({ projectId }) {
       {showFlowList ? (
         <Card>
           <CardContent className="p-6 space-y-4">
-            <h2 className="text-lg font-semibold">Flows</h2>
-            <div className="flex gap-2">
-              <Input placeholder="Flow name e.g. Welcome Flow" value={newFlowName}
-                onChange={e => setNewFlowName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleCreateFlow()} />
-              <Button onClick={handleCreateFlow} disabled={creatingFlow || !newFlowName.trim()}>
-                {creatingFlow ? <Loader2 size={14} className="animate-spin mr-1" /> : <Plus size={14} className="mr-1" />}
-                Create
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Flows</h2>
+              <Button onClick={() => setShowCreateModal(true)}>
+                <Plus size={14} className="mr-1" /> New Flow
               </Button>
             </div>
             {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
@@ -1047,6 +1045,32 @@ export default function FlowsTab({ projectId }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-20">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4 m-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">New flow</h3>
+              <button onClick={() => { setShowCreateModal(false); setNewFlowName(""); }}><X size={16} /></button>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Flow name</p>
+              <Input autoFocus placeholder="e.g. Welcome Flow" value={newFlowName}
+                onChange={e => setNewFlowName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleCreateFlow()} />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowCreateModal(false); setNewFlowName(""); }}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={handleCreateFlow} disabled={creatingFlow || !newFlowName.trim()}>
+                {creatingFlow ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                Create
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
