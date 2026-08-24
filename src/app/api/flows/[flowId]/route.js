@@ -59,6 +59,15 @@ export async function DELETE(req, { params }) {
   const role = await getProjectRole(user.id, existingFlow.project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  await supabase.from("flows").delete().eq("id", flowId);
+  // FIX: was never checking the delete's result — with RLS off (as this
+  // table always was until now) that was harmless, but it meant a
+  // filtered/failed delete would still report fake success. .select()
+  // after delete() returns exactly the rows that were actually removed,
+  // so this can now tell the difference.
+  const { data: deletedRows, error } = await supabase.from("flows").delete().eq("id", flowId).select();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!deletedRows || deletedRows.length === 0) {
+    return NextResponse.json({ error: "Delete affected no rows — check permissions" }, { status: 403 });
+  }
   return NextResponse.json({ status: "deleted" });
 }
