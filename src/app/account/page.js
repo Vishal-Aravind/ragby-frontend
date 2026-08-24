@@ -204,11 +204,12 @@ export default function AccountPage() {
   const isNearLimit = percent >= 80;
   const isAtLimit = percent >= 100;
   const hasSubscription = planData?.has_subscription || false;
-  // Razorpay flips status to "cancelled" the moment cancel-at-cycle-end is
-  // requested, even though access keeps running until current_end — without
-  // checking this, the UI looked completely unchanged after a customer
-  // cancelled, with no way to tell it actually worked.
-  const isCancelled = planData?.status === "cancelled";
+  // NOT derived from planData.status — confirmed live that Razorpay keeps
+  // status "active" the whole time for a cancel-at-cycle-end subscription,
+  // right up until it actually ends. cancel_scheduled is tracked on Zavo's
+  // own side instead (see backend/billing.py), which is the only reliable
+  // signal here.
+  const isCancelled = planData?.cancel_scheduled;
   const cancelsOnDate = planData?.current_end
     ? new Date(planData.current_end * 1000).toLocaleDateString("en-IN", { month: "long", day: "numeric", year: "numeric" })
     : null;
