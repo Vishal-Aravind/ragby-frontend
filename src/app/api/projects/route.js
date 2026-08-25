@@ -123,10 +123,19 @@ export async function POST(req) {
   }
 
   const body = await req.json();
-  const { name, domain, logo_url } = body;
+  let { name, domain, logo_url } = body;
 
+  // Name is no longer a hard gate — a brand-new account gets a project
+  // auto-created (see dashboard/page.js) before it ever asks for one, so
+  // there's no form to require it from at that point. Falls back to the
+  // signup-time profile name; renamable anytime from the dashboard header.
   if (!name || !name.trim()) {
-    return NextResponse.json({ error: "Project name is required" }, { status: 400 });
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("name")
+      .eq("id", user.id)
+      .maybeSingle();
+    name = profile?.name ? `${profile.name}'s Business` : "My Business";
   }
 
   const { data, error } = await supabaseAdmin

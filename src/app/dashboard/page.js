@@ -131,6 +131,26 @@ export default function Dashboard() {
         return;
       }
 
+      // Brand-new account, no project yet, and never a member of anyone
+      // else's either — one project per account is enforced anyway, so
+      // there's no real choice being made by asking for a name upfront.
+      // Auto-create with a default (renamable in the dashboard header) and
+      // skip straight to it, instead of a blocking "create project" screen.
+      if (data && data.length === 0) {
+        const createRes = await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (createRes.ok) {
+          const newProject = await createRes.json();
+          router.replace(`/dashboard/${newProject.id}`);
+          return;
+        }
+        // Auto-create failed (rare) — fall through to the manual "+ New
+        // project" button below instead of leaving the user stuck.
+      }
+
       setProjects(data || []);
       setLoading(false);
     };

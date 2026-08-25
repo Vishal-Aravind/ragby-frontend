@@ -7,7 +7,7 @@ import { hasProjectTabAccess } from "@/lib/project-access";
 import TabNav from "./TabNav";
 import {
   FileText, Plug, GitBranch, ShoppingBag, Inbox, BarChart2, PartyPopper,
-  Sparkles, X, ArrowRight,
+  Sparkles, X, ArrowRight, Pencil,
 } from "lucide-react";
 
 // Guided tour copy — kept short and benefit-oriented on purpose (covers the
@@ -244,6 +244,35 @@ export default function DashboardShell({ project, children }) {
     }
   };
 
+  // --------------------------------------------------
+  // PROJECT NAME — auto-created with a default (see dashboard/page.js),
+  // renamable here. Shows up on the public chat widget, so it's a real
+  // field, not just an internal label.
+  // --------------------------------------------------
+  const [projectName, setProjectName] = useState(project.name || "");
+  const [editingName, setEditingName] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+
+  const handleNameSave = async () => {
+    const trimmed = projectName.trim();
+    if (!trimmed || trimmed === project.name) {
+      setProjectName(project.name || "");
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+    } finally {
+      setSavingName(false);
+      setEditingName(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Joyride
@@ -271,7 +300,30 @@ export default function DashboardShell({ project, children }) {
             className="h-10 w-10 object-contain rounded-lg border p-0.5"
           />
         )}
-        <h1 className="text-2xl font-semibold">{project.name}</h1>
+        {editingName ? (
+          <input
+            autoFocus
+            value={projectName}
+            disabled={savingName}
+            onChange={(e) => setProjectName(e.target.value)}
+            onBlur={handleNameSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.target.blur();
+              if (e.key === "Escape") { setProjectName(project.name || ""); setEditingName(false); }
+            }}
+            className="text-2xl font-semibold border-b border-dashed outline-none bg-transparent disabled:opacity-60"
+          />
+        ) : (
+          <h1
+            className={`text-2xl font-semibold ${isOwnerOrAdmin ? "flex items-center gap-2 group cursor-pointer" : ""}`}
+            onClick={() => isOwnerOrAdmin && setEditingName(true)}
+          >
+            {project.name}
+            {isOwnerOrAdmin && (
+              <Pencil size={14} className="text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+            )}
+          </h1>
+        )}
         <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={restartTour}>
           <Sparkles size={13} />Tour
         </Button>
