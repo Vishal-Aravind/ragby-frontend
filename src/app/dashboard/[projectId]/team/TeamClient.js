@@ -235,7 +235,11 @@ export default function TeamClient({ projectId, initialData }) {
           </h3>
           {atSeatLimit ? (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              You've used all {seats.limit} seat{seats.limit === 1 ? '' : 's'} on your current plan. Upgrade your plan to invite more teammates.
+              {data.plan === 'business' ? (
+                <>You've used all {seats.limit} seats on the Business plan — <a href="/pricing" className="underline font-medium">see Enterprise</a> for larger teams.</>
+              ) : (
+                <>You've used all {seats.limit} seat{seats.limit === 1 ? '' : 's'} on your current plan. Upgrade your plan to invite more teammates.</>
+              )}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">

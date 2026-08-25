@@ -6,6 +6,11 @@ import { Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PLAN_PRICES } from "@/lib/pricing";
 
+// TODO: fill this in before this is live — placeholder so the Enterprise
+// card's CTA has somewhere to go without inventing a fake/broken contact
+// method. Empty mailto: just opens a blank compose window for now.
+const ENTERPRISE_CONTACT_EMAIL = "";
+
 const PLANS = [
   {
     key: "free",
@@ -57,6 +62,18 @@ const PLANS = [
     cta: "Get started",
     featured: false,
   },
+  {
+    key: "enterprise",
+    name: "Enterprise",
+    features: [
+      { text: "100+ team seats", included: true },
+      { text: "Custom message volume", included: true },
+      { text: "Dedicated onboarding & support", included: true },
+      { text: "Custom SLA & integrations", included: true },
+    ],
+    cta: "Contact us",
+    featured: false,
+  },
 ];
 
 export default function PricingPage() {
@@ -66,6 +83,7 @@ export default function PricingPage() {
 
   const getPrice = (plan) => {
     if (plan.key === "free") return "Free";
+    if (plan.key === "enterprise") return "Custom";
     // show INR as reference, USD is the display price — Razorpay charges
     // whatever currency/amount is set on the underlying Plan object.
     return billing === "yearly"
@@ -75,19 +93,25 @@ export default function PricingPage() {
 
   const getINRPrice = (plan) => {
     if (plan.key === "free") return "₹0";
+    if (plan.key === "enterprise") return null;
     return billing === "yearly"
       ? `~₹${plan.yearlyINR.toLocaleString("en-IN")}/mo`
       : `~₹${plan.monthlyINR.toLocaleString("en-IN")}/mo`;
   };
 
   const getOldPrice = (plan) => {
-    if (plan.key === "free" || billing === "monthly") return null;
+    if (plan.key === "free" || plan.key === "enterprise" || billing === "monthly") return null;
     return `$${plan.monthlyUSD}`;
   };
 
   const handleCheckout = async (plan) => {
     if (plan.key === "free") {
       router.push("/login");
+      return;
+    }
+
+    if (plan.key === "enterprise") {
+      window.location.href = `mailto:${ENTERPRISE_CONTACT_EMAIL}?subject=${encodeURIComponent("Zavo Enterprise")}`;
       return;
     }
 
@@ -168,7 +192,7 @@ export default function PricingPage() {
         </div>
 
         {/* Plan cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {PLANS.map((plan) => (
             <div
               key={plan.key}
@@ -193,18 +217,24 @@ export default function PricingPage() {
                     </span>
                   )}
                   <span className="text-3xl font-semibold">{getPrice(plan)}</span>
-                  {plan.key !== "free" && (
+                  {plan.key !== "free" && plan.key !== "enterprise" && (
                     <span className="text-sm text-muted-foreground">/ month</span>
                   )}
                 </div>
 
-                {plan.key !== "free" && (
+                {plan.key !== "free" && plan.key !== "enterprise" && (
                   <p className="text-xs text-muted-foreground mt-1">
                     {getINRPrice(plan)} · {billing === "yearly" ? "billed annually" : "billed monthly"}
                   </p>
                 )}
 
-                {billing === "yearly" && plan.key !== "free" && (
+                {plan.key === "enterprise" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Pricing based on team size and usage.
+                  </p>
+                )}
+
+                {billing === "yearly" && plan.key !== "free" && plan.key !== "enterprise" && (
                   <p className="text-xs text-muted-foreground mt-0.5">
                     ${plan.yearlyUSD * 12}/year total
                   </p>

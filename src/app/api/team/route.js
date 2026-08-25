@@ -9,7 +9,18 @@ const supabaseAdmin = createClient(
 );
 
 // Mirrors PLAN_LIMITS["seats"] in backend/config.py — keep in sync.
-const SEAT_LIMITS = { free: 1, pro: 5, business: null };
+// 100 on business is "effectively unlimited" for any real SMB team without
+// literally promising infinite seats forever — leaves room for a future
+// Enterprise tier above it. Deliberately NOT `SEAT_LIMITS[plan] ?? free`
+// below — a falsy/zero-like limit would be silently treated as "missing"
+// by `??`; the `in` check only falls back for a genuinely unrecognized
+// plan string.
+const SEAT_LIMITS = { free: 1, pro: 5, business: 100 };
+function getSeatLimit(plan) {
+  return plan in SEAT_LIMITS ? SEAT_LIMITS[plan] : SEAT_LIMITS.free;
+}
+
+const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 
 export async function GET(req) {
   const { supabase } = getSupabase(req);
@@ -41,7 +52,7 @@ export async function GET(req) {
     .eq("project_id", projectId)
     .order("created_at", { ascending: true });
 
-  const seatLimit = SEAT_LIMITS[ownerProfile?.plan] ?? SEAT_LIMITS.free;
+  const seatLimit = getSeatLimit(ownerProfile?.plan);
   const activeMembers = (members || []).filter(m => m.status === "active").length;
 
   return NextResponse.json({
@@ -49,6 +60,7 @@ export async function GET(req) {
     owner: { id: project.user_id, email: ownerProfile?.email || null, name: ownerProfile?.name || null },
     members: members || [],
     seats: { used: 1 + activeMembers, limit: seatLimit },
+    plan: ownerProfile?.plan || "free",
   });
 }
 
@@ -56,6 +68,18 @@ export async function POST(req) {
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // The "no account found for that email" response below is an
+  // email-existence oracle — capped the same way login/signup already are.
+  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const rateCheck = await fetch(`${BACKEND}/auth/rate-limit-check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+    body: JSON.stringify({ action: "team_invite" }),
+  });
+  if (!rateCheck.ok) {
+    return NextResponse.json({ error: "Too many invite attempts — please wait and try again." }, { status: 429 });
+  }
 
   const { projectId, email, role } = await req.json();
   if (!projectId || !email || !role) {
@@ -118,7 +142,7 @@ export async function POST(req) {
     .eq("id", project.user_id)
     .maybeSingle();
 
-  const seatLimit = SEAT_LIMITS[ownerProfile?.plan] ?? SEAT_LIMITS.free;
+  const seatLimit = getSeatLimit(ownerProfile?.plan);
   if (seatLimit !== null) {
     const { count: activeMembers } = await supabaseAdmin
       .from("project_members")
