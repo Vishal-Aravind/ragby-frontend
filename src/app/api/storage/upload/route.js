@@ -51,7 +51,10 @@ export async function POST(req) {
       upsert: false,
     });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Storage upload failed:", error);
+    return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
+  }
 
   const { data: { publicUrl } } = supabase.storage
     .from(bucket)

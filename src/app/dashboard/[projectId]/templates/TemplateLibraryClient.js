@@ -26,7 +26,11 @@ export default function TemplateLibraryClient({ projectId, initialTemplates }) {
     if (res.ok || data.status === 'exists') {
       setAdded(a => ({ ...a, [template.id]: true }))
     } else {
-      setErrors(e => ({ ...e, [template.id]: data.error || 'Failed to add' }))
+      // data.error is WhatsApp's own rejection reason (e.g. a formatting
+      // issue with the template) — genuinely useful to show, unlike a raw
+      // JSON blob, but Meta's phrasing/error codes read as cryptic on
+      // their own, so it gets a plain-language lead-in here.
+      setErrors(e => ({ ...e, [template.id]: data.error ? `WhatsApp rejected this template: ${data.error}` : 'Failed to add this template.' }))
     }
     setAdding(a => ({ ...a, [template.id]: false }))
   }

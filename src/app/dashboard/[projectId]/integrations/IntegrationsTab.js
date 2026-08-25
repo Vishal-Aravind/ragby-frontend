@@ -113,6 +113,7 @@ function WhatsAppItem({ projectId }) {
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [coexistence, setCoexistence] = useState(null);
+  const [resyncing, setResyncing] = useState(false);
   const isCoexistenceRef = useRef(false);
   const wabaIdHintRef = useRef(null);
 
@@ -137,25 +138,44 @@ function WhatsAppItem({ projectId }) {
     checkStatus();
   }, [projectId]);
 
+  const refreshCoexistence = async () => {
+    try {
+      const res = await fetch(`/api/whatsapp/coexistence-status/${projectId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCoexistence(data.coexistence_enabled ? data : null);
+      }
+    } catch {}
+  };
+
   // Polls the coexistence sync status while connected — only meaningful
   // once whatsapp_onboard has actually saved a row, hence gated on
   // `connected` rather than running unconditionally.
   useEffect(() => {
     if (!connected) return;
-    let cancelled = false;
-    async function poll() {
-      try {
-        const res = await fetch(`/api/whatsapp/coexistence-status/${projectId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) setCoexistence(data.coexistence_enabled ? data : null);
-        }
-      } catch {}
-    }
-    poll();
-    const interval = setInterval(poll, 30000);
-    return () => { cancelled = true; clearInterval(interval); };
+    refreshCoexistence();
+    const interval = setInterval(refreshCoexistence, 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected, projectId]);
+
+  // Deliberately manual, never auto-triggered — Meta rate-limits the sync
+  // API per phone number (see api/whatsapp/resync's own comment).
+  const handleRetrySync = async () => {
+    setResyncing(true);
+    try {
+      const res = await fetch(`/api/whatsapp/resync/${projectId}`, { method: "POST" });
+      // Don't put the raw response text in the toast — the persistent
+      // "Technical details" toggle below (refreshed right after this) is
+      // where that belongs, same as the original sync-failed message.
+      toast[res.ok ? "success" : "error"](
+        res.ok ? "Sync started again." : "Sync retry failed — see details below."
+      );
+      await refreshCoexistence();
+    } finally {
+      setResyncing(false);
+    }
+  };
 
   // NOTE: We intentionally do NOT call /api/whatsapp/connect from the
   // postMessage "FINISH" event anymore. That event from Meta's embedded
@@ -319,9 +339,25 @@ function WhatsAppItem({ projectId }) {
                 <p className="text-xs text-emerald-600">Your existing chats and contacts have been synced.</p>
               )}
               {coexistence.history_sync_status === "failed" && (
-                <p className="text-xs text-red-600">
-                  Sync failed{coexistence.last_sync_error ? `: ${coexistence.last_sync_error}` : ""} — new conversations still work normally.
-                </p>
+                <div className="text-xs space-y-1.5">
+                  <p className="text-red-600">
+                    We couldn't finish syncing your existing chat history — new conversations keep working normally.
+                  </p>
+                  <button
+                    onClick={handleRetrySync}
+                    disabled={resyncing}
+                    className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    <RefreshCw size={11} className={resyncing ? "animate-spin" : ""} />
+                    {resyncing ? "Retrying..." : "Retry sync"}
+                  </button>
+                  {coexistence.last_sync_error && (
+                    <details className="text-muted-foreground">
+                      <summary className="cursor-pointer select-none">Technical details</summary>
+                      <p className="mt-1 font-mono text-[10px] break-all">{coexistence.last_sync_error}</p>
+                    </details>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -928,7 +964,13 @@ function ShopifyItem({ projectId }) {
           </div>
           <div className="bg-white border rounded-xl px-4 py-3 space-y-1 text-xs text-muted-foreground">
             {lastSyncError ? (
-              <p className="text-red-600">Last sync failed: {lastSyncError}</p>
+              <div className="space-y-1">
+                <p className="text-red-600">Your last catalog sync didn't complete — try "Sync now" below.</p>
+                <details>
+                  <summary className="cursor-pointer select-none">Technical details</summary>
+                  <p className="mt-1 font-mono text-[10px] break-all">{lastSyncError}</p>
+                </details>
+              </div>
             ) : lastSyncedAt ? (
               <p>Last synced {new Date(lastSyncedAt).toLocaleString()}</p>
             ) : (

@@ -148,6 +148,9 @@ export async function POST(req) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Team invite insert failed:", error);
+    return NextResponse.json({ error: "Something went wrong sending that invite. Please try again." }, { status: 500 });
+  }
   return NextResponse.json(created);
 }
