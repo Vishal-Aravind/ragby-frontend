@@ -14,11 +14,11 @@ export const TAB_CONFIG = [
   { key: "flows",         segment: "flows",         label: "Flows",         icon: GitBranch,     tourId: "flows" },
   { key: "conversations", segment: "conversations", label: "Conversations", icon: Inbox,         tourId: "conversations" },
   { key: "analytics",     segment: "analytics",     label: "Analytics",     icon: BarChart2,     tourId: "analytics" },
-  { key: "api",           segment: "api-keys",      label: "API",           icon: Key },
   { key: "campaigns",     segment: "campaigns",     label: "Campaigns",     icon: Megaphone },
   { key: "templates",     segment: "templates",     label: "Templates",     icon: Sparkles },
   { key: "shop",          segment: "shop",          label: "Shop",          icon: ShoppingBag,   tourId: "shop" },
   { key: "appointments",  segment: "appointments",  label: "Appointments",  icon: CalendarDays },
   { key: "events",        segment: "events",        label: "Registrations", icon: CalendarRange },
+  { key: "api",           segment: "api-keys",      label: "API",           icon: Key },
   { key: "team",          segment: "team",          label: "Team",          icon: UserCog },
 ];
