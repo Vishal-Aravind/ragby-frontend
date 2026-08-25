@@ -1,10 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { hasProjectTabAccess } from "@/lib/project-access";
 import { TAB_CONFIG } from "./tabs-config";
+
+// Fixed-size + always-rendered (opacity toggle only) so it never shifts the
+// label next to it — Next's own guidance for useLinkStatus, since a
+// pop-in/pop-out element here would nudge the tab label sideways on click.
+function PendingDot() {
+  const { pending } = useLinkStatus();
+  return <span aria-hidden className={`pending-dot ${pending ? "is-pending" : ""}`} />;
+}
 
 export default function TabNav({ project }) {
   const pathname = usePathname();
@@ -27,6 +35,7 @@ export default function TabNav({ project }) {
             <Link href={href} data-tour={tab.tourId ? `tab-${tab.tourId}` : undefined}>
               <Icon size={13} />
               {tab.label}
+              <PendingDot />
             </Link>
           </Button>
         );
