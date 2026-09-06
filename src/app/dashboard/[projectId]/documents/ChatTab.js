@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 
 export default function ChatTab({ projectId }) {
-  console.log("NEW ChatTab rendered for project:", projectId);
 
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
@@ -222,6 +221,16 @@ export default function ChatTab({ projectId }) {
         }),
       });
     
+      if (!res.ok) {
+        console.error("Could not start a chat:", await res.text());
+        setMessages(prev => [
+          ...prev,
+          { role: "assistant", content: "Couldn't start a new chat. Please try again.", showSources: false, isError: true }
+        ]);
+        setLoading(false);
+        return;
+      }
+
       const newChat = await res.json();
       chatId = newChat.id;
     
@@ -252,7 +261,22 @@ export default function ChatTab({ projectId }) {
       });
   
       if (!res.ok) {
-        console.error(await res.text());
+        // Was a bare `return`: on a 429 the monthly-limit message ("Monthly
+        // limit of N conversations reached") went only to the console, so
+        // the merchant saw their message sit there and nothing happen.
+        const body = await res.text();
+        console.error(body);
+        let reason = "Something went wrong. Please try again.";
+        try {
+          const parsed = JSON.parse(body);
+          if (res.status === 429 && parsed?.error) reason = parsed.error;
+        } catch {
+          // keep the generic message
+        }
+        setMessages(prev => [
+          ...prev,
+          { role: "assistant", content: reason, showSources: false, isError: true }
+        ]);
         return;
       }
   

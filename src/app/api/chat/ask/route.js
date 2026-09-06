@@ -34,10 +34,20 @@ export async function POST(req) {
     if (!res.ok) {
       const errorText = await res.text();
       console.error("FastAPI Backend Error:", errorText);
-      return NextResponse.json(
-        { error: "RAG Backend failed", details: errorText },
-        { status: res.status }
-      );
+
+      // `details` used to carry the raw Python exception straight to the
+      // browser. Rate-limit and quota messages (429) are the user's own
+      // situation and worth showing; everything else stays generic.
+      let error = "Something went wrong. Please try again.";
+      if (res.status === 429) {
+        try {
+          const parsed = JSON.parse(errorText);
+          if (parsed?.detail) error = parsed.detail;
+        } catch {
+          error = "You're sending messages too quickly. Please wait a moment.";
+        }
+      }
+      return NextResponse.json({ error }, { status: res.status });
     }
 
     return NextResponse.json(await res.json());
