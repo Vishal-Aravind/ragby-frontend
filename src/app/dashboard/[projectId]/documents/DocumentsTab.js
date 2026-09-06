@@ -77,7 +77,7 @@ export default function DocumentsTab({
     const res = await fetch("/api/sources/introspect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ db_url: dbUrl }),
+      body: JSON.stringify({ db_url: dbUrl, projectId }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -120,11 +120,32 @@ export default function DocumentsTab({
     return s > 0 && s < (schema[table]?.length || 0);
   }
 
+  // A "Publish to web" URL is /spreadsheets/d/e/2PACX-.../pubhtml — the old
+  // regex matched /d/e and captured the literal "e" as the sheet id, which
+  // then 404'd and created a permanently empty "connected" source. Published
+  // URLs aren't readable via the CSV endpoint at all, so reject them with a
+  // real explanation instead of silently accepting garbage.
+  function parseSheetId(input) {
+    const raw = input.trim();
+    if (/\/spreadsheets\/d\/e\//.test(raw)) return null;
+    const match = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]{20,})/);
+    if (match) return match[1];
+    // Allow pasting a bare id, but only if it actually looks like one.
+    return /^[a-zA-Z0-9-_]{20,}$/.test(raw) ? raw : null;
+  }
+
   // ── Submit handlers ──────────────────────────────────
   function handleAddGsheet() {
     if (!gsheetUrl.trim()) return;
-    const match = gsheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-    const sheetId = match ? match[1] : gsheetUrl.trim();
+    const sheetId = parseSheetId(gsheetUrl);
+    if (!sheetId) {
+      alert(
+        "That doesn't look like a Google Sheet link. Open your sheet and " +
+        "copy the URL from your browser's address bar (it looks like " +
+        "docs.google.com/spreadsheets/d/…)."
+      );
+      return;
+    }
     const range = readAll || !sheetRange.trim() ? "all" : sheetRange.trim();
     onAddSource({ type: "gsheets", label: sheetLabel || "Google Sheet", config: { sheet_id: sheetId, range } });
     setSheetLabel(""); setGsheetUrl(""); setSheetRange(""); setReadAll(false);

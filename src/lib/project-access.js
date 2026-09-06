@@ -8,7 +8,11 @@ const OWNER_ADMIN_ONLY = new Set(["team"]);
 
 export function hasProjectTabAccess(project, tabKey) {
   if (!project) return false;
-  const myRole = project.myRole || "owner";
+  // Was `project.myRole || "owner"`, which failed OPEN: any project object
+  // arriving without myRole (a shape change, a partially cached response)
+  // silently granted owner-level access to every tab.
+  const myRole = project.myRole;
+  if (!myRole) return false;
   const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
 
   if (ALWAYS_ALLOWED.has(tabKey)) return true;

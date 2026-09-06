@@ -11,12 +11,15 @@ const ALLOWED_TYPES = [
   "text/plain",
 ];
 
+const ALLOWED_EXTENSIONS = ["pdf", "docx", "ppt", "pptx", "xls", "xlsx", "txt"];
+
 // Documents is the one tab whose data layer used to live in the shared
 // ProjectClient shell instead of the tab itself — genuinely tab-specific,
 // so it moves here rather than into DashboardShell.
 export default function DocumentsPageClient({ projectId }) {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState(null);
@@ -67,8 +70,16 @@ export default function DocumentsPageClient({ projectId }) {
   // FILE SELECTION
   // --------------------------------------------------
   const handleSelectFiles = (selectedFiles) => {
+    const rejected = [];
     for (const file of selectedFiles) {
-      if (!ALLOWED_TYPES.includes(file.type)) continue;
+      // Browser-reported MIME is unreliable (a .docx often arrives as
+      // application/octet-stream), so fall back to the extension rather
+      // than silently dropping a file the server would have accepted.
+      const ext = file.name.toLowerCase().split(".").pop();
+      if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(ext)) {
+        rejected.push(file.name);
+        continue;
+      }
       const exists = files.find((f) => f.name === file.name && f.fromDb);
       if (exists) {
         setPendingFile(file);
@@ -77,6 +88,11 @@ export default function DocumentsPageClient({ projectId }) {
         addFile(file);
       }
     }
+    setUploadError(
+      rejected.length
+        ? `Skipped ${rejected.join(", ")} — only PDF, Word, PowerPoint, Excel and text files are supported.`
+        : null
+    );
   };
 
   const addFile = (file) => {
@@ -98,6 +114,7 @@ export default function DocumentsPageClient({ projectId }) {
   // --------------------------------------------------
   const handleUpload = async () => {
     setUploading(true);
+    setUploadError(null);
     for (const item of files) {
       if (item.status !== "pending") continue;
       try {
@@ -105,7 +122,17 @@ export default function DocumentsPageClient({ projectId }) {
         formData.append("file", item.file);
         formData.append("projectId", projectId);
         const res = await fetch("/api/files/upload", { method: "POST", body: formData });
-        if (!res.ok) throw new Error("Upload failed");
+        const data = await res.json().catch(() => ({}));
+        // The route used to answer {success:true} even when ingestion had
+        // failed, so every file showed as "Indexed" whether or not the bot
+        // could actually read it. Trust the reported status, not the upload.
+        if (!res.ok || data.success === false) {
+          setFiles((prev) =>
+            prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true } : f)
+          );
+          setUploadError(data.error || "Some files couldn't be processed.");
+          continue;
+        }
         setFiles((prev) =>
           prev.map((f) => f.name === item.name ? { ...f, status: "indexed", fromDb: true } : f)
         );
@@ -114,6 +141,7 @@ export default function DocumentsPageClient({ projectId }) {
         setFiles((prev) =>
           prev.map((f) => f.name === item.name ? { ...f, status: "error" } : f)
         );
+        setUploadError("Some files couldn't be uploaded.");
       }
     }
     setUploading(false);
@@ -129,8 +157,14 @@ export default function DocumentsPageClient({ projectId }) {
 
   const confirmDeleteFile = async () => {
     if (!fileToDelete) return;
-    await fetch(`/api/files/${fileToDelete.id}`, { method: "DELETE" });
-    setFiles((prev) => prev.filter((f) => f.id !== fileToDelete.id));
+    const res = await fetch(`/api/files/${fileToDelete.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setFiles((prev) => prev.filter((f) => f.id !== fileToDelete.id));
+    } else {
+      // Removing it from the list on failure hid the fact that the document
+      // was still indexed and still being cited by the bot.
+      setUploadError("Couldn't delete that document. Please try again.");
+    }
     setFileToDelete(null);
     setDeleteDialogOpen(false);
   };
@@ -213,12 +247,19 @@ export default function DocumentsPageClient({ projectId }) {
   };
 
   const handleDeleteSource = async (id) => {
-    await fetch(`/api/sources/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/sources/${id}`, { method: "DELETE" });
+    if (!res.ok) alert("Couldn't disconnect that source. Please try again.");
     await fetchSources();
   };
 
   return (
     <>
+      {uploadError && (
+        <div className="mx-6 mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          {uploadError}
+        </div>
+      )}
+
       <DocumentsTab
         projectId={projectId}
         files={files}

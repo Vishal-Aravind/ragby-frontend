@@ -1,7 +1,7 @@
 //app/api/files/route.js
 
 import { NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase-api";
+import { getSupabase, getProjectRole } from "@/lib/supabase-api";
 
 export async function GET(req) {
   const { supabase } = getSupabase(req);
@@ -20,15 +20,21 @@ export async function GET(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Documents belong to the PROJECT, not to whoever happened to upload
+  // them. Filtering by user_id meant an owner couldn't see (or clean up)
+  // a teammate's uploads that their own bot was answering from.
+  const role = await getProjectRole(user.id, projectId);
+  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   const { data, error } = await supabase
     .from("files")
     .select("id, filename, status, updated_at")
     .eq("project_id", projectId)
-    .eq("user_id", user.id)
     .order("updated_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("files list error:", error);
+    return NextResponse.json({ error: "Could not load documents." }, { status: 500 });
   }
 
   return NextResponse.json(data || []);
