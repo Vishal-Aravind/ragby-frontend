@@ -431,17 +431,26 @@ return (
           <div ref={scrollRef} />
         </div>
 
-        <div className="p-4 border-t flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder="Type your message..."
-            disabled={loading}
-          />
-          <Button onClick={sendMessage} disabled={loading}>
-            Send
-          </Button>
+        <div className="p-4 border-t space-y-2">
+          <div className="flex gap-2">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              placeholder="Type your message..."
+              disabled={loading}
+            />
+            <Button onClick={sendMessage} disabled={loading}>
+              Send
+            </Button>
+          </div>
+          {/* Test messages run the same paid pipeline as real customer
+              chats and count against the monthly allowance. Say so, rather
+              than letting a merchant discover it when their live widget
+              starts refusing customers. */}
+          <p className="text-xs text-muted-foreground">
+            Test messages count towards your monthly conversation limit.
+          </p>
         </div>
       </div>
     </div>
