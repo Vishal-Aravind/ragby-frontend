@@ -186,7 +186,9 @@ function WhatsAppItem({ projectId }) {
   // to detect CANCEL / ERROR and to stop the loading spinner.
   useEffect(() => {
     const handler = async (event) => {
-      if (!event.origin.endsWith("facebook.com")) return;
+      // endsWith matched https://evilfacebook.com too, and this handler
+      // sets wabaIdHint/isCoexistence which are sent straight to onboard.
+      if (!["https://www.facebook.com", "https://web.facebook.com", "https://business.facebook.com"].includes(event.origin)) return;
       let data;
       try { data = typeof event.data === "string" ? JSON.parse(event.data) : event.data; }
       catch { return; }
@@ -657,7 +659,14 @@ function TelegramItem({ projectId }) {
   async function handleDisconnect() {
     setLoading(true);
     try {
-      await fetch(`/api/telegram/disconnect/${projectId}`, { method: "DELETE" });
+      // The response used to be discarded, so a 403 (non-admin) or a 500
+      // still flipped the UI to disconnected and toasted success - the
+      // merchant believed the integration was gone while it stayed live.
+      const res = await fetch(`/api/telegram/disconnect/${projectId}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Couldn't disconnect Telegram. Please try again.");
+        return;
+      }
       setConnected(false);
       setBotUsername("");
       toast.success("Telegram bot disconnected.");
@@ -778,7 +787,14 @@ function SlackItem({ projectId }) {
   async function handleDisconnect() {
     setLoading(true);
     try {
-      await fetch(`/api/slack/disconnect/${projectId}`, { method: "DELETE" });
+      // The response used to be discarded, so a 403 (non-admin) or a 500
+      // still flipped the UI to disconnected and toasted success - the
+      // merchant believed the integration was gone while it stayed live.
+      const res = await fetch(`/api/slack/disconnect/${projectId}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Couldn't disconnect Slack. Please try again.");
+        return;
+      }
       setConnected(false);
       setTeamName("");
       toast.success("Slack disconnected.");
@@ -911,7 +927,14 @@ function ShopifyItem({ projectId }) {
   async function handleDisconnect() {
     setLoading(true);
     try {
-      await fetch(`/api/shopify/disconnect/${projectId}`, { method: "DELETE" });
+      // The response used to be discarded, so a 403 (non-admin) or a 500
+      // still flipped the UI to disconnected and toasted success - the
+      // merchant believed the integration was gone while it stayed live.
+      const res = await fetch(`/api/shopify/disconnect/${projectId}`, { method: "DELETE" });
+      if (!res.ok) {
+        toast.error("Couldn't disconnect Shopify. Please try again.");
+        return;
+      }
       setConnected(false);
       setShopDomain("");
       setSourceId(null);
