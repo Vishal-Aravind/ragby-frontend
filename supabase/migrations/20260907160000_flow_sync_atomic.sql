@@ -169,15 +169,17 @@ grant execute on function sync_flow_graph(uuid, jsonb, jsonb, bigint) to authent
 -- ------------------------------------------------------------
 -- 4. whatsapp_sessions uniqueness
 -- ------------------------------------------------------------
--- Ordered by ctid desc: this table's shape isn't defined in any migration
--- and may have no timestamp column to sort on. For transient conversation
--- state the newest physical row version is the right one to keep, and a
--- wrong guess here costs a customer one restarted conversation, not data.
+-- Keep the NEWEST row per (project_id, phone_number). Without the
+-- constraint below, upsert_session has been appending rather than
+-- updating, so the most recently created row holds the customer's actual
+-- current position in the flow. ctid breaks ties for rows sharing a
+-- timestamp. Worst case a wrong pick costs one restarted conversation,
+-- not data.
 delete from whatsapp_sessions s
 using (
   select ctid, row_number() over (
     partition by project_id, phone_number
-    order by ctid desc
+    order by created_at desc nulls last, ctid desc
   ) as rn
   from whatsapp_sessions
 ) d
