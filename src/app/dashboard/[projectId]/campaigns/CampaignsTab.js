@@ -113,10 +113,15 @@ export default function CampaignsTab({ project }) {
   // from real values instead of asking the user to type one blind.
   useEffect(() => {
     if (!projectId) return
-    fetch(`/api/leads?projectId=${projectId}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(leads => {
-        const tags = Array.from(new Set((Array.isArray(leads) ? leads : []).flatMap(l => l.tags || []))).sort()
+    // /api/leads is paged now and returns { leads, total } rather than a bare
+    // array. Only the first page's tags are offered here, which is why the
+    // "By tag" field stays free text — a tag that exists further down the
+    // list still works, it just isn't suggested.
+    fetch(`/api/leads?projectId=${projectId}&limit=500`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const leads = Array.isArray(data) ? data : (data?.leads || [])
+        const tags = Array.from(new Set(leads.flatMap(l => l.tags || []))).sort()
         setAvailableTags(tags)
       })
       .catch(() => {})

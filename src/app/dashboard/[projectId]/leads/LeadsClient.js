@@ -2,10 +2,14 @@
 import { useState } from 'react'
 import { MessageSquare, Globe, Search, Download, RefreshCw, Tag, Loader2, X } from 'lucide-react'
 
-export default function LeadsClient({ projectId, initialLeads }) {
+const PAGE_SIZE = 200
+
+export default function LeadsClient({ projectId, initialLeads, initialTotal, initialError }) {
   const [leads, setLeads]       = useState(initialLeads || [])
+  const [total, setTotal]       = useState(initialTotal || 0)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState(null)
+  const [error, setError]       = useState(initialError || null)
   const [search, setSearch]     = useState('')
   const [filter, setFilter]     = useState('all') // all | whatsapp | web
   const [tagFilter, setTagFilter] = useState('') // '' = no tag filter
@@ -18,13 +22,49 @@ export default function LeadsClient({ projectId, initialLeads }) {
   const [bulkTagText, setBulkTagText] = useState('')
   const [bulkApplying, setBulkApplying] = useState(false)
 
-  const fetchLeads = () => {
+  // Was `r.ok ? r.json() : []`, which turned a 403 into an empty list — so a
+  // permission failure rendered as "No leads yet" and the error state below
+  // was unreachable.
+  const loadPage = async (offset) => {
+    const res = await fetch(`/api/leads?projectId=${projectId}&offset=${offset}&limit=${PAGE_SIZE}`)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || 'Could not load leads.')
+    }
+    return res.json()
+  }
+
+  const fetchLeads = async () => {
     if (!projectId) return
     setLoading(true)
-    fetch(`/api/leads?projectId=${projectId}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => { setLeads(Array.isArray(data) ? data : []); setLoading(false); })
-      .catch(() => { setError('Failed to load.'); setLoading(false); })
+    setError(null)
+    try {
+      const data = await loadPage(0)
+      setLeads(data.leads || [])
+      setTotal(data.total || 0)
+    } catch (e) {
+      setError(e.message || 'Could not load leads.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadMore = async () => {
+    setLoadingMore(true)
+    try {
+      const data = await loadPage(leads.length)
+      // Guard against a lead arriving on page 1 while page 2 is in flight,
+      // which shifts the offset window and would otherwise duplicate a row.
+      setLeads(prev => {
+        const seen = new Set(prev.map(l => l.id))
+        return [...prev, ...(data.leads || []).filter(l => !seen.has(l.id))]
+      })
+      setTotal(data.total || 0)
+    } catch (e) {
+      setError(e.message || 'Could not load more leads.')
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   const updateLeadTags = async (lead, tags) => {
@@ -113,14 +153,44 @@ export default function LeadsClient({ projectId, initialLeads }) {
   const whatsappCount = leads.filter(l => l.channel === 'whatsapp' || l.source === 'whatsapp').length
   const webCount = leads.filter(l => l.channel === 'web' || l.source === 'widget').length
 
+  // Lead names, emails and phones can be written by anyone who can reach the
+  // public widget, so this export is attacker-influenced input landing in a
+  // spreadsheet. Two separate problems were live here:
+  //   1. Fields were wrapped in quotes but never had their own quotes
+  //      doubled, so a name containing " broke the row structure and shifted
+  //      every column after it.
+  //   2. A value starting = + - @ (or a leading tab/CR, which Excel strips
+  //      before parsing) is read as a FORMULA, not text — the classic CSV
+  //      injection path from "someone filled in your web form" to "code ran
+  //      on your machine when you opened the file".
+  const csvCell = (value) => {
+    let s = value == null ? '' : String(value)
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
+    return `"${s.replace(/"/g, '""')}"`
+  }
+
   const exportCSV = () => {
-    const header = 'Name,Email,Phone,Source,Tags,Date\n'
-    const rows = filtered.map(l =>
-      `"${l.name || ''}","${l.email || ''}","${l.phone || ''}","${l.channel || l.source || ''}","${(l.tags || []).join('; ')}","${new Date(l.created_at).toLocaleDateString()}"`
-    ).join('\n')
-    const blob = new Blob([header + rows], { type: 'text/csv' })
+    const rows = [
+      ['Name', 'Email', 'Phone', 'Source', 'Tags', 'Date'],
+      ...filtered.map(l => [
+        l.name || '',
+        l.email || '',
+        l.phone || '',
+        l.channel || l.source || '',
+        (l.tags || []).join('; '),
+        l.created_at ? new Date(l.created_at).toLocaleDateString() : '',
+      ]),
+    ]
+    // CRLF and a UTF-8 BOM so Excel parses the rows and renders non-ASCII
+    // names correctly instead of mojibake.
+    const csv = '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = url; a.download = 'leads.csv'; a.click()
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'leads.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading leads...</div>
@@ -132,7 +202,10 @@ export default function LeadsClient({ projectId, initialLeads }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold">Leads & Contacts</h2>
-          <p className="text-sm text-muted-foreground">{leads.length} total</p>
+          <p className="text-sm text-muted-foreground">
+            {total} total
+            {leads.length < total && ` · ${leads.length} loaded`}
+          </p>
         </div>
         <div className="flex gap-2">
           <button onClick={fetchLeads} className="text-sm border rounded px-3 py-1.5 hover:bg-muted flex items-center gap-1">
@@ -149,7 +222,7 @@ export default function LeadsClient({ projectId, initialLeads }) {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="border rounded-lg p-3 text-center">
-          <p className="text-2xl font-bold">{leads.length}</p>
+          <p className="text-2xl font-bold">{total}</p>
           <p className="text-xs text-muted-foreground">Total</p>
         </div>
         <div className="border rounded-lg p-3 text-center bg-green-50">
@@ -356,6 +429,27 @@ export default function LeadsClient({ projectId, initialLeads }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Leads are paged now — the endpoint used to return every row of every
+          column in one unbounded response, rendered as one <tr> each. Search
+          and the filters above only apply to what's loaded, so say so rather
+          than letting an empty result look conclusive. */}
+      {leads.length < total && (
+        <div className="text-center space-y-2 pt-1">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="text-sm border rounded px-4 py-1.5 hover:bg-muted disabled:opacity-50 inline-flex items-center gap-1.5"
+          >
+            {loadingMore && <Loader2 size={13} className="animate-spin" />}
+            Load {Math.min(PAGE_SIZE, total - leads.length)} more
+          </button>
+          <p className="text-xs text-muted-foreground">
+            Showing {leads.length} of {total}. Search, filters and CSV export
+            cover the loaded rows only.
+          </p>
         </div>
       )}
     </div>

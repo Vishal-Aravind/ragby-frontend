@@ -23,10 +23,25 @@ export async function PUT(req) {
       body: JSON.stringify(body)
     })
 
-    const data = await res.json()
-    return NextResponse.json(data)
+    // The backend status was discarded here, so a 403 from the permission
+    // check came back to the browser as 200 and the UI cheerfully reported
+    // "Lead capture settings saved" on a rejected save.
+    if (!res.ok) {
+      const text = await res.text()
+      console.error('Lead config save rejected:', res.status, text)
+      const error =
+        res.status === 403
+          ? "You don't have permission to change these settings."
+          : 'Could not save lead capture settings.'
+      return NextResponse.json({ error }, { status: res.status })
+    }
+
+    return NextResponse.json(await res.json())
   } catch (err) {
     console.error('Lead config save error:', err)
-    return NextResponse.json({ error: 'Failed' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Could not reach the server. Please try again.' },
+      { status: 502 }
+    )
   }
 }

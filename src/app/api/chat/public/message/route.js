@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
  
 export async function POST(req) {
-  const { projectId, message, sessionId, accessToken } = await req.json();
+  const { projectId, message, sessionId, accessToken, visitorId } = await req.json();
 
   // Note: forwarding X-Forwarded-For here does nothing useful. Render
   // APPENDS to that header and the backend deliberately trusts only the
@@ -16,7 +16,7 @@ export async function POST(req) {
   const res = await fetch(`${process.env.BACKEND_BASE_URL}/public/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectId, message, sessionId, accessToken }),
+    body: JSON.stringify({ projectId, message, sessionId, accessToken, visitorId }),
   });
 
   if (!res.ok) {

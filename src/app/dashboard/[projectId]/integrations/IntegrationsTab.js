@@ -485,7 +485,10 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   const saveLeadConfig = async () => {
     setLeadSaving(true);
     try {
-      await fetch("/api/lead-config", {
+      // The response was never inspected, so a rejected save still showed
+      // "Lead capture settings saved" and the operator walked away believing
+      // the change had taken effect.
+      const res = await fetch("/api/lead-config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -496,6 +499,11 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
           formSubtitle: leadConfig.formSubtitle,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Couldn't save lead capture settings.");
+        return;
+      }
       setLeadSaved(true);
       toast.success("Lead capture settings saved");
       setTimeout(() => setLeadSaved(false), 2000);
@@ -603,11 +611,13 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
             </div>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Form title</label>
-              <Input value={leadConfig.formTitle} onChange={e => setLeadConfig(p => ({ ...p, formTitle: e.target.value }))} className="bg-white text-sm" />
+              {/* Matches the server-side cap, so an over-long title is
+                  stopped here rather than coming back as a 422. */}
+              <Input maxLength={120} value={leadConfig.formTitle} onChange={e => setLeadConfig(p => ({ ...p, formTitle: e.target.value }))} className="bg-white text-sm" />
             </div>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Form subtitle</label>
-              <Input value={leadConfig.formSubtitle} onChange={e => setLeadConfig(p => ({ ...p, formSubtitle: e.target.value }))} className="bg-white text-sm" />
+              <Input maxLength={240} value={leadConfig.formSubtitle} onChange={e => setLeadConfig(p => ({ ...p, formSubtitle: e.target.value }))} className="bg-white text-sm" />
             </div>
           </div>
         )}
