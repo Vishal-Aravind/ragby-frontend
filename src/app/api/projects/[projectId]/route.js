@@ -48,7 +48,7 @@ export async function GET(req, { params }) {
 
   const { data, error } = await supabaseAdmin
     .from("projects")
-    .select("id, name, domain, user_id, logo_url, brand_color, chat_enabled, chat_password")
+    .select("id, name, domain, user_id, logo_url, brand_color, chat_enabled, chat_password, allowed_domains")
     .eq("id", projectId)
     .single();
 
@@ -56,7 +56,14 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ ...data, myRole, myPermissions });
+  // The settings UI prefills the password field from this, but only
+  // owner/admin can open those settings or PATCH them — an agent had no
+  // reason to receive the plaintext chat password and now doesn't.
+  const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
+  const payload = { ...data };
+  if (!isOwnerOrAdmin) delete payload.chat_password;
+
+  return NextResponse.json({ ...payload, myRole, myPermissions });
 }
 
 // ---------------- PATCH ----------------
@@ -81,9 +88,42 @@ export async function PATCH(req, { params }) {
 
   const body = await req.json();
 
+  // Was `.update(body)` — every column on `projects` was writable by any
+  // owner/admin. That included `suspended`, the abuse kill switch enforced
+  // in run_chat, so a merchant shut off for abuse could simply PATCH it
+  // back to false; and `user_id`, i.e. reassigning the project. Only the
+  // fields this settings screen actually edits are accepted.
+  const EDITABLE_FIELDS = [
+    "name",
+    "domain",
+    "chat_enabled",
+    "chat_password",
+    "brand_color",
+    "logo_url",
+    "allowed_domains",
+  ];
+
+  const update = {};
+  for (const key of EDITABLE_FIELDS) {
+    if (key in body) update[key] = body[key];
+  }
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  // Normalise the allowlist: bare hostnames, lowercased, no scheme or path.
+  if ("allowed_domains" in update) {
+    const raw = Array.isArray(update.allowed_domains) ? update.allowed_domains : [];
+    update.allowed_domains = raw
+      .map((d) => String(d).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""))
+      .filter(Boolean)
+      .slice(0, 50);
+  }
+
   const { error } = await supabaseAdmin
     .from("projects")
-    .update(body)
+    .update(update)
     .eq("id", projectId);
 
   if (error) {

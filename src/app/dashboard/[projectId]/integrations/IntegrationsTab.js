@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Copy, Check, Link, Lock, Eye, EyeOff, Loader2, ChevronDown, RefreshCw } from "lucide-react";
+import { Copy, Check, Link, Lock, Eye, EyeOff, Loader2, ChevronDown, RefreshCw, X } from "lucide-react";
 import RazorpayConnectCard from "@/components/RazorpayConnectCard";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -416,6 +416,56 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   const [leadSaving, setLeadSaving] = useState(false);
   const [leadSaved, setLeadSaved] = useState(false);
 
+  // Domain allowlist. The projectId in the embed snippet is visible in the
+  // page source of every site the widget runs on, so without this anyone
+  // could copy it and run the bot from their own site on this project's
+  // quota. Empty list = allowed anywhere, so nothing changes until opted in.
+  const [domains, setDomains] = useState([]);
+  const [domainInput, setDomainInput] = useState("");
+  const [domainsSaving, setDomainsSaving] = useState(false);
+  const [domainsSaved, setDomainsSaved] = useState(false);
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (data?.allowed_domains) setDomains(data.allowed_domains); })
+      .catch(() => {});
+  }, [projectId]);
+
+  const normalizeDomain = (value) =>
+    value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+
+  const saveDomains = async (next) => {
+    setDomainsSaving(true);
+    setDomainsSaved(false);
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowed_domains: next }),
+      });
+      if (!res.ok) {
+        toast.error("Couldn't save the domain list. Please try again.");
+        return;
+      }
+      setDomains(next);
+      setDomainsSaved(true);
+      setTimeout(() => setDomainsSaved(false), 2000);
+    } catch {
+      toast.error("Couldn't save the domain list. Please try again.");
+    } finally {
+      setDomainsSaving(false);
+    }
+  };
+
+  const addDomain = () => {
+    const d = normalizeDomain(domainInput);
+    if (!d) return;
+    if (domains.includes(d)) { setDomainInput(""); return; }
+    saveDomains([...domains, d]);
+    setDomainInput("");
+  };
+
   useEffect(() => {
     fetch(`${BACKEND}/public/lead-config/${projectId}`)
       .then(r => r.json())
@@ -470,6 +520,56 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
             {copied ? <><Check size={12} className="mr-1 text-green-500" />Copied</> : <><Copy size={12} className="mr-1" />Copy</>}
           </Button>
         </div>
+      </div>
+
+      <div className="border-t" />
+
+      <div className="space-y-3">
+        <div>
+          <p className="text-sm font-medium">Allowed websites</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Restrict where this widget can run. Leave empty to allow any site.
+            Subdomains of a listed domain are included.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={domainInput}
+            onChange={e => setDomainInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDomain(); } }}
+            placeholder="yourstore.com"
+            className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          <Button size="sm" variant="outline" onClick={addDomain} disabled={domainsSaving || !domainInput.trim()}>
+            Add
+          </Button>
+        </div>
+
+        {domains.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {domains.map(d => (
+              <span key={d} className="inline-flex items-center gap-1.5 text-xs bg-gray-50 border rounded-full pl-3 pr-1.5 py-1">
+                {d}
+                <button
+                  onClick={() => saveDomains(domains.filter(x => x !== d))}
+                  disabled={domainsSaving}
+                  className="rounded-full p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                  aria-label={`Remove ${d}`}
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            Anyone who copies your embed code can currently run this bot on their
+            own site, using your message allowance. Add your domain to prevent that.
+          </p>
+        )}
+
+        {domainsSaved && <p className="text-xs text-green-600">Saved.</p>}
       </div>
 
       <div className="border-t" />
