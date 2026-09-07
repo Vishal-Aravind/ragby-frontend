@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
+
 const ALLOWED_BUCKETS = ["flow-media"];
 
 const IMAGE_TYPES = {
@@ -53,6 +55,29 @@ export async function POST(req) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Being logged in was the ONLY check here, and documents are allowed up
+  // to 100MB — so any account could upload without limit and bill us for
+  // the storage. The counter lives in the backend because a Next.js route
+  // is serverless and an in-memory counter here wouldn't survive between
+  // requests (same reason /auth/rate-limit-check exists for login).
+  try {
+    const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rateCheck = await fetch(`${BACKEND}/auth/rate-limit-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+      body: JSON.stringify({ action: "storage_upload" }),
+    });
+    if (!rateCheck.ok) {
+      return NextResponse.json(
+        { error: "Too many uploads — please wait a little and try again." },
+        { status: 429 }
+      );
+    }
+  } catch {
+    // The limiter being unreachable must not take uploads down with it.
+    console.error("upload rate-limit check unreachable; allowing upload");
+  }
 
   const formData = await req.formData();
   const file     = formData.get("file");

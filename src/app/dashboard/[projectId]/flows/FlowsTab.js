@@ -579,6 +579,7 @@ export default function FlowsTab({ projectId }) {
   const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
 
   const [saveStatus, setSaveStatus] = useState("saved");
+  const [errorMsg, setErrorMsg]     = useState("");
   const autoSaveTimer    = useRef(null);
   const isLoadingFlow    = useRef(false);
   const reactFlowWrapper = useRef(null);
@@ -588,16 +589,46 @@ export default function FlowsTab({ projectId }) {
   const rfEdgesRef      = useRef([]);
   const selectedFlowRef = useRef(null);
   const catalogsRef     = useRef([]);
+  // The flow's revision as of the last successful load or save. Sent back on
+  // every save so the server can reject a write built on a stale copy —
+  // two tabs open on the same flow used to silently overwrite each other.
+  const revisionRef     = useRef(null);
+  // Set when a load fails. Autosave is blocked while this is true: a failed
+  // load leaves an EMPTY canvas, and the 30-second timer would then happily
+  // write that emptiness over the real flow.
+  const loadFailedRef   = useRef(false);
 
   useEffect(() => { rfNodesRef.current = rfNodes; }, [rfNodes]);
   useEffect(() => { rfEdgesRef.current = rfEdges; }, [rfEdges]);
   useEffect(() => { selectedFlowRef.current = selectedFlow; }, [selectedFlow]);
   useEffect(() => { catalogsRef.current = catalogs; }, [catalogs]);
 
+  // Every one of these calls used to ignore its response. A 403 rendered as
+  // "No flows yet", and a rejected save still showed as success.
+  const readError = async (res, fallback) => {
+    try {
+      const body = await res.json();
+      return body?.error || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
   const fetchFlows = async () => {
     setLoading(true);
-    const res = await fetch(`/api/flows?project_id=${projectId}`);
-    if (res.ok) setFlows((await res.json()) || []);
+    try {
+      const res = await fetch(`/api/flows?project_id=${projectId}`);
+      if (!res.ok) {
+        setErrorMsg(await readError(res, "Could not load your flows."));
+        setFlows([]);
+      } else {
+        setErrorMsg("");
+        setFlows((await res.json()) || []);
+      }
+    } catch {
+      setErrorMsg("Could not reach the server. Check your connection.");
+      setFlows([]);
+    }
     setLoading(false);
   };
 
@@ -612,6 +643,8 @@ export default function FlowsTab({ projectId }) {
 
   const markDirty = useCallback(() => {
     if (isLoadingFlow.current) return;
+    // Never schedule an autosave on top of a failed load — see loadFailedRef.
+    if (loadFailedRef.current) return;
     setSaveStatus("unsaved");
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(() => { doSave(); }, 30000);
@@ -654,32 +687,71 @@ export default function FlowsTab({ projectId }) {
       })),
     };
 
-    const res = await fetch(`/api/flows/${flow.id}/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (res.ok) {
-      const result = await res.json();
-      if (result.idMap) {
-        setRfNodes(nds => nds.map(n => ({ ...n, id: result.idMap[n.id] || n.id })));
-        setRfEdges(eds => eds.map(e => ({ ...e, source: result.idMap[e.source] || e.source, target: result.idMap[e.target] || e.target })));
-      }
-      setSaveStatus("saved");
-      setTimeout(() => setSaveStatus("saved"), 2000);
-    } else {
+    let res;
+    try {
+      res = await fetch(`/api/flows/${flow.id}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, revision: revisionRef.current }),
+      });
+    } catch {
       setSaveStatus("unsaved");
+      setErrorMsg("Could not reach the server. Your changes are still here — try Save again.");
+      return;
     }
+
+    if (!res.ok) {
+      setSaveStatus("unsaved");
+      if (res.status === 409) {
+        // Someone else (or another tab) saved this flow since we loaded it.
+        // Refusing is the point: the alternative is silently discarding
+        // their work.
+        setErrorMsg("This flow was changed somewhere else. Reload the page before saving, or your changes will overwrite theirs.");
+      } else {
+        setErrorMsg(await readError(res, "Could not save the flow."));
+      }
+      return;
+    }
+
+    const result = await res.json();
+    setErrorMsg("");
+    if (result.revision != null) revisionRef.current = result.revision;
+    if (result.idMap) {
+      setRfNodes(nds => nds.map(n => ({ ...n, id: result.idMap[n.id] || n.id })));
+      setRfEdges(eds => eds.map(e => ({ ...e, source: result.idMap[e.source] || e.source, target: result.idMap[e.target] || e.target })));
+    }
+    setSaveStatus("saved");
   }, []);
 
   const loadFlow = async (flow) => {
     if (isLoadingFlow.current) return;
     isLoadingFlow.current = true;
     setSaveStatus("saved");
-    const res = await fetch(`/api/flows/${flow.id}/nodes`);
-    if (!res.ok) { isLoadingFlow.current = false; return; }
+
+    let res;
+    try {
+      res = await fetch(`/api/flows/${flow.id}/nodes`);
+    } catch {
+      loadFailedRef.current = true;
+      isLoadingFlow.current = false;
+      setErrorMsg("Could not reach the server. This flow hasn't loaded — don't edit it yet.");
+      return;
+    }
+
+    if (!res.ok) {
+      // Leave the canvas as-is and mark the load failed. Previously this
+      // returned silently, leaving an empty canvas that the next autosave
+      // wrote over the real flow.
+      loadFailedRef.current = true;
+      isLoadingFlow.current = false;
+      setErrorMsg(await readError(res, "Could not load this flow. Reload before editing."));
+      return;
+    }
+
     const data = await res.json();
+    loadFailedRef.current = false;
+    revisionRef.current = data.revision ?? null;
+    setErrorMsg("");
     buildGraph(data.nodes || [], data.edges || []);
     setSaveStatus("saved");
     setTimeout(() => { isLoadingFlow.current = false; }, 500);
@@ -751,9 +823,12 @@ export default function FlowsTab({ projectId }) {
   });
 
   const selectFlow = async (flow) => {
-    if (selectedFlowRef.current && saveStatus === "unsaved" && !isLoadingFlow.current) {
+    if (selectedFlowRef.current && saveStatus === "unsaved"
+        && !isLoadingFlow.current && !loadFailedRef.current) {
       await doSave();
     }
+    loadFailedRef.current = false;
+    revisionRef.current = null;
     setRfNodes([]); setRfEdges([]);
     setSelectedFlow(flow);
     selectedFlowRef.current = flow;
@@ -766,17 +841,24 @@ export default function FlowsTab({ projectId }) {
   const handleCreateFlow = async () => {
     if (!newFlowName.trim()) return;
     setCreatingFlow(true);
-    const res = await fetch("/api/flows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project_id: projectId, name: newFlowName.trim() }),
-    });
-    if (res.ok) {
-      const flow = await res.json();
-      setNewFlowName("");
-      setShowCreateModal(false);
-      await fetchFlows();
-      await selectFlow(flow);
+    try {
+      const res = await fetch("/api/flows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId, name: newFlowName.trim() }),
+      });
+      if (!res.ok) {
+        setErrorMsg(await readError(res, "Could not create the flow."));
+      } else {
+        const flow = await res.json();
+        setErrorMsg("");
+        setNewFlowName("");
+        setShowCreateModal(false);
+        await fetchFlows();
+        await selectFlow(flow);
+      }
+    } catch {
+      setErrorMsg("Could not reach the server. Try again.");
     }
     setCreatingFlow(false);
   };
@@ -785,27 +867,52 @@ export default function FlowsTab({ projectId }) {
     if (!selectedFlow) return;
     setSavingSettings(true);
     const keywords = editKeywords.split(",").map(k => k.trim()).filter(Boolean);
-    await fetch(`/api/flows/${selectedFlow.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ trigger_keywords: keywords, free_questions: editFreeQ }),
-    });
-    setSelectedFlow(f => ({ ...f, trigger_keywords: keywords, free_questions: editFreeQ }));
-    await fetchFlows();
+    try {
+      const res = await fetch(`/api/flows/${selectedFlow.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger_keywords: keywords, free_questions: editFreeQ }),
+      });
+      if (!res.ok) {
+        // Was applied to local state unconditionally, so a rejected save
+        // still looked like it had worked until the next reload.
+        setErrorMsg(await readError(res, "Could not save these settings."));
+      } else {
+        const saved = await res.json();
+        setErrorMsg("");
+        setSelectedFlow(f => ({
+          ...f,
+          trigger_keywords: saved?.trigger_keywords ?? keywords,
+          free_questions: saved?.free_questions ?? editFreeQ,
+        }));
+        await fetchFlows();
+        setSettingsOpen(false);
+      }
+    } catch {
+      setErrorMsg("Could not reach the server. Try again.");
+    }
     setSavingSettings(false);
-    setSettingsOpen(false);
   };
 
   const toggleActive = async (flow, e) => {
     e?.stopPropagation();
-    await fetch(`/api/flows/${flow.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_active: !flow.is_active }),
-    });
-    await fetchFlows();
-    if (selectedFlow?.id === flow.id)
-      setSelectedFlow(f => ({ ...f, is_active: !f.is_active }));
+    try {
+      const res = await fetch(`/api/flows/${flow.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !flow.is_active }),
+      });
+      if (!res.ok) {
+        setErrorMsg(await readError(res, "Could not change the flow's status."));
+        return;
+      }
+      setErrorMsg("");
+      await fetchFlows();
+      if (selectedFlow?.id === flow.id)
+        setSelectedFlow(f => ({ ...f, is_active: !f.is_active }));
+    } catch {
+      setErrorMsg("Could not reach the server. Try again.");
+    }
   };
 
   const handleAddNode = (type = "message", position = null) => {
@@ -849,16 +956,29 @@ export default function FlowsTab({ projectId }) {
   };
 
   const confirmDeleteFlow = async () => {
-    await fetch(`/api/flows/${flowToDelete.id}`, { method: "DELETE" });
-    if (selectedFlow?.id === flowToDelete.id) {
-      setSelectedFlow(null); setRfNodes([]); setRfEdges([]); setShowFlowList(true);
+    try {
+      const res = await fetch(`/api/flows/${flowToDelete.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        // The route deliberately returns 403 when the delete matched no
+        // rows; reporting success regardless is how a flow could appear to
+        // be gone and then come back on the next reload.
+        setErrorMsg(await readError(res, "Could not delete the flow."));
+        setFlowToDelete(null); setDeleteFlowOpen(false);
+        return;
+      }
+      setErrorMsg("");
+      if (selectedFlow?.id === flowToDelete.id) {
+        setSelectedFlow(null); setRfNodes([]); setRfEdges([]); setShowFlowList(true);
+      }
+    } catch {
+      setErrorMsg("Could not reach the server. Try again.");
     }
     setFlowToDelete(null); setDeleteFlowOpen(false);
     await fetchFlows();
   };
 
   const handleGoBack = async () => {
-    if (saveStatus === "unsaved") await doSave();
+    if (saveStatus === "unsaved" && !loadFailedRef.current) await doSave();
     setShowFlowList(true);
   };
 
@@ -882,6 +1002,15 @@ export default function FlowsTab({ projectId }) {
 
   return (
     <div className="space-y-4">
+      {errorMsg && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <AlertCircle size={15} className="mt-0.5 shrink-0" />
+          <span className="flex-1">{errorMsg}</span>
+          <button onClick={() => setErrorMsg("")} className="text-red-400 hover:text-red-600">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {showFlowList ? (
         <Card>
           <CardContent className="p-6 space-y-4">
@@ -892,7 +1021,11 @@ export default function FlowsTab({ projectId }) {
               </Button>
             </div>
             {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
-            {!loading && flows.length === 0 && <p className="text-sm text-muted-foreground">No flows yet.</p>}
+            {/* Only claim there are no flows when we actually know that —
+                an error above means we couldn't tell. */}
+            {!loading && !errorMsg && flows.length === 0 && (
+              <p className="text-sm text-muted-foreground">No flows yet.</p>
+            )}
             <div className="space-y-2">
               {flows.map(flow => (
                 <div key={flow.id}

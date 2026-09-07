@@ -1,25 +1,13 @@
 // src/app/api/flows/route.js
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { getProjectRole } from "@/lib/supabase-api";
+import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
+import {
+  MAX_FLOWS_PER_PROJECT,
+  normalizeTriggerKeywords,
+  validateFlowName,
+} from "@/lib/flow-validation";
 
-function getSupabase(req) {
-  const response = NextResponse.next();
-  return {
-    supabase: createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          get: (name) => req.cookies.get(name)?.value,
-          set: (name, value, options) => response.cookies.set({ name, value, ...options }),
-          remove: (name, options) => response.cookies.set({ name, value: "", ...options }),
-        },
-      }
-    ),
-    response,
-  };
-}
+const DEFAULT_KEYWORDS = ["hi", "hello", "hey", "start", "menu"];
 
 export async function GET(req) {
   const { supabase } = getSupabase(req);
@@ -28,18 +16,22 @@ export async function GET(req) {
 
   const { searchParams } = new URL(req.url);
   const project_id = searchParams.get("project_id");
-  if (!project_id) return NextResponse.json({ error: "project_id required" }, { status: 400 });
 
-  const role = await getProjectRole(user.id, project_id);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Was getProjectRole, which passes for ANY role — an agent with no flows
+  // permission could read, and below write, the project's bot script.
+  const gate = await requireProjectTab(user.id, project_id, { tab: "flows" });
+  if (!gate.ok) return gate.response;
 
   const { data, error } = await supabase
     .from("flows")
-    .select("id, name, is_active, trigger_keywords, free_questions, created_at")
+    .select("id, name, is_active, trigger_keywords, free_questions, revision, created_at")
     .eq("project_id", project_id)
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("flows list failed:", error);
+    return NextResponse.json({ error: "Could not load flows." }, { status: 500 });
+  }
   return NextResponse.json(data || []);
 }
 
@@ -48,22 +40,56 @@ export async function POST(req) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const role = await getProjectRole(user.id, body.project_id);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  const gate = await requireProjectTab(user.id, body?.project_id, { tab: "flows" });
+  if (!gate.ok) return gate.response;
+
+  const nameError = validateFlowName(body.name);
+  if (nameError) return NextResponse.json({ error: nameError }, { status: 400 });
+
+  const keywords = normalizeTriggerKeywords(
+    body.trigger_keywords ?? DEFAULT_KEYWORDS
+  );
+  if (keywords.error) {
+    return NextResponse.json({ error: keywords.error }, { status: 400 });
+  }
+
+  // Nothing bounded this table. A flow is cheap to create and each one can
+  // hold 300 nodes, so the ceiling is what stops a scripted loop from
+  // filling the project.
+  const { count } = await supabase
+    .from("flows")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", body.project_id);
+
+  if ((count || 0) >= MAX_FLOWS_PER_PROJECT) {
+    return NextResponse.json(
+      { error: `You've reached the limit of ${MAX_FLOWS_PER_PROJECT} flows for this project.` },
+      { status: 403 }
+    );
+  }
 
   const { data, error } = await supabase
     .from("flows")
     .insert({
       project_id: body.project_id,
-      name: body.name,
-      is_active: body.is_active ?? false,
-      trigger_keywords: body.trigger_keywords ?? ["hi", "hello", "hey", "start", "menu"],
-      free_questions: body.free_questions ?? false,
+      name: body.name.trim(),
+      is_active: body.is_active === true,
+      trigger_keywords: keywords.value.length ? keywords.value : DEFAULT_KEYWORDS,
+      free_questions: body.free_questions === true,
     })
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("flow create failed:", error);
+    return NextResponse.json({ error: "Could not create the flow." }, { status: 500 });
+  }
   return NextResponse.json(data);
 }

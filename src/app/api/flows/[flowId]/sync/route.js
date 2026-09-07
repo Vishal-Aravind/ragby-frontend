@@ -1,27 +1,7 @@
 // src/app/api/flows/[flowId]/sync/route.js
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { getProjectRole } from "@/lib/supabase-api";
-
-function getSupabase(req) {
-  const response = NextResponse.next();
-  return {
-    supabase: createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          get: (name) => req.cookies.get(name)?.value,
-          set: (name, value, options) => response.cookies.set({ name, value, ...options }),
-          remove: (name, options) => response.cookies.set({ name, value: "", ...options }),
-        },
-      }
-    ),
-  };
-}
-
-const toId = (label) =>
-  (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `id_${Date.now()}`;
+import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
+import { validateGraph } from "@/lib/flow-validation";
 
 export async function POST(req, { params }) {
   const { flowId } = await params;
@@ -29,86 +9,97 @@ export async function POST(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: flow } = await supabase.from("flows").select("project_id").eq("id", flowId).maybeSingle();
+  const { data: flow } = await supabase
+    .from("flows")
+    .select("project_id")
+    .eq("id", flowId)
+    .maybeSingle();
   if (!flow) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const role = await getProjectRole(user.id, flow.project_id);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await req.json();
+  const gate = await requireProjectTab(user.id, flow.project_id, { tab: "flows" });
+  if (!gate.ok) return gate.response;
+
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
   const nodes = body.nodes || [];
   const edges = body.edges || [];
 
-  // Step 1: Get all node IDs for this flow
-  const { data: existingNodes } = await supabase
-    .from("flow_nodes")
-    .select("id")
-    .eq("flow_id", flowId);
+  const graphError = validateGraph(nodes, edges);
+  if (graphError) return NextResponse.json({ error: graphError }, { status: 400 });
 
-  const existingNodeIds = (existingNodes || []).map(n => n.id);
-
-  // Step 2: Clear sessions that reference these nodes (fixes FK constraint)
-  if (existingNodeIds.length > 0) {
-    await supabase
-      .from("whatsapp_sessions")
-      .update({ current_node_id: null })
-      .in("current_node_id", existingNodeIds);
-  }
-
-  // Step 3: Delete edges then nodes
-  await supabase.from("flow_edges").delete().eq("flow_id", flowId);
-  await supabase.from("flow_nodes").delete().eq("flow_id", flowId);
-
-  if (nodes.length === 0) {
-    return NextResponse.json({ status: "synced", nodes: 0, edges: 0, idMap: {} });
-  }
-
-  // Step 4: Build ID map and bulk insert nodes
+  // Client ids ("local_1738..." for unsaved nodes, real UUIDs for saved
+  // ones) are mapped to fresh UUIDs here so the database function never has
+  // to trust an id the browser chose. Edges are then resolved against this
+  // map ONLY — an edge whose endpoint isn't in it is dropped rather than
+  // being passed through raw, which is how an edge could previously come to
+  // point at another project's node.
   const idMap = {};
-  const nodeRows = nodes.map((node) => {
-    const newId = crypto.randomUUID();
-    idMap[node.id] = newId;
-    return {
-      id: newId,
-      flow_id: flowId,
-      type: node.data?.type || node.type,
-      content: node.data?.content || node.content || {},
-      is_start: node.data?.isStart || node.is_start || false,
-      position: node.position || { x: 0, y: 0 },
-    };
-  });
-
-  const { error: nodesError } = await supabase.from("flow_nodes").insert(nodeRows);
-  if (nodesError) {
-    console.error("nodes insert error:", nodesError);
-    return NextResponse.json({ error: nodesError.message }, { status: 500 });
+  for (const node of nodes) {
+    if (node?.id != null) idMap[String(node.id)] = crypto.randomUUID();
   }
 
-  // Step 5: Bulk insert edges
+  const nodeRows = nodes.map((node) => ({
+    id: idMap[String(node.id)],
+    type: node.data?.type || node.type,
+    content: node.data?.content ?? node.content ?? {},
+    is_start: (node.data?.isStart ?? node.is_start) === true,
+    position: node.position || { x: 0, y: 0 },
+  }));
+
   const edgeRows = [];
+  let droppedEdges = 0;
   for (const edge of edges) {
-    const fromId = idMap[edge.source || edge.from_node_id] || edge.source || edge.from_node_id;
-    const toNodeId = idMap[edge.target || edge.to_node_id] || edge.target || edge.to_node_id;
-    if (!fromId || !toNodeId) continue;
+    const from = idMap[String(edge.source ?? edge.from_node_id)];
+    const to = idMap[String(edge.target ?? edge.to_node_id)];
+    if (!from || !to) {
+      droppedEdges += 1;
+      continue;
+    }
     edgeRows.push({
-      flow_id: flowId,
-      from_node_id: fromId,
+      from_node_id: from,
       trigger: edge.sourceHandle || edge.trigger || "next",
-      to_node_id: toNodeId,
+      to_node_id: to,
     });
   }
 
-  if (edgeRows.length > 0) {
-    const { error: edgesError } = await supabase.from("flow_edges").insert(edgeRows);
-    if (edgesError) {
-      console.error("edges insert error:", edgesError);
-      return NextResponse.json({ error: edgesError.message }, { status: 500 });
+  // Everything below happens inside ONE transaction in the database.
+  //
+  // This route used to delete every edge and every node for the flow and
+  // then re-insert them as separate statements. It runs on a 30-second
+  // autosave timer, so a failure between the delete and the insert — a cold
+  // start, a dropped connection, a validation error — left the merchant
+  // with an empty flow and a 500. Now a failure changes nothing at all.
+  const { data, error } = await supabase.rpc("sync_flow_graph", {
+    p_flow_id: flowId,
+    p_nodes: nodeRows,
+    p_edges: edgeRows,
+    p_revision: Number.isInteger(body.revision) ? body.revision : null,
+  });
+
+  if (error) {
+    // Raised by the function when the flow changed since this editor loaded
+    // it — another tab, or another person, saved in the meantime.
+    if (error.message?.includes("flow_revision_conflict")) {
+      return NextResponse.json(
+        { error: "This flow was changed somewhere else. Reload before saving." },
+        { status: 409 }
+      );
     }
+    console.error("flow sync failed:", error);
+    return NextResponse.json({ error: "Could not save the flow." }, { status: 500 });
   }
 
   return NextResponse.json({
     status: "synced",
-    nodes: nodes.length,
+    nodes: nodeRows.length,
     edges: edgeRows.length,
+    droppedEdges,
+    revision: data?.revision ?? null,
     idMap,
   });
 }
