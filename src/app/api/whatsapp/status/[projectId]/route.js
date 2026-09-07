@@ -15,6 +15,9 @@ export async function GET(req, { params }) {
     { headers: { "Authorization": `Bearer ${session.access_token}` } }
   );
  
-  return NextResponse.json(await res.json());
+  // Was dropping res.status, so a 403 or 500 reached the browser as a 200
+  // and the dashboard rendered "not connected" for an already-connected
+  // project, inviting a pointless re-onboard.
+  return NextResponse.json(await res.json(), { status: res.status });
 }
  

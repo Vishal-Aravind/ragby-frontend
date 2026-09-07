@@ -777,7 +777,14 @@ function SlackItem({ projectId }) {
     try {
       const res = await fetch(`/api/slack/connect?projectId=${projectId}`);
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      // A 403 (not an admin) returned no url, so nothing happened at all and
+      // the button stayed on "Connecting..." with no explanation.
+      if (!res.ok || !data.url) {
+        toast.error(data.error || "Couldn't start the Slack connection.");
+        setLoading(false);
+        return;
+      }
+      window.location.href = data.url;
     } catch {
       toast.error("Something went wrong.");
       setLoading(false);
@@ -917,7 +924,20 @@ function ShopifyItem({ projectId }) {
         setLoading(false);
         return;
       }
-      window.open(data.auth_url, "shopify-auth", "width=500,height=700");
+      const popup = window.open(data.auth_url, "shopify-auth", "width=500,height=700");
+      if (!popup) {
+        toast.error("Please allow pop-ups for this site, then try again.");
+        setLoading(false);
+        return;
+      }
+      // Nothing cleared `loading` if the user simply closed the popup, so
+      // the button stayed disabled until the page was remounted.
+      const closedTimer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(closedTimer);
+          setLoading(false);
+        }
+      }, 800);
     } catch {
       toast.error("Something went wrong.");
       setLoading(false);
