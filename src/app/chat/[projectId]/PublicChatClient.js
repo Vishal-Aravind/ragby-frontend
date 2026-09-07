@@ -10,6 +10,9 @@ import ReactMarkdown from "react-markdown";
 
 export default function PublicChatClient({ project, isPasswordProtected }) {
   const [unlocked, setUnlocked] = useState(!isPasswordProtected);
+  // Signed, short-lived proof that the password was actually entered.
+  // `unlocked` alone is just React state and gated nothing server-side.
+  const [accessToken, setAccessToken] = useState(null);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [checkingPassword, setCheckingPassword] = useState(false);
@@ -77,6 +80,8 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
     });
 
     if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setAccessToken(data.accessToken || null);
       setUnlocked(true);
     } else if (res.status === 429) {
       setPasswordError("Too many attempts — please wait a few minutes and try again.");
@@ -102,6 +107,7 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
         projectId: project.id,
         message: userMessage,
         sessionId,
+        accessToken,
       }),
     });
 
