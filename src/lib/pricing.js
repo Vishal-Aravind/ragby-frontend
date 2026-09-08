@@ -14,8 +14,21 @@ export const PLAN_PRICES = {
 // Mirrors backend/config.py's PLAN_LIMITS. Can't be imported directly —
 // separate repos (Next.js frontend vs. FastAPI backend) — so keep these in
 // sync by hand if plan limits ever change.
+//
+// business.seats was `null` here (meaning unlimited) while backend/config.py
+// and the invite route both enforced 100, and the pricing page advertised
+// "100+". Four places, three different answers. 100 is the enforced number
+// and now the only one, leaving room for an Enterprise tier above it.
 export const PLAN_LIMITS = {
   free: { conversations: 300, seats: 1 },
   pro: { conversations: 5000, seats: 5 },
-  business: { conversations: 25000, seats: null },
+  business: { conversations: 25000, seats: 100 },
 };
+
+// Resolves a plan name to its seat limit. Deliberately NOT
+// `PLAN_LIMITS[plan]?.seats ?? free` — a falsy limit would be silently
+// treated as "missing"; the `in` check only falls back for a genuinely
+// unrecognized plan string.
+export function getSeatLimit(plan) {
+  return plan in PLAN_LIMITS ? PLAN_LIMITS[plan].seats : PLAN_LIMITS.free.seats;
+}

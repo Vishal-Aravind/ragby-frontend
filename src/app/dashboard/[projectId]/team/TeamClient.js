@@ -32,17 +32,38 @@ export default function TeamClient({ projectId, initialData }) {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState('agent')
   const [inviting, setInviting] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState(null)          // invite form only
+  const [actionError, setActionError] = useState(null)  // load / role / permission / remove
   const [removingId, setRemovingId] = useState(null)
   const [permissionsOpenFor, setPermissionsOpenFor] = useState(null)
   const [savingPermissionsFor, setSavingPermissionsFor] = useState(null)
+
+  // Every write below used to fire and refetch without checking its
+  // response, so a rejected change was indistinguishable from a successful
+  // one until the refetch quietly showed the old value.
+  const readError = async (res, fallback) => {
+    try {
+      const body = await res.json()
+      return body?.error || fallback
+    } catch {
+      return fallback
+    }
+  }
 
   const fetchTeam = async () => {
     setLoading(true)
     try {
       const res = await fetch(`/api/team?projectId=${projectId}`)
-      if (res.ok) setData(await res.json())
-    } catch (e) { console.error(e) }
+      if (!res.ok) {
+        setActionError(await readError(res, 'Could not load the team.'))
+      } else {
+        setActionError(null)
+        setData(await res.json())
+      }
+    } catch (e) {
+      console.error(e)
+      setActionError('Could not reach the server. Check your connection.')
+    }
     setLoading(false)
   }
 
@@ -56,22 +77,35 @@ export default function TeamClient({ projectId, initialData }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId, email: inviteEmail.trim(), role: inviteRole }),
       })
-      const result = await res.json()
-      if (!res.ok) { setError(result.error || 'Failed to invite'); return }
+      // res.json() was called before checking res.ok, so a non-JSON error
+      // response (a proxy 502, say) threw here and the invite failed with
+      // no message at all.
+      if (!res.ok) { setError(await readError(res, 'Failed to invite')); return }
       setInviteEmail('')
       await fetchTeam()
+    } catch {
+      setError('Could not reach the server. Try again.')
     } finally {
       setInviting(false)
     }
   }
 
   const handleRoleChange = async (memberId, role) => {
-    await fetch(`/api/team/${memberId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role }),
-    })
-    await fetchTeam()
+    try {
+      const res = await fetch(`/api/team/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      })
+      if (!res.ok) {
+        setActionError(await readError(res, 'Could not change that role.'))
+        return
+      }
+      setActionError(null)
+      await fetchTeam()
+    } catch {
+      setActionError('Could not reach the server. Try again.')
+    }
   }
 
   const handlePermissionToggle = async (member, key) => {
@@ -79,12 +113,19 @@ export default function TeamClient({ projectId, initialData }) {
     const next = current.includes(key) ? current.filter(p => p !== key) : [...current, key]
     setSavingPermissionsFor(member.id)
     try {
-      await fetch(`/api/team/${member.id}`, {
+      const res = await fetch(`/api/team/${member.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissions: next }),
       })
+      if (!res.ok) {
+        setActionError(await readError(res, 'Could not save that permission.'))
+        return
+      }
+      setActionError(null)
       await fetchTeam()
+    } catch {
+      setActionError('Could not reach the server. Try again.')
     } finally {
       setSavingPermissionsFor(null)
     }
@@ -94,19 +135,39 @@ export default function TeamClient({ projectId, initialData }) {
     if (!confirm('Remove this teammate from the project?')) return
     setRemovingId(memberId)
     try {
-      await fetch(`/api/team/${memberId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/team/${memberId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        setActionError(await readError(res, 'Could not remove that teammate.'))
+        return
+      }
+      setActionError(null)
       await fetchTeam()
+    } catch {
+      setActionError('Could not reach the server. Try again.')
     } finally {
       setRemovingId(null)
     }
   }
 
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading team...</div>
-  if (!data) return <div className="p-6 text-sm text-muted-foreground">Could not load team.</div>
+  if (!data) {
+    return (
+      <div className="p-6 space-y-2">
+        <p className="text-sm text-muted-foreground">Could not load team.</p>
+        {actionError && <p className="text-sm text-red-600">{actionError}</p>}
+      </div>
+    )
+  }
 
   const canManage = data.myRole === 'owner' || data.myRole === 'admin'
   const seats = data.seats || { used: 1, limit: 1 }
-  const atSeatLimit = seats.limit !== null && seats.used >= seats.limit
+  // No plan is unlimited any more (business is 100, see lib/pricing.js), so
+  // the old `seats.limit === null` branches here were unreachable.
+  const atSeatLimit = seats.used >= seats.limit
+  // A plan downgrade never removes teammates — by design, so nobody is cut
+  // off mid-conversation. That leaves the project legitimately over its
+  // limit, which was previously shown as a bare "5 / 1" with no explanation.
+  const overSeatLimit = seats.used > seats.limit
 
   return (
     <div className="p-6 space-y-4 max-w-2xl">
@@ -115,10 +176,24 @@ export default function TeamClient({ projectId, initialData }) {
           <h2 className="text-lg font-semibold">Team</h2>
           <p className="text-sm text-muted-foreground">Who has access to this project, and what they can do.</p>
         </div>
-        <span className="text-xs px-2.5 py-1 rounded-full border bg-gray-50 text-gray-600 whitespace-nowrap">
-          {seats.limit === null ? `${seats.used} seat${seats.used === 1 ? '' : 's'} used` : `${seats.used} / ${seats.limit} seats used`}
+        <span className={`text-xs px-2.5 py-1 rounded-full border whitespace-nowrap ${overSeatLimit ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-600'}`}>
+          {seats.used} / {seats.limit} seats used
         </span>
       </div>
+
+      {actionError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 flex items-start gap-2">
+          <span className="flex-1">{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-600 shrink-0">✕</button>
+        </div>
+      )}
+
+      {overSeatLimit && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          This project has {seats.used} people but your plan includes {seats.limit} seat{seats.limit === 1 ? '' : 's'}.
+          Everyone keeps their access — you just can&apos;t add anyone new until you upgrade.
+        </div>
+      )}
 
       {/* Members list */}
       <div className="border rounded-xl divide-y bg-white overflow-hidden">
@@ -233,7 +308,7 @@ export default function TeamClient({ projectId, initialData }) {
           <h3 className="text-sm font-semibold flex items-center gap-2">
             <UserPlus size={14} /> Invite a teammate
           </h3>
-          {atSeatLimit ? (
+          {atSeatLimit && !overSeatLimit ? (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
               {data.plan === 'business' ? (
                 <>You've used all {seats.limit} seats on the Business plan — <a href="/pricing" className="underline font-medium">see Enterprise</a> for larger teams.</>
