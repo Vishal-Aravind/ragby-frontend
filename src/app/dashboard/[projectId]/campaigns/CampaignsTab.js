@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles, RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -33,6 +33,26 @@ export default function CampaignsTab({ project }) {
   const [recurrence, setRecurrence]   = useState('none') // none | daily | weekly | monthly
   const [cancellingId, setCancellingId] = useState(null)
   const [editingCampaignId, setEditingCampaignId] = useState(null) // null = creating new
+  const [counting, setCounting]       = useState(false)
+
+  // Idempotency key for campaign creation, minted once per form session and
+  // rotated after a successful send. The server rejects a repeat of the same
+  // token, so a double-click or a retry after a timeout can't message
+  // everyone twice — there is no undo for a sent WhatsApp template.
+  const clientTokenRef = useRef(
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())
+  )
+
+  // Every write here used to assume res.json() would parse and that a
+  // failure was reportable — a proxy 502 returns HTML, not JSON.
+  const readError = async (res, fallback) => {
+    try {
+      const body = await res.json()
+      return body?.error || body?.detail || fallback
+    } catch {
+      return fallback
+    }
+  }
 
   const handleCsvUpload = async (e) => {
     const file = e.target.files[0]
@@ -74,16 +94,25 @@ export default function CampaignsTab({ project }) {
         fetch(`/api/campaigns?projectId=${projectId}`),
         fetch(`/api/campaigns/templates?projectId=${projectId}`),
       ])
+      // Both of these used to fail silently, so a 403 on the campaigns tab
+      // looked exactly like "you have no campaigns yet".
       if (campRes.ok) {
         const campData = await campRes.json()
         setCampaigns(Array.isArray(campData) ? campData : [])
+        setError(null)
+      } else {
+        setCampaigns([])
+        setError(await readError(campRes, 'Could not load your campaigns.'))
       }
       if (tmplRes.ok) {
         const tmplData = await tmplRes.json()
         setTemplates(Array.isArray(tmplData) ? tmplData : [])
+      } else {
+        setTemplates([])
       }
     } catch (err) {
       console.error('CampaignsTab fetch error:', err)
+      setError('Could not reach the server. Check your connection.')
     }
     setLoading(false)
   }
@@ -147,6 +176,9 @@ export default function CampaignsTab({ project }) {
     setScheduledAt('')
     setRecurrence('none')
     setEditingCampaignId(null)
+    // New form session, new idempotency key.
+    clientTokenRef.current =
+      typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now())
   }
 
   const handleSend = async () => {
@@ -161,8 +193,51 @@ export default function CampaignsTab({ project }) {
     if (recurrence !== 'none' && recipientFilter === 'csv') {
       return setError("Recurring campaigns can't use a one-time CSV upload — pick a live filter instead")
     }
-    setSending(true)
     setError(null)
+
+    // Every recipient is one WhatsApp message billed by Meta, and there was
+    // no confirmation of any kind before this. Ask with the REAL number —
+    // for a server-side filter the browser can't know it, so fetch it.
+    let recipientCount = csvContacts.length
+    if (recipientFilter !== 'csv') {
+      setCounting(true)
+      try {
+        const params = new URLSearchParams({
+          projectId,
+          recipient_filter: recipientFilter,
+          ...(tagFilter ? { tag_filter: tagFilter } : {}),
+        })
+        const countRes = await fetch(`/api/campaigns/recipient-count?${params}`)
+        if (!countRes.ok) {
+          setError(await readError(countRes, 'Could not work out who this would go to.'))
+          return
+        }
+        const countData = await countRes.json()
+        recipientCount = countData.count
+        if (countData.over_limit) {
+          setError(`This would message ${countData.count} people. A single campaign can reach at most ${countData.max} — narrow the filter or split it up.`)
+          return
+        }
+      } catch {
+        setError('Could not reach the server. Try again.')
+        return
+      } finally {
+        setCounting(false)
+      }
+    }
+
+    if (recipientCount === 0) {
+      return setError('No contacts match this filter.')
+    }
+
+    const when = sendTiming === 'later' ? 'be scheduled for' : 'send now to'
+    const verb = editingCampaignId ? 'Update this campaign to reach' : `This will ${when}`
+    if (!confirm(
+      `${verb} ${recipientCount} ${recipientCount === 1 ? 'person' : 'people'}, using the "${selectedTemplate.name}" template.\n\n` +
+      `Each one is a WhatsApp message billed to your account. This can't be undone once sending starts.`
+    )) return
+
+    setSending(true)
 
     const payload = {
       projectId,
@@ -177,28 +252,35 @@ export default function CampaignsTab({ project }) {
       // convert to a proper ISO string with offset for the backend.
       scheduled_at: sendTiming === 'later' ? new Date(scheduledAt).toISOString() : null,
       recurrence: sendTiming === 'later' && recurrence !== 'none' ? recurrence : null,
+      // Minted once per form session. A double-click or a retry after a
+      // timeout used to create a second campaign and message everyone twice.
+      client_token: clientTokenRef.current,
     }
 
-    const res = editingCampaignId
-      ? await fetch(`/api/campaigns/${editingCampaignId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      : await fetch('/api/campaigns', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
+    try {
+      const res = editingCampaignId
+        ? await fetch(`/api/campaigns/${editingCampaignId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        : await fetch('/api/campaigns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
 
-    if (res.ok) {
-      resetForm()
-      setTimeout(fetchData, editingCampaignId ? 0 : 2000)
-    } else {
-      const data = await res.json()
-      setError(data.error || 'Failed to save campaign')
+      if (res.ok) {
+        resetForm()
+        setTimeout(fetchData, editingCampaignId ? 0 : 2000)
+      } else {
+        setError(await readError(res, 'Failed to save campaign'))
+      }
+    } catch {
+      setError('Could not reach the server. Your campaign was not sent.')
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
   const openEditCampaign = (campaign) => {
@@ -229,8 +311,15 @@ export default function CampaignsTab({ project }) {
     if (!confirm('Cancel this scheduled campaign? It will not be sent.')) return
     setCancellingId(campaignId)
     try {
-      await fetch(`/api/campaigns/${campaignId}/cancel`, { method: 'POST' })
+      const res = await fetch(`/api/campaigns/${campaignId}/cancel`, { method: 'POST' })
+      if (!res.ok) {
+        setError(await readError(res, 'Could not cancel that campaign.'))
+        return
+      }
+      setError(null)
       await fetchData()
+    } catch {
+      setError('Could not reach the server. Try again.')
     } finally {
       setCancellingId(null)
     }
@@ -504,9 +593,10 @@ export default function CampaignsTab({ project }) {
               className="flex-1 border rounded-lg px-4 py-2 text-sm hover:bg-muted">
               Cancel
             </button>
-            <button onClick={handleSend} disabled={sending}
+            <button onClick={handleSend} disabled={sending || counting}
               className="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
-              {sending
+              {counting ? 'Checking recipients...'
+                : sending
                 ? (editingCampaignId ? 'Saving...' : sendTiming === 'later' ? 'Scheduling...' : 'Sending...')
                 : editingCampaignId ? <><Clock size={13} /> Save Changes</>
                 : sendTiming === 'later' ? <><Clock size={13} /> Schedule Campaign</> : <><Send size={13} /> Send Campaign</>}

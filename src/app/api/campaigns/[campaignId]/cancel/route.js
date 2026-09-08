@@ -15,7 +15,17 @@ export async function POST(req, { params }) {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
+  // Was echoing the raw backend body on a parse failure, which on a 500
+  // meant a Python traceback rendered straight into the browser.
   const text = await res.text();
-  try { return NextResponse.json(JSON.parse(text), { status: res.status }); }
-  catch { return NextResponse.json({ error: text }, { status: res.status }); }
+  try {
+    const parsed = JSON.parse(text);
+    return NextResponse.json(
+      res.ok ? parsed : { error: parsed.detail || "Could not cancel that campaign." },
+      { status: res.status }
+    );
+  } catch {
+    console.error("campaign cancel returned non-JSON:", text.slice(0, 500));
+    return NextResponse.json({ error: "Could not cancel that campaign." }, { status: 502 });
+  }
 }

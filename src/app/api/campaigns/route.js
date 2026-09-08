@@ -33,7 +33,15 @@ export async function GET(req) {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
-  if (!res.ok) return NextResponse.json([], { status: 200 });
+  // Was `return NextResponse.json([], { status: 200 })` — a 403 rendered
+  // as "no campaigns yet", indistinguishable from an empty list.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return NextResponse.json(
+      { error: body.detail || "Could not load campaigns." },
+      { status: res.status }
+    );
+  }
   return NextResponse.json(await res.json());
 }
 
@@ -64,7 +72,11 @@ export async function POST(req) {
     }),
   });
 
-  const data = await res.json();
-  if (!res.ok) return NextResponse.json({ error: data.detail || "Failed" }, { status: res.status });
+  // res.json() ran before the ok check, so a non-JSON error response (a
+  // proxy 502, say) threw here and the caller saw no message at all.
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return NextResponse.json({ error: data.detail || "Failed to create the campaign." }, { status: res.status });
+  }
   return NextResponse.json(data);
 }

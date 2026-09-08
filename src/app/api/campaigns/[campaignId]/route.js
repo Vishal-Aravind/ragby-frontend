@@ -48,7 +48,9 @@ export async function PUT(req, { params }) {
     }),
   });
 
-  const data = await res.json();
-  if (!res.ok) return NextResponse.json({ error: data.detail || "Failed" }, { status: res.status });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return NextResponse.json({ error: data.detail || "Failed to save the campaign." }, { status: res.status });
+  }
   return NextResponse.json(data);
 }

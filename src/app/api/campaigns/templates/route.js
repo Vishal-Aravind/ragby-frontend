@@ -33,6 +33,12 @@ export async function GET(req) {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
-  if (!res.ok) return NextResponse.json([]);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    return NextResponse.json(
+      { error: body.detail || "Could not load templates." },
+      { status: res.status }
+    );
+  }
   return NextResponse.json(await res.json());
 }
