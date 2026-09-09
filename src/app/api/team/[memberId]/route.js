@@ -15,7 +15,7 @@ const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 // Team management is deliberately excluded: granting it would let an agent
 // add/remove teammates or change roles, which is a privilege-escalation risk.
 const GRANTABLE_PERMISSIONS = [
-  "documents", "integrations", "flows", "analytics", "api",
+  "documents", "integrations", "flows", "analytics",
   "campaigns", "templates", "shop", "appointments", "events",
 ];
 

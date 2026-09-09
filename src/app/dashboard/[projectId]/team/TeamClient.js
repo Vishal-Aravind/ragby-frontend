@@ -18,7 +18,6 @@ const PERMISSION_LABELS = {
   integrations: 'Integrations',
   flows: 'Flows',
   analytics: 'Analytics',
-  api: 'API',
   campaigns: 'Campaigns',
   templates: 'Templates',
   shop: 'Shop',
