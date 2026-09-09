@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { Copy, RefreshCw, Check } from 'lucide-react'
 
-export default function ApiKeysClient({ projectId, initialApiKey }) {
+export default function ApiKeysClient({ projectId, initialApiKey, initialError }) {
   const [apiKey, setApiKey]         = useState(initialApiKey || null)
   // Only ever set right after a fresh create/regenerate — the key is
   // hashed at rest and shown exactly once. A normal page load never gets
@@ -10,6 +10,13 @@ export default function ApiKeysClient({ projectId, initialApiKey }) {
   const [revealedKey, setRevealedKey] = useState(initialApiKey?.key || null)
   const [copied, setCopied]         = useState(false)
   const [regen, setRegen]           = useState(false)
+  const [error, setError]           = useState(initialError || null)
+
+  // The backend no longer mints a key as a side effect of reading one — a
+  // GET that creates a live WhatsApp credential was both a read verb doing
+  // a write and a way for an agent locked out of this tab to obtain one.
+  // Creation happens here, explicitly, through the same regenerate call.
+  const hasKey = Boolean(apiKey?.has_key)
 
   const copyKey = () => {
     navigator.clipboard.writeText(revealedKey)
@@ -17,17 +24,27 @@ export default function ApiKeysClient({ projectId, initialApiKey }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const regenerate = async () => {
-    if (!confirm("Regenerate API key? Your old key will stop working immediately.")) return
+  const mintKey = async (isRotation) => {
+    if (isRotation && !confirm("Regenerate API key? Your old key will stop working immediately.")) return
     setRegen(true)
-    const res = await fetch(`/api/api-keys/${projectId}/regenerate`, { method: "POST" })
-    if (res.ok) {
-      const data = await res.json()
+    setError(null)
+    try {
+      const res = await fetch(`/api/api-keys/${projectId}/regenerate`, { method: "POST" })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.detail || data.error || "Could not create the key.")
+        return
+      }
       setRevealedKey(data.key)
-      setApiKey(a => ({ ...a, has_key: true }))
+      setApiKey(a => ({ ...(a || {}), has_key: true }))
+    } catch {
+      setError("Could not reach the server. Try again.")
+    } finally {
+      setRegen(false)
     }
-    setRegen(false)
   }
+
+  const regenerate = () => mintKey(true)
 
   // Once revealed this session, show the real value; otherwise a
   // placeholder — there's nothing to mask-and-reveal anymore since the
@@ -46,12 +63,22 @@ export default function ApiKeysClient({ projectId, initialApiKey }) {
       <div className="border rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">Your API Key</p>
-          <button onClick={regenerate} disabled={regen}
-            className="text-xs border rounded px-2 py-1 hover:bg-muted flex items-center gap-1 text-red-600 border-red-200">
-            <RefreshCw size={12} className={regen ? "animate-spin" : ""} />
-            Regenerate
-          </button>
+          {/* Only meaningful once a key exists — otherwise the panel below
+              offers Generate instead. */}
+          {(hasKey || revealedKey) && (
+            <button onClick={regenerate} disabled={regen}
+              className="text-xs border rounded px-2 py-1 hover:bg-muted flex items-center gap-1 text-red-600 border-red-200">
+              <RefreshCw size={12} className={regen ? "animate-spin" : ""} />
+              Regenerate
+            </button>
+          )}
         </div>
+
+        {error && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
 
         {revealedKey ? (
           <>
@@ -68,10 +95,25 @@ export default function ApiKeysClient({ projectId, initialApiKey }) {
           </>
         ) : (
           <div className="bg-muted/50 rounded-lg px-4 py-3">
-            <code className="text-sm font-mono text-gray-400">{displayKey}</code>
-            <p className="text-xs text-muted-foreground mt-2">
-              A key exists but isn't shown again after creation. Click Regenerate to get a new one (this invalidates the old one immediately).
-            </p>
+            {hasKey ? (
+              <>
+                <code className="text-sm font-mono text-gray-400">{displayKey}</code>
+                <p className="text-xs text-muted-foreground mt-2">
+                  A key exists but isn&apos;t shown again after creation. Click Regenerate to get a new one (this invalidates the old one immediately).
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-700">No API key yet.</p>
+                <p className="text-xs text-muted-foreground mt-1 mb-3">
+                  Generate one to send WhatsApp messages from your own systems. It&apos;s shown once.
+                </p>
+                <button onClick={() => mintKey(false)} disabled={regen}
+                  className="text-sm bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50">
+                  {regen ? "Generating..." : "Generate API key"}
+                </button>
+              </>
+            )}
           </div>
         )}
 

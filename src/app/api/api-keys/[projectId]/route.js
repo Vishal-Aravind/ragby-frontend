@@ -1,23 +1,7 @@
 // src/app/api/api-keys/[projectId]/route.js
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-
-function getSupabase(req) {
-  const response = NextResponse.next();
-  return {
-    supabase: createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          get: (name) => req.cookies.get(name)?.value,
-          set: (name, value, options) => response.cookies.set({ name, value, ...options }),
-          remove: (name, options) => response.cookies.set({ name, value: "", ...options }),
-        },
-      }
-    ),
-  };
-}
+import { getSupabase, getToken } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function GET(req, { params }) {
   const { projectId } = await params;
@@ -25,13 +9,9 @@ export async function GET(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: { session } } = await supabase.auth.getSession();
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://ragby-backend.onrender.com";
-
-  const res = await fetch(`${backendUrl}/api-keys/${projectId}`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
-
-  if (!res.ok) return NextResponse.json({ error: "Failed" }, { status: 500 });
-  return NextResponse.json(await res.json());
+  // Was `if (!res.ok) return { error: "Failed" }, 500` with no try/catch, so
+  // a 403 read as a server fault and an unreachable backend threw inside
+  // the route.
+  const token = await getToken(supabase);
+  return proxyToBackend(`/api-keys/${projectId}`, { token });
 }
