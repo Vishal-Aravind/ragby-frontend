@@ -16,7 +16,10 @@ export async function GET(req) {
     .neq("plan", "free")
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("admin billing query failed:", error);
+    return NextResponse.json({ error: "Could not load billing customers." }, { status: 500 });
+  }
 
   return NextResponse.json({ customers: data || [] });
 }

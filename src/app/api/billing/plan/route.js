@@ -2,18 +2,14 @@
 // app/api/billing/plan/route.js
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase-api";
+import { getSupabase, getToken } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function GET(req) {
   const { supabase } = getSupabase(req);
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const res = await fetch(`${process.env.BACKEND_BASE_URL}/billing/plan`, {
-    headers: {
-      "Authorization": `Bearer ${session.access_token}`,
-    },
-  });
-
-  return NextResponse.json(await res.json(), { status: res.status });
+  const token = await getToken(supabase);
+  return proxyToBackend("/billing/plan", { token });
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Zap, CreditCard, CheckCircle2, XCircle, X } from "lucide-react";
+import { Loader2, Zap, CreditCard, CheckCircle2, XCircle, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 
@@ -269,6 +269,21 @@ export default function AccountPage() {
               {cancelsOnDate
                 ? <>Cancelled — you'll keep {PLAN_LABELS[plan]} access until <strong>{cancelsOnDate}</strong>, then it drops to Free.</>
                 : <>Cancelled — this subscription will not renew.</>}
+            </div>
+          )}
+
+          {/* The monthly message count is NOT prorated on a downgrade: usage
+              already spent this month still counts against the new, smaller
+              Free allowance. Someone well past 300 replies would otherwise
+              hit a hard stop the moment the plan drops, with no warning. */}
+          {isCancelled && used > PLAN_LIMITS.free && (
+            <div className="flex items-start gap-2 text-xs bg-red-50 text-red-700 border border-red-100 rounded-lg px-3 py-2">
+              <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+              <span>
+                You've used {used.toLocaleString()} messages this month. The Free plan includes{" "}
+                {PLAN_LIMITS.free.toLocaleString()}, and this month's usage carries over — so replies
+                will pause as soon as the plan drops, until the count resets next month.
+              </span>
             </div>
           )}
 
