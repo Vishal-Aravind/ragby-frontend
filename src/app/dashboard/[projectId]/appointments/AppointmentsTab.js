@@ -4,6 +4,22 @@ import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLe
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
+// The timezone your working hours and Google Calendar events are in. This
+// was hardcoded to Asia/Kolkata in the backend, so a merchant anywhere else
+// got calendar events at the wrong time with no way to fix it. Kept to a
+// short list of IANA zones rather than all ~600 — these cover the markets
+// this product actually serves, and the field accepts any valid zone if one
+// is ever set directly.
+const TIMEZONES = [
+  'Asia/Kolkata', 'Asia/Dubai', 'Asia/Karachi', 'Asia/Dhaka', 'Asia/Colombo',
+  'Asia/Kathmandu', 'Asia/Singapore', 'Asia/Jakarta', 'Asia/Manila',
+  'Asia/Bangkok', 'Asia/Hong_Kong', 'Asia/Tokyo', 'Australia/Sydney',
+  'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin',
+  'Europe/Madrid', 'Africa/Lagos', 'Africa/Nairobi', 'Africa/Johannesburg',
+  'America/New_York', 'America/Chicago', 'America/Denver',
+  'America/Los_Angeles', 'America/Toronto', 'America/Sao_Paulo', 'UTC',
+]
+
 function emptyServiceForm() {
   return { name: '', description: '', duration_minutes: 30, price: 0, payment_mode: 'free', is_active: true, sort_order: 0 }
 }
@@ -721,6 +737,15 @@ export default function AppointmentsTab({ project }) {
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">How many bookings can happen at the same time slot</p>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Timezone</label>
+                <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                  value={settings.timezone || 'Asia/Kolkata'}
+                  onChange={e => setSettings(s => ({ ...s, timezone: e.target.value }))}>
+                  {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz.replace('_', ' ')}</option>)}
+                </select>
+                <p className="text-xs text-muted-foreground">Used for your working hours and Google Calendar events</p>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Accent color</label>
