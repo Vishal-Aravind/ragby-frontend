@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
-function getSupabase(req) {
-  const response = NextResponse.next();
-  return { supabase: createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, { cookies: { get: (n) => req.cookies.get(n)?.value, set: (n, v, o) => response.cookies.set({ name: n, value: v, ...o }), remove: (n, o) => response.cookies.set({ name: n, value: "", ...o }) } }) };
-}
+import { getSupabase } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
+
 export async function GET(req, { params }) {
   const { supabase } = getSupabase(req);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { eventId } = await params;
-  const res = await fetch(`${BACKEND}/events/${eventId}/registrations`, { headers: { Authorization: `Bearer ${session.access_token}` } });
-  const text = await res.text();
-  try { return NextResponse.json(JSON.parse(text), { status: res.status }); }
-  catch { return NextResponse.json({ error: text }, { status: res.status }); }
+
+  // Tab enforcement lives in the backend, which resolves the event's
+  // project first. This route's own bug was returning the raw backend body
+  // on failure — registrant names, phones and emails are behind it.
+  return proxyToBackend(`/events/${encodeURIComponent(eventId)}/registrations`, {
+    token: session.access_token,
+  });
 }

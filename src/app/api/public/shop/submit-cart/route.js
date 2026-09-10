@@ -1,5 +1,6 @@
 // src/app/api/public/shop/submit-cart/route.js
 import { NextResponse } from "next/server";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 export async function POST(req) {
   try {
@@ -10,10 +11,9 @@ export async function POST(req) {
       return NextResponse.json({ error: "Backend not configured" }, { status: 500 });
     }
 
-    const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     const res = await fetch(`${backendUrl}/public/shop/submit-cart`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+      headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
       body: JSON.stringify(body),
     });
 

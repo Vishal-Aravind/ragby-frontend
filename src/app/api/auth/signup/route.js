@@ -4,6 +4,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -20,10 +21,9 @@ export async function POST(req) {
 
   // Checked first, before touching Supabase Auth at all — nothing here
   // previously stopped scripted mass fake-account creation.
-  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   const rateCheck = await fetch(`${BACKEND}/auth/rate-limit-check`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+    headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
     body: JSON.stringify({ action: "signup" }),
   });
   if (!rateCheck.ok) {

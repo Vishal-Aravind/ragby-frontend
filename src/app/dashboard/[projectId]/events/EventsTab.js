@@ -12,6 +12,8 @@ export default function EventsTab({ project }) {
   const [builderEvent, setBuilderEvent] = useState(null)
   const [registrations, setRegistrations] = useState([])
   const [loadingRegs, setLoadingRegs] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [regsError, setRegsError] = useState(null)
 
   // Create form now only asks for the event name — everything else
   // (description, banner, date, location, capacity, contact phone, colors)
@@ -29,8 +31,22 @@ export default function EventsTab({ project }) {
     if (!silent) setLoading(true)
     try {
       const res = await fetch(`/api/events?projectId=${projectId}`)
-      if (res.ok) setEvents(await res.json())
-    } catch (e) { console.error(e) }
+      // A failed load used to leave `events` empty, which renders as
+      // "No events yet. Create your first event" — so an outage or a
+      // permission error looked exactly like a brand new project, and the
+      // obvious next click was to create a duplicate. Same false-empty-state
+      // bug the Leads tab was fixed for.
+      if (res.ok) {
+        setEvents(await res.json())
+        setLoadError(null)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setLoadError(data.error || data.detail || "Couldn't load your events.")
+      }
+    } catch (e) {
+      console.error(e)
+      setLoadError("Couldn't load your events. Check your connection and try again.")
+    }
     if (!silent) setLoading(false)
   }
 
@@ -82,37 +98,78 @@ export default function EventsTab({ project }) {
       const created = await pendingCreateRef.current
       eventId = created.id
     }
-    await fetch(`/api/events/${eventId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
+    // The response used to be discarded entirely. A 403 (agent without the
+    // Registrations permission) or a 500 still closed the builder, so the
+    // merchant's whole page design vanished and the UI looked like it had
+    // saved. Keep the builder open on failure so nothing is lost.
+    let res
+    try {
+      res = await fetch(`/api/events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    } catch (e) {
+      console.error(e)
+      alert("Couldn't save your changes. Check your connection — your design is still here.")
+      return
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(err.error || err.detail || "Couldn't save your changes. Your design is still here.")
+      return
+    }
     setBuilderEvent(null)
     fetchEvents()
   }
 
   const toggleActive = async (event) => {
-    await fetch(`/api/events/${event.id}`, {
+    const res = await fetch(`/api/events/${event.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: !event.is_active }),
-    })
+    }).catch(() => null)
+    // Was unchecked, so a refused toggle silently reverted on the next
+    // refresh with no explanation.
+    if (!res || !res.ok) {
+      const err = res ? await res.json().catch(() => ({})) : {}
+      alert(err.error || err.detail || "Couldn't update this event.")
+      return
+    }
     fetchEvents()
   }
 
   const deleteEvent = async (eventId) => {
     if (!confirm('Delete this event? All registrations will also be deleted.')) return
-    await fetch(`/api/events/${eventId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' }).catch(() => null)
+    if (!res || !res.ok) {
+      const err = res ? await res.json().catch(() => ({})) : {}
+      alert(err.error || err.detail || "Couldn't delete this event.")
+      return
+    }
     fetchEvents()
   }
 
   const viewRegistrations = async (event) => {
     setViewingEvent(event)
     setLoadingRegs(true)
+    setRegsError(null)
     try {
       const res = await fetch(`/api/events/${event.id}/registrations`)
-      if (res.ok) setRegistrations(await res.json())
-    } catch (e) { console.error(e) }
+      // Was unchecked, so a failure rendered as "No registrations yet" —
+      // indistinguishable from an event nobody signed up for.
+      if (res.ok) {
+        setRegistrations(await res.json())
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setRegistrations([])
+        setRegsError(err.error || err.detail || "Couldn't load registrations.")
+      }
+    } catch (e) {
+      console.error(e)
+      setRegistrations([])
+      setRegsError("Couldn't load registrations. Check your connection and try again.")
+    }
     setLoadingRegs(false)
   }
 
@@ -140,6 +197,16 @@ export default function EventsTab({ project }) {
 
         {loadingRegs ? (
           <div className="text-sm text-muted-foreground">Loading...</div>
+        ) : regsError ? (
+          <div className="text-center py-12 border border-destructive/30 bg-destructive/5 rounded-xl text-sm">
+            <p className="text-destructive font-medium">{regsError}</p>
+            <button
+              onClick={() => viewRegistrations(viewingEvent)}
+              className="mt-2 text-xs underline text-muted-foreground"
+            >
+              Try again
+            </button>
+          </div>
         ) : registrations.length === 0 ? (
           <div className="text-center py-12 border rounded-xl text-sm text-muted-foreground">
             No registrations yet. Share the registration link to get started.
@@ -230,7 +297,17 @@ export default function EventsTab({ project }) {
       )}
 
       {/* Events list */}
-      {events.length === 0 ? (
+      {loadError ? (
+        <div className="text-center py-12 border border-destructive/30 bg-destructive/5 rounded-xl text-sm">
+          <p className="text-destructive font-medium">{loadError}</p>
+          <button
+            onClick={() => fetchEvents()}
+            className="mt-2 text-xs underline text-muted-foreground"
+          >
+            Try again
+          </button>
+        </div>
+      ) : events.length === 0 ? (
         <div className="text-center py-12 border rounded-xl text-sm text-muted-foreground">
           No events yet. Create your first event to start collecting registrations.
         </div>

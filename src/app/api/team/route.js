@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
 import { getSeatLimit } from "@/lib/pricing";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -88,11 +89,10 @@ export async function POST(req) {
 
   // The "no account found for that email" response below is an
   // email-existence oracle — capped the same way login/signup already are.
-  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   try {
     const rateCheck = await fetch(`${BACKEND}/auth/rate-limit-check`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+      headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
       body: JSON.stringify({ action: "team_invite" }),
     });
     if (!rateCheck.ok) {

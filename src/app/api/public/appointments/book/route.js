@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 
@@ -10,13 +11,11 @@ export async function POST(req) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-
   let res;
   try {
     res = await fetch(`${BACKEND}/public/appointments/book`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+      headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
       body: JSON.stringify(body),
     });
   } catch (e) {

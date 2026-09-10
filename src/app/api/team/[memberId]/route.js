@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -24,11 +25,10 @@ const GRANTABLE_PERMISSIONS = [
 // lives in the backend because a Next.js route is serverless and an
 // in-memory counter here wouldn't survive between requests.
 async function rateLimited(req) {
-  const visitorIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   try {
     const res = await fetch(`${BACKEND}/auth/rate-limit-check`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Forwarded-For": visitorIp },
+      headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
       body: JSON.stringify({ action: "team_manage" }),
     });
     return !res.ok;

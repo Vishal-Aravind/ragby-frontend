@@ -5,6 +5,34 @@ import { useParams } from "next/navigation";
 import { Check, Calendar, MapPin, Users } from "lucide-react";
 import DOMPurify from "isomorphic-dompurify";
 
+// Origins allowed inside an <iframe> on a public registration page.
+// page_json is merchant-authored, but "merchant" includes any teammate
+// granted the Registrations tab, and an iframe on a page anonymous
+// visitors load is a much bigger surface than a broken embed. Anything
+// unrecognised renders as a plain link instead.
+const ALLOWED_EMBED_HOSTS = [
+  "www.youtube.com",
+  "youtube.com",
+  "www.youtube-nocookie.com",
+  "player.vimeo.com",
+  "www.google.com",       // maps embeds
+  "maps.google.com",
+  "www.openstreetmap.org",
+];
+
+function safeEmbedUrl(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const url = new URL(raw);
+    // Blocks javascript: and data: before the host check even matters.
+    if (url.protocol !== "https:") return null;
+    if (!ALLOWED_EMBED_HOSTS.includes(url.hostname)) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────
 // PUBLIC BLOCK RENDERER — turns page_json into actual page
 // ─────────────────────────────────────────────────────────
@@ -129,29 +157,46 @@ function BlockRenderer({ blocks, accent, formFields, onSubmit, submitting, spots
 
           case "video": {
             if (!p.url) return null;
-            let embedUrl = p.url;
+            // The YouTube rewrite is a convenience, not a filter — any
+            // other URL used to fall straight through into the iframe src.
             const ytMatch = p.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-            if (ytMatch) embedUrl = `https://www.youtube.com/embed/${ytMatch[1]}`;
+            const embedUrl = ytMatch
+              ? `https://www.youtube.com/embed/${ytMatch[1]}`
+              : safeEmbedUrl(p.url);
+            if (!embedUrl) {
+              return (
+                <div key={block.id} className="px-4 py-4">
+                  <a href={p.url} target="_blank" rel="noopener noreferrer"
+                     className="text-sm underline text-gray-500 break-all">
+                    {p.caption || p.url}
+                  </a>
+                </div>
+              );
+            }
             return (
               <div key={block.id} className="px-4 py-4">
                 <div className="rounded-xl overflow-hidden" style={{ aspectRatio: "16/9" }}>
-                  <iframe src={embedUrl} className="w-full h-full" allowFullScreen />
+                  <iframe src={embedUrl} className="w-full h-full" allowFullScreen
+                          sandbox="allow-scripts allow-same-origin allow-presentation" />
                 </div>
                 {p.caption && <p className="text-xs text-gray-400 mt-2 text-center">{p.caption}</p>}
               </div>
             );
           }
 
-          case "map":
+          case "map": {
+            const mapUrl = safeEmbedUrl(p.embed_url);
             return (
               <div key={block.id} className="px-4 py-4">
-                {p.embed_url ? (
-                  <iframe src={p.embed_url} className="w-full rounded-xl" style={{ height: 200, border: 0 }} loading="lazy" />
+                {mapUrl ? (
+                  <iframe src={mapUrl} className="w-full rounded-xl" style={{ height: 200, border: 0 }}
+                          loading="lazy" sandbox="allow-scripts allow-same-origin" />
                 ) : (
                   <div className="bg-gray-100 rounded-xl p-4 text-center text-sm text-gray-500">📍 {p.address}</div>
                 )}
               </div>
             );
+          }
 
           case "divider":
             return p.style === "space"
@@ -197,11 +242,27 @@ function DynamicForm({ fields, accent, onSubmit, submitting }) {
     e.preventDefault();
     setError(null);
     for (const f of fields) {
-      if (f.required && !values[f.id]) {
+      // `!values[f.id]` alone treated a legitimate 0 as missing, and let a
+      // string of spaces through as present.
+      const raw = values[f.id];
+      const empty =
+        raw === undefined || raw === null || raw === false ||
+        (typeof raw === "string" && !raw.trim());
+      if (f.required && empty) {
         setError(`${f.label} is required`);
         return;
       }
     }
+
+    // The backend is the authority on this (it has to be — anyone can POST
+    // the endpoint directly), but catching it here saves a round trip and
+    // gives a clearer message than a 400 does.
+    const phone = String(values.phone ?? "").replace(/\D/g, "");
+    if (phone && (phone.length < 8 || phone.length > 15)) {
+      setError("Please enter a valid phone number with country code");
+      return;
+    }
+
     onSubmit(values);
   };
 
@@ -276,14 +337,18 @@ export default function EventRegistrationPage() {
       const res = await fetch("/api/public/events/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // project_id used to be sent from here. The backend ignored it for
+        // the registration itself but mixed it into the rate-limit key, so
+        // sending it at all was what made that limit forgeable.
         body: JSON.stringify({
           event_id: eventId,
-          project_id: event.project_id,
           data: values,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Registration failed");
+      // Was an unguarded res.json(), so an empty or non-JSON response
+      // showed the visitor a raw "Unexpected token" parse error.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.error || "Registration failed");
       setSubmitted(true);
     } catch (e) {
       alert(e.message);
