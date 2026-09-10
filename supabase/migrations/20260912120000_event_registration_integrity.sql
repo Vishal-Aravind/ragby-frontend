@@ -41,18 +41,19 @@ create index if not exists event_registrations_event_status_idx
 -- ------------------------------------------------------------
 -- 2. The duplicate backstop
 -- ------------------------------------------------------------
--- Partial, on two counts. Cancelled rows are excluded so that someone who
--- cancels can register again — which is the behaviour the app already
--- describes. Rows with no phone are excluded because the column is not
--- known to be NOT NULL and nulls must not collide with each other.
+-- Partial so that someone who cancels can register again, which is the
+-- behaviour the app already describes. phone is NOT NULL on this table, so
+-- no null guard is needed; event_id IS nullable, and nulls never collide
+-- in a unique index, which is the correct outcome for an orphaned row.
 --
--- If this fails with a uniqueness violation, duplicates already exist.
--- Run the query in the plan's Step 0 to see them; they must be collapsed
--- by hand, because deciding which of two real registrations to keep is not
--- a decision a migration should make silently.
+-- Verified clean before writing this: the table is empty, so the index
+-- creates without any cleanup. If it ever fails with a uniqueness
+-- violation, duplicates exist and must be collapsed by hand — deciding
+-- which of two real registrations to keep is not something a migration
+-- should do silently.
 create unique index if not exists event_registrations_event_phone_uniq
   on event_registrations (event_id, phone)
-  where status is distinct from 'cancelled' and phone is not null;
+  where status is distinct from 'cancelled';
 
 
 -- ------------------------------------------------------------
