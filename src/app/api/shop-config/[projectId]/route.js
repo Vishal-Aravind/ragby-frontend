@@ -1,7 +1,7 @@
 // src/app/api/shop-config/[projectId]/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getProjectRole } from "@/lib/supabase-api";
+import { requireProjectTab } from "@/lib/supabase-api";
 
 // FIX: razorpay_key_secret was previously returned to the browser on every
 // GET/PUT via select("*") — a live merchant secret shipped into the
@@ -33,9 +33,10 @@ export async function GET(req, { params }) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   // FIX: previously any logged-in user could read another project's shop
-  // config here — including its Razorpay key/secret in plaintext.
-  const role = await getProjectRole(user.id, projectId);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // config here — including its Razorpay key/secret in plaintext. Now gated
+  // on the shop tab rather than merely having some role on the project.
+  const gate = await requireProjectTab(user.id, projectId, { tab: "shop" });
+  if (!gate.ok) return gate.response;
 
   const { data, error } = await supabase
     .from("shop_config")
@@ -43,7 +44,10 @@ export async function GET(req, { params }) {
     .eq("project_id", projectId)
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("shop-config write failed:", error);
+    return NextResponse.json({ error: "Could not save your shop settings." }, { status: 500 });
+  }
   return NextResponse.json(data || {});
 }
 
@@ -53,8 +57,10 @@ export async function PUT(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = await getProjectRole(user.id, projectId);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Writing shop config sets prices, tax and the Razorpay keys, so it needs
+  // the shop tab and admin — not just any role.
+  const gate = await requireProjectTab(user.id, projectId, { tab: "shop", minRole: "admin" });
+  if (!gate.ok) return gate.response;
 
   const body = await req.json();
 
@@ -78,6 +84,9 @@ export async function PUT(req, { params }) {
     .select(SHOP_CONFIG_SAFE_COLUMNS)
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("shop-config write failed:", error);
+    return NextResponse.json({ error: "Could not save your shop settings." }, { status: 500 });
+  }
   return NextResponse.json(data);
 }

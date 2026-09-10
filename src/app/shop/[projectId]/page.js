@@ -34,7 +34,9 @@ export default function ShopPage() {
           fetch(`/api/public/shop/${projectId}?type=products${catalogId ? `&catalog_id=${catalogId}` : ""}`),
         ];
         if (orderId) {
-          promises.push(fetch(`/api/public/shop/order/${orderId}`));
+          // The backend now requires the phone that owns the order — it
+          // used to return any order's contents to anyone holding its id.
+          promises.push(fetch(`/api/public/shop/order/${orderId}?phone=${encodeURIComponent(phone)}`));
         }
 
         const results = await Promise.all(promises);

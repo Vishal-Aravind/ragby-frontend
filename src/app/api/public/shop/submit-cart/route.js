@@ -23,13 +23,15 @@ export async function POST(req) {
     try {
       data = JSON.parse(text);
     } catch {
-      console.error("Backend non-JSON response:", text);
-      return NextResponse.json({ error: text || "Backend error" }, { status: res.status });
+      // Was returning the raw body — on a backend 500 that put a Python
+      // traceback in front of an anonymous shopper.
+      console.error("submit-cart non-JSON response:", res.status, text.slice(0, 300));
+      return NextResponse.json({ error: "Could not place that order. Please try again." }, { status: 502 });
     }
 
     return NextResponse.json(data, { status: res.status });
   } catch (e) {
     console.error("submit-cart proxy error:", e.message);
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Could not reach the store. Please try again." }, { status: 502 });
   }
 }
