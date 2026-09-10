@@ -1,29 +1,17 @@
-// ─────────────────────────────────────────────────────────
-// app/api/shopify/disconnect/[projectId]/route.js
-// ─────────────────────────────────────────────────────────
+// src/app/api/shopify/disconnect/[projectId]/route.js
 import { NextResponse } from "next/server";
-import { getSupabase, getProjectRole } from "@/lib/supabase-api";
+import { getSupabase, getToken, requireProjectTab } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function DELETE(req, { params }) {
   const { projectId } = await params;
   const { supabase } = getSupabase(req);
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // FIX: previously any logged-in user could disconnect any project's
-  // Shopify integration by passing an arbitrary project_id.
-  const role = await getProjectRole(session.user.id, projectId);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const gate = await requireProjectTab(user.id, projectId, { tab: "integrations", minRole: "admin" });
+  if (!gate.ok) return gate.response;
 
-  const res = await fetch(
-    `${process.env.BACKEND_BASE_URL}/shopify/disconnect/${projectId}`,
-    { method: "DELETE", headers: { "Authorization": `Bearer ${session.access_token}` } }
-  );
-
-  if (!res.ok) {
-    const err = await res.text();
-    return NextResponse.json({ error: err }, { status: res.status });
-  }
-
-  return NextResponse.json(await res.json());
+  const token = await getToken(supabase);
+  return proxyToBackend(`/shopify/disconnect/${projectId}`, { token, method: "DELETE" });
 }

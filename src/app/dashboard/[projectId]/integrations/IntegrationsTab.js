@@ -1007,6 +1007,10 @@ function ShopifyItem({ projectId }) {
   // SHOPIFY_AUTH message back here, rather than the frontend polling.
   useEffect(() => {
     const handler = (event) => {
+      // The backend popup now targets this exact origin (shopify_oauth.py's
+      // _popup_html), so anything arriving from elsewhere is not ours —
+      // without this, any other window could post a fake FINISH.
+      if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "SHOPIFY_AUTH") return;
       if (event.data.event === "FINISH") {
         setLoading(false);
@@ -1030,7 +1034,7 @@ function ShopifyItem({ projectId }) {
       const res = await fetch(`/api/shopify/connect?projectId=${projectId}&shop=${encodeURIComponent(shop)}`);
       const data = await res.json();
       if (!res.ok || !data.auth_url) {
-        toast.error(data.error || "Failed to start Shopify connection.");
+        toast.error(data.error || data.detail || "Failed to start Shopify connection.");
         setLoading(false);
         return;
       }

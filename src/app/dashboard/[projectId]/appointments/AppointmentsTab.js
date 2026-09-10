@@ -155,6 +155,10 @@ export default function AppointmentsTab({ project }) {
   // Listen for Google OAuth popup callback
   useEffect(() => {
     const handler = async (event) => {
+      // The callback popup targets this exact origin now (appointments.py's
+      // _popup_html), so anything from elsewhere is not ours. Without this,
+      // any other window could post a fake FINISH.
+      if (event.origin !== window.location.origin) return
       if (event.data?.type === 'GOOGLE_AUTH') {
         if (event.data.event === 'FINISH') {
           setGoogleConnecting(false)
