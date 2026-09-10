@@ -21,7 +21,10 @@ export const BACKEND =
  * shape) and the account page reads `data.detail`, so that key is preserved
  * verbatim; these messages are written for the customer.
  */
-export async function proxyToBackend(path, { token, method = "GET", body } = {}) {
+export async function proxyToBackend(
+  path,
+  { token, method = "GET", body, timeoutMs = 30000 } = {}
+) {
   let res;
   try {
     res = await fetch(`${BACKEND}${path}`, {
@@ -31,11 +34,17 @@ export async function proxyToBackend(path, { token, method = "GET", body } = {})
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      // Without this a slow (not even down) backend pins the Next.js
+      // request until the platform's own timeout kills it, and the user
+      // watches a spinner with no error the whole time.
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e) {
     console.error(`backend unreachable: ${path}`, e);
+    // Was worded as "the billing service", which is what Shopify and every
+    // later caller of this helper also showed.
     return NextResponse.json(
-      { detail: "We couldn't reach the billing service. Please try again in a moment." },
+      { detail: "We couldn't reach the server. Please try again in a moment." },
       { status: 502 }
     );
   }

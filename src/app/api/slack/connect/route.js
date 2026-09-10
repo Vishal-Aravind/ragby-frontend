@@ -3,7 +3,8 @@
 // Gets the Slack OAuth URL and redirects user
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
-import { getSupabase, getProjectRole } from "@/lib/supabase-api";
+import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function GET(req) {
   const { supabase } = getSupabase(req);
@@ -12,17 +13,16 @@ export async function GET(req) {
 
   const projectId = req.nextUrl.searchParams.get("projectId");
 
-  // FIX: previously any logged-in user could pass any project_id here and
-  // start connecting Slack to a project they don't own.
-  const role = await getProjectRole(session.user.id, projectId);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Was getProjectRole, which passes for ANY role — so an agent locked out
+  // of Integrations could still start an install. Only admins may connect.
+  const access = await requireProjectTab(session.user.id, projectId, {
+    tab: "integrations",
+    minRole: "admin",
+  });
+  if (!access.ok) return access.response;
 
-  const res = await fetch(
-    `${process.env.BACKEND_BASE_URL}/slack/auth-url?project_id=${projectId}`,
-    { headers: { "Authorization": `Bearer ${session.access_token}` } }
+  return proxyToBackend(
+    `/slack/auth-url?project_id=${encodeURIComponent(projectId)}`,
+    { token: session.access_token }
   );
- 
-  const data = await res.json();
-  return NextResponse.json(data);
 }
- 

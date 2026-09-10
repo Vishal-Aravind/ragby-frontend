@@ -1,9 +1,9 @@
- 
 // ─────────────────────────────────────────────────────────
 // app/api/slack/disconnect/[projectId]/route.js
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
-import { getSupabase, getProjectRole } from "@/lib/supabase-api";
+import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function DELETE(req, { params }) {
   const { projectId } = await params;
@@ -11,18 +11,17 @@ export async function DELETE(req, { params }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // FIX: previously any logged-in user could disconnect any project's
-  // Slack integration by passing an arbitrary project_id.
-  const role = await getProjectRole(session.user.id, projectId);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // This route dropped the backend's status code, so an agent without the
+  // integrations permission got a 403 from FastAPI, a 200 from here, and a
+  // "Slack disconnected" toast for something that never happened.
+  const access = await requireProjectTab(session.user.id, projectId, {
+    tab: "integrations",
+    minRole: "admin",
+  });
+  if (!access.ok) return access.response;
 
-  const res = await fetch(
-    `${process.env.BACKEND_BASE_URL}/slack/disconnect/${projectId}`,
-    {
-      method: "DELETE",
-      headers: { "Authorization": `Bearer ${session.access_token}` },
-    }
-  );
- 
-  return NextResponse.json(await res.json());
+  return proxyToBackend(`/slack/disconnect/${projectId}`, {
+    token: session.access_token,
+    method: "DELETE",
+  });
 }

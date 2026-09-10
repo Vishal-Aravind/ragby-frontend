@@ -769,12 +769,13 @@ function TelegramItem({ projectId }) {
   async function handleDisconnect() {
     setLoading(true);
     try {
-      // The response used to be discarded, so a 403 (non-admin) or a 500
-      // still flipped the UI to disconnected and toasted success - the
-      // merchant believed the integration was gone while it stayed live.
+      // This check only started working once the API route stopped
+      // discarding the backend's status code — until then every failure,
+      // including a 403 for a non-admin, arrived here as a 200.
       const res = await fetch(`/api/telegram/disconnect/${projectId}`, { method: "DELETE" });
       if (!res.ok) {
-        toast.error("Couldn't disconnect Telegram. Please try again.");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || data.detail || "Couldn't disconnect Telegram. Please try again.");
         return;
       }
       setConnected(false);
@@ -904,12 +905,13 @@ function SlackItem({ projectId }) {
   async function handleDisconnect() {
     setLoading(true);
     try {
-      // The response used to be discarded, so a 403 (non-admin) or a 500
-      // still flipped the UI to disconnected and toasted success - the
-      // merchant believed the integration was gone while it stayed live.
+      // This check only started working once the API route stopped
+      // discarding the backend's status code — until then every failure,
+      // including a 403 for a non-admin, arrived here as a 200.
       const res = await fetch(`/api/slack/disconnect/${projectId}`, { method: "DELETE" });
       if (!res.ok) {
-        toast.error("Couldn't disconnect Slack. Please try again.");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || data.detail || "Couldn't disconnect Slack. Please try again.");
         return;
       }
       setConnected(false);

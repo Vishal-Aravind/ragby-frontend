@@ -1,9 +1,9 @@
- 
 // ─────────────────────────────────────────────────────────
 // app/api/slack/status/[projectId]/route.js
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
-import { getSupabase, getProjectRole } from "@/lib/supabase-api";
+import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function GET(req, { params }) {
   const { projectId } = await params;
@@ -11,16 +11,15 @@ export async function GET(req, { params }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // FIX: previously any logged-in user could check any project's Slack
-  // connection status by passing an arbitrary project_id.
-  const role = await getProjectRole(session.user.id, projectId);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Was getProjectRole, which passes for ANY role and ignores the per-member
+  // tab grid the backend enforces. The status code was dropped too, so a 403
+  // rendered as "not connected".
+  const access = await requireProjectTab(session.user.id, projectId, {
+    tab: "integrations",
+  });
+  if (!access.ok) return access.response;
 
-  const res = await fetch(
-    `${process.env.BACKEND_BASE_URL}/slack/status/${projectId}`,
-    { headers: { "Authorization": `Bearer ${session.access_token}` } }
-  );
- 
-  return NextResponse.json(await res.json());
+  return proxyToBackend(`/slack/status/${projectId}`, {
+    token: session.access_token,
+  });
 }
- 
