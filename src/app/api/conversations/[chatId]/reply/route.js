@@ -1,8 +1,9 @@
 // src/app/api/conversations/[chatId]/reply/route.js
 import { NextResponse } from "next/server";
+import { proxyToBackend } from "@/lib/backend-proxy";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import { getProjectRole } from "@/lib/supabase-api";
+import { requireProjectTab } from "@/lib/supabase-api";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -32,36 +33,49 @@ export async function POST(req, { params }) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { message, project_id, phone_number } = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+  const { message, project_id } = body;
   if (!message?.trim()) return NextResponse.json({ error: "Message required" }, { status: 400 });
 
-  const { data: chat } = await supabaseAdmin.from("chats").select("project_id").eq("id", chatId).maybeSingle();
+  // external_id is read here rather than trusted from the body. The chat
+  // was validated against the project, but phone_number was whatever the
+  // client sent — so the validated chat did not actually constrain who
+  // received the message.
+  const { data: chat } = await supabaseAdmin
+    .from("chats")
+    .select("project_id, external_id, channel")
+    .eq("id", chatId)
+    .maybeSingle();
   if (!chat || chat.project_id !== project_id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (chat.channel !== "whatsapp" || !chat.external_id) {
+    return NextResponse.json({ error: "That conversation is not a WhatsApp chat." }, { status: 400 });
+  }
 
-  const role = await getProjectRole(user.id, project_id);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // Was getProjectRole, which passes for ANY role. Sending on the business's
+  // WhatsApp number is an admin action, matching the backend endpoint.
+  const access = await requireProjectTab(user.id, project_id, {
+    tab: "conversations",
+    minRole: "admin",
+  });
+  if (!access.ok) return access.response;
 
   // Get auth token for backend
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
 
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://ragby-backend.onrender.com";
-
-  const res = await fetch(`${backendUrl}/whatsapp/reply`, {
+  // Was collapsing every backend status to 500, so a 429 or a refusal
+  // outside the 24-hour window reached the browser as a generic server
+  // error. Also had a hardcoded production URL as its fallback.
+  return proxyToBackend("/whatsapp/reply", {
+    token,
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({ project_id, phone_number, message }),
+    body: { project_id, phone_number: chat.external_id, message },
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    return NextResponse.json({ error: err.detail || "Failed to send" }, { status: 500 });
-  }
-
-  return NextResponse.json({ status: "sent" });
 }

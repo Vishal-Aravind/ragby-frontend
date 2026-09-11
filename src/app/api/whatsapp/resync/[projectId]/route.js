@@ -1,11 +1,9 @@
 // ─────────────────────────────────────────────────────────
 // app/api/whatsapp/resync/[projectId]/route.js
-// Deliberately separate from resubscribe — Meta rate-limits the sync API
-// per phone number, so this must stay a standalone, deliberate action,
-// never auto-triggered. See backend/whatsapp.py's whatsapp_resync.
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
-import { getSupabase } from "@/lib/supabase-api";
+import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
 export async function POST(req, { params }) {
   const { projectId } = await params;
@@ -13,13 +11,18 @@ export async function POST(req, { params }) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const res = await fetch(
-    `${process.env.BACKEND_BASE_URL}/whatsapp/resync/${projectId}`,
-    {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${session.access_token}` },
-    }
-  );
+  // This layer checked only for a session, so projectId from the URL was
+  // taken entirely on trust. The backend does enforce, but WhatsApp was
+  // the last integration still hand-rolled rather than using the shared
+  // tab gate. Burns a hard Meta quota.
+  const access = await requireProjectTab(session.user.id, projectId, {
+    tab: "integrations",
+    minRole: "admin",
+  });
+  if (!access.ok) return access.response;
 
-  return NextResponse.json(await res.json(), { status: res.status });
+  return proxyToBackend(`/whatsapp/resync/${projectId}`, {
+    token: session.access_token,
+    method: "POST",
+  });
 }

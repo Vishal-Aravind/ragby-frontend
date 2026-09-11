@@ -112,6 +112,7 @@ function WhatsAppItem({ projectId }) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [statusError, setStatusError] = useState(null);
   const [coexistence, setCoexistence] = useState(null);
   const [resyncing, setResyncing] = useState(false);
   const isCoexistenceRef = useRef(false);
@@ -131,8 +132,16 @@ function WhatsAppItem({ projectId }) {
           const data = await res.json();
           setConnected(data.connected);
           if (data.display_phone_number) setPhoneNumber(data.display_phone_number);
+        } else {
+          // Every failure was swallowed, so a 403 or a backend outage
+          // rendered as "not connected" and invited a pointless re-onboard
+          // of an already-connected number.
+          const data = await res.json().catch(() => ({}));
+          setStatusError(data.error || data.detail || "Couldn't check the WhatsApp connection.");
         }
-      } catch {}
+      } catch {
+        setStatusError("Couldn't reach the server to check the WhatsApp connection.");
+      }
       setChecking(false);
     }
     checkStatus();
@@ -319,6 +328,10 @@ function WhatsAppItem({ projectId }) {
     >
       {checking ? (
         <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
+      ) : statusError ? (
+        <div className="text-sm bg-white border border-amber-200 rounded-xl px-4 py-3 text-amber-700">
+          {statusError}
+        </div>
       ) : connected ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm bg-white border rounded-xl px-4 py-3">
