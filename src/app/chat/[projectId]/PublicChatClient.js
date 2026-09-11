@@ -79,7 +79,10 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
       const res = await fetch("/api/chat/public/history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
+        // project.id, not a bare projectId — the backend now requires the
+        // project to scope the transcript, and this component only ever
+        // had the project object in scope.
+        body: JSON.stringify({ sessionId, projectId: project.id }),
       });
       if (res.ok) {
         const data = await res.json();

@@ -15,12 +15,31 @@ const BACKEND = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(req) {
-  const { sessionId } = await req.json();
-  if (!sessionId || !UUID_RE.test(sessionId)) {
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ messages: [] });
+  }
+  const { sessionId, projectId } = body;
+
+  // projectId is required by the backend now. The channel restriction was
+  // the only binding before, so a leaked public session id from any
+  // project returned its transcript to whoever held it.
+  if (!sessionId || !UUID_RE.test(sessionId) || !projectId || !UUID_RE.test(projectId)) {
     return NextResponse.json({ messages: [] });
   }
 
-  const res = await fetch(`${BACKEND}/public/chat/history/${sessionId}`);
-  if (!res.ok) return NextResponse.json({ messages: [] });
-  return NextResponse.json(await res.json());
+  try {
+    const res = await fetch(
+      `${BACKEND}/public/chat/history/${sessionId}?project_id=${encodeURIComponent(projectId)}`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (!res.ok) return NextResponse.json({ messages: [] });
+    return NextResponse.json(await res.json());
+  } catch (e) {
+    // History is a redraw convenience; never fail the page over it.
+    console.error("public chat history failed:", e);
+    return NextResponse.json({ messages: [] });
+  }
 }
