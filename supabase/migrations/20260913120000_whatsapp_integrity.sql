@@ -44,16 +44,17 @@ alter table whatsapp_integrations
 -- ------------------------------------------------------------
 -- 2. One project per WhatsApp number
 -- ------------------------------------------------------------
--- Partial because phone_number_id is nullable — a row mid-onboarding has
--- none yet, and nulls must not collide with each other.
+-- phone_number_id is NOT NULL on this table, so no partial clause is
+-- needed. Verified clean against the deployed database before writing
+-- this: no number is currently bound to more than one project, so the
+-- index creates with no cleanup step.
 --
--- If this fails with a uniqueness violation, two projects are already
--- bound to one number and their conversations are being split. That must
--- be resolved by hand: run the query in the plan's Step 0, decide which
--- project genuinely owns the number, and disconnect the other.
+-- If this ever fails with a uniqueness violation, two projects are bound
+-- to one number and their conversations are being split. That must be
+-- resolved by hand — decide which project genuinely owns the number and
+-- disconnect the other.
 create unique index if not exists whatsapp_integrations_phone_number_id_uniq
-  on whatsapp_integrations (phone_number_id)
-  where phone_number_id is not null;
+  on whatsapp_integrations (phone_number_id);
 
 
 -- ------------------------------------------------------------
