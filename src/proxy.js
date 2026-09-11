@@ -30,16 +30,37 @@ export async function proxy(request) {
     pathname === "/" ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
+    pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/verification");
 
   const protectedPages = pathname.startsWith("/dashboard") || pathname.startsWith("/admin");
 
-  if (user && authPages) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // /reset-password establishes a recovery session, which makes the user
+  // "logged in" — so without this it would be treated as an auth page and
+  // bounced to the dashboard before they could set a new password.
+  const recoveryPages = pathname.startsWith("/reset-password");
+
+  if (user && authPages && !recoveryPages) {
+    // An unverified user is sent to /verification below, and /verification
+    // is itself an auth page — without this exception the two redirects
+    // bounce off each other forever.
+    const stuckOnVerification =
+      !user.email_confirmed_at && pathname.startsWith("/verification");
+    if (!stuckOnVerification) {
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
   }
 
   if (!user && protectedPages) {
     return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Email confirmation was enforced in exactly one place, the login route,
+  // so any session obtained another way reached the dashboard and every
+  // API unverified. Checked here so it covers every protected page rather
+  // than one entry point.
+  if (user && protectedPages && !user.email_confirmed_at) {
+    return NextResponse.redirect(new URL("/verification", request.url));
   }
 
   // /admin needs staff status specifically, not just any login. Checked

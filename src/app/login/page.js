@@ -73,6 +73,12 @@ function LoginContent() {
           />
         </div>
 
+        <div className="text-right -mt-1">
+          <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-blue-600 hover:underline">
+            Forgot password?
+          </Link>
+        </div>
+
         <button
           onClick={login}
           disabled={loading}

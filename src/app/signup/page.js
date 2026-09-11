@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
+import { validatePassword, MIN_PASSWORD_LENGTH } from "@/lib/password";
  
 export default function SignupPage() {
   const router = useRouter();
@@ -23,8 +24,11 @@ export default function SignupPage() {
       toast.error("Please fill in all fields");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    // Same rule as the server, from one shared module so the two cannot
+    // drift the way the old duplicated `< 6` check did.
+    const pwError = validatePassword(password, { email, name });
+    if (pwError) {
+      toast.error(pwError);
       return;
     }
  
@@ -107,7 +111,7 @@ export default function SignupPage() {
           />
           <input
             type="password"
-            placeholder="Password (min 6 characters)"
+            placeholder={`Password (min ${MIN_PASSWORD_LENGTH} characters)`}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && signup()}

@@ -102,6 +102,15 @@ export async function POST(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Email confirmation was checked only at login, so a session obtained
+  // any other way could create projects unverified.
+  if (!user.email_confirmed_at) {
+    return NextResponse.json(
+      { error: "Please verify your email before creating a project." },
+      { status: 403 }
+    );
+  }
+
   // One business = one account — enforced here server-side, not just in the
   // UI, since a direct client-side insert could otherwise bypass any
   // frontend-only check. Only checks projects this user OWNS — being a team
