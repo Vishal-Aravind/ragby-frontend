@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 // FIX: this route used to query chat_messages directly with the SERVICE
 // ROLE key (full RLS bypass) from a public, unauthenticated, internet-
@@ -33,7 +34,7 @@ export async function POST(req) {
   try {
     const res = await fetch(
       `${BACKEND}/public/chat/history/${sessionId}?project_id=${encodeURIComponent(projectId)}`,
-      { signal: AbortSignal.timeout(10000) }
+      { signal: AbortSignal.timeout(10000), headers: visitorHeaders(req) }
     );
     if (!res.ok) return NextResponse.json({ messages: [] });
     return NextResponse.json(await res.json());

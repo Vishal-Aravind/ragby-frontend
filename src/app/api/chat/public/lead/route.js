@@ -6,15 +6,20 @@
 // BACKEND_BASE_URL is server-only here.
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
+import { BACKEND } from "@/lib/backend-proxy";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 export async function POST(req) {
   const { projectId, sessionId, chatSessionId, name, email, phone } = await req.json();
 
   let res;
   try {
-    res = await fetch(`${process.env.BACKEND_BASE_URL}/public/leads`, {
+    // BACKEND_BASE_URL alone was resolved here; every other route resolves
+    // the full chain, so one missing name meant "undefined/public/leads".
+    res = await fetch(`${BACKEND}/public/leads`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(30000),
+      headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
       body: JSON.stringify({
         project_id: projectId,
         session_id: sessionId,

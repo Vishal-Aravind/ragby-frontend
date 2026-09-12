@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { visitorHeaders } from "@/lib/visitor-ip";
 
 // Every billing route resolved only BACKEND_BASE_URL, while the rest of the
 // app resolves this chain. One name missing in an environment meant
@@ -20,17 +21,25 @@ export const BACKEND =
  * The backend signals errors as {detail: "..."} (FastAPI's HTTPException
  * shape) and the account page reads `data.detail`, so that key is preserved
  * verbatim; these messages are written for the customer.
+ *
+ * `token` is optional so the unauthenticated /public/* routes can use this
+ * too. Pass `req` on those: it forwards the real visitor address via
+ * visitorHeaders. Without it the backend's client_ip() sees only this
+ * frontend's egress IP, so every visitor of every project shares one
+ * rate-limit bucket — on the booking page that meant roughly ten concurrent
+ * visitors could 429 each other off the slots endpoint.
  */
 export async function proxyToBackend(
   path,
-  { token, method = "GET", body, timeoutMs = 30000 } = {}
+  { token, req, method = "GET", body, timeoutMs = 30000 } = {}
 ) {
   let res;
   try {
     res = await fetch(`${BACKEND}${path}`, {
       method,
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(req ? visitorHeaders(req) : {}),
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
