@@ -10,6 +10,25 @@ const JOB_LABELS = {
   whatsapp_sync_monitor: "WhatsApp Coexistence sync monitor (every 30m)",
 };
 
+/**
+ * A job can succeed and still have found something that needs a human.
+ *
+ * Both of these used to be reported as job FAILURES by the backend, which
+ * made a working detector look identical to a broken one and painted the
+ * row red for ever. The backend now reports the run honestly and puts the
+ * finding in `detail`; this is what reads it out.
+ */
+function jobWarning(name, detail) {
+  if (!detail) return null;
+  if (name === "whatsapp_sync_monitor" && detail.stalled_count > 0) {
+    return `${detail.stalled_count} sync${detail.stalled_count === 1 ? "" : "s"} stalled past 12h — Meta offboards at 24h`;
+  }
+  if (name === "shopify_reconciliation" && detail.failed > 0) {
+    return `${detail.failed} of ${detail.total} stores failed to sync`;
+  }
+  return null;
+}
+
 function timeAgo(ts) {
   if (!ts) return "never";
   const diff = Date.now() - new Date(ts).getTime();
@@ -43,21 +62,29 @@ export default function SystemHealthTab() {
         <div className="divide-y">
           {data.jobs.map(j => {
             const status = j.lastRun?.status;
+            const warning = jobWarning(j.name, j.lastRun?.detail);
             return (
-              <div key={j.name} className="px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {status === "success" ? (
-                    <CheckCircle2 size={15} className="text-emerald-500" />
-                  ) : status === "failure" ? (
-                    <XCircle size={15} className="text-red-500" />
-                  ) : (
-                    <MinusCircle size={15} className="text-gray-300" />
-                  )}
-                  <span className="text-sm text-gray-800">{JOB_LABELS[j.name] || j.name}</span>
+              <div key={j.name} className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {status === "failure" ? (
+                      <XCircle size={15} className="text-red-500 shrink-0" />
+                    ) : warning ? (
+                      <AlertTriangle size={15} className="text-amber-500 shrink-0" />
+                    ) : status === "success" ? (
+                      <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                    ) : (
+                      <MinusCircle size={15} className="text-gray-300 shrink-0" />
+                    )}
+                    <span className="text-sm text-gray-800 truncate">{JOB_LABELS[j.name] || j.name}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {j.lastRun ? `Last run ${timeAgo(j.lastRun.finished_at)} · ${status}` : "No recorded runs yet"}
+                  </span>
                 </div>
-                <span className="text-xs text-muted-foreground">
-                  {j.lastRun ? `Last run ${timeAgo(j.lastRun.finished_at)} · ${status}` : "No recorded runs yet"}
-                </span>
+                {warning && (
+                  <p className="text-xs text-amber-700 mt-1.5 ml-[23px]">{warning}</p>
+                )}
               </div>
             );
           })}
