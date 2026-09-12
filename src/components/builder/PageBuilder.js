@@ -749,7 +749,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
                 <div className="flex items-center justify-between border rounded-xl px-3 py-3 bg-white">
                   <div>
                     <p className="text-sm font-medium">Let the AI register in chat</p>
-                    <p className="text-xs text-muted-foreground">Your chatbot can register customers for this event directly inside a conversation (WhatsApp, Telegram, Slack, web chat)</p>
+                    <p className="text-xs text-muted-foreground">Your chatbot can register customers for this event directly inside a conversation (WhatsApp, Telegram, web chat)</p>
                   </div>
                   <button
                     onClick={() => updateDetail({ bot_can_register: !details.bot_can_register })}

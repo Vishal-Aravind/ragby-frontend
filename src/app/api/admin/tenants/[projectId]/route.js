@@ -26,7 +26,6 @@ export async function GET(req, { params }) {
     usageRes,
     whatsappRes,
     telegramRes,
-    slackRes,
     shopifyRes,
     razorpayRes,
     chatsRes,
@@ -40,7 +39,6 @@ export async function GET(req, { params }) {
     supabaseAdmin.from("usage").select("count").eq("user_id", project.user_id).eq("month", month).maybeSingle(),
     supabaseAdmin.from("whatsapp_integrations").select("waba_id").eq("project_id", projectId).maybeSingle(),
     supabaseAdmin.from("telegram_integrations").select("bot_username").eq("project_id", projectId).maybeSingle(),
-    supabaseAdmin.from("slack_integrations").select("team_name").eq("project_id", projectId).maybeSingle(),
     supabaseAdmin.from("shopify_integrations").select("shop_domain, last_synced_at, last_sync_error").eq("project_id", projectId).maybeSingle(),
     supabaseAdmin.from("razorpay_connections").select("razorpay_account_id, connected_at").eq("project_id", projectId).maybeSingle(),
     supabaseAdmin.from("chats").select("id", { count: "exact", head: true }).eq("project_id", projectId).gte("created_at", sevenDaysAgo),
@@ -65,7 +63,6 @@ export async function GET(req, { params }) {
     integrations: {
       whatsapp: whatsappRes.data ? { connected: true, ...whatsappRes.data } : { connected: false },
       telegram: telegramRes.data ? { connected: true, ...telegramRes.data } : { connected: false },
-      slack: slackRes.data ? { connected: true, ...slackRes.data } : { connected: false },
       shopify: shopifyRes.data ? { connected: true, ...shopifyRes.data } : { connected: false },
       razorpay: razorpayRes.data ? { connected: true, ...razorpayRes.data } : { connected: false },
     },

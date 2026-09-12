@@ -576,7 +576,7 @@ export default function AppointmentsTab({ project }) {
           <div className="flex items-center justify-between border rounded-xl px-4 py-3 bg-white">
             <div>
               <p className="text-sm font-medium">Let the AI book in chat</p>
-              <p className="text-xs text-muted-foreground">Your chatbot can check availability and book appointments directly inside a conversation (WhatsApp, Telegram, Slack, web chat)</p>
+              <p className="text-xs text-muted-foreground">Your chatbot can check availability and book appointments directly inside a conversation (WhatsApp, Telegram, web chat)</p>
             </div>
             <button
               onClick={() => setSettings(s => ({ ...s, bot_can_book: !s.bot_can_book }))}

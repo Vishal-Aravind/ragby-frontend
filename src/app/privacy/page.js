@@ -9,7 +9,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-semibold text-gray-900 mb-2">1. Introduction</h2>
           <p>
-            Askzavo ("we", "our", or "us") operates an AI-powered business automation platform accessible at askzavo.com. This Privacy Policy explains how we collect, use, store, and protect information when you use our services, including our WhatsApp Business API integration, website chat widget, Telegram bot, and Slack integration.
+            Askzavo ("we", "our", or "us") operates an AI-powered business automation platform accessible at askzavo.com. This Privacy Policy explains how we collect, use, store, and protect information when you use our services, including our WhatsApp Business API integration, website chat widget, and Telegram bot.
           </p>
           <p className="mt-2">
             By using Askzavo, you agree to the collection and use of information in accordance with this policy.

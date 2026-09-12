@@ -91,9 +91,6 @@ export default function IntegrationsTab({ projectId }) {
       {/* Telegram */}
       <TelegramItem projectId={projectId} />
 
-      {/* Slack */}
-      <SlackItem projectId={projectId} />
-
       {/* Shopify */}
       <ShopifyItem projectId={projectId} />
 
@@ -926,115 +923,6 @@ function TelegramItem({ projectId }) {
           </div>
           <Button onClick={handleConnect} disabled={loading || !botToken.trim()} className="w-full">
             {loading ? <><Loader2 size={13} className="animate-spin mr-2" />Connecting...</> : "Connect Telegram Bot"}
-          </Button>
-        </div>
-      )}
-    </IntegrationItem>
-  );
-}
-
-// ── Slack Item ─────────────────────────────────────────────
-function SlackItem({ projectId }) {
-  const [connected, setConnected] = useState(false);
-  const [teamName, setTeamName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    async function checkStatus() {
-      const res = await fetch(`/api/slack/status/${projectId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setConnected(data.connected);
-        if (data.team_name) setTeamName(data.team_name);
-      }
-      setChecking(false);
-    }
-    checkStatus();
-  }, [projectId]);
-
-  async function handleConnect() {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/slack/connect?projectId=${projectId}`);
-      const data = await res.json();
-      // A 403 (not an admin) returned no url, so nothing happened at all and
-      // the button stayed on "Connecting..." with no explanation.
-      if (!res.ok || !data.url) {
-        toast.error(data.error || "Couldn't start the Slack connection.");
-        setLoading(false);
-        return;
-      }
-      window.location.href = data.url;
-    } catch {
-      toast.error("Something went wrong.");
-      setLoading(false);
-    }
-  }
-
-  async function handleDisconnect() {
-    setLoading(true);
-    try {
-      // This check only started working once the API route stopped
-      // discarding the backend's status code — until then every failure,
-      // including a 403 for a non-admin, arrived here as a 200.
-      const res = await fetch(`/api/slack/disconnect/${projectId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error || data.detail || "Couldn't disconnect Slack. Please try again.");
-        return;
-      }
-      setConnected(false);
-      setTeamName("");
-      toast.success("Slack disconnected.");
-    } finally { setLoading(false); }
-  }
-
-  const slackIcon = (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" fill="#E01E5A"/>
-    </svg>
-  );
-
-  return (
-    <IntegrationItem
-      icon={slackIcon}
-      title="Slack Integration"
-      badge={!checking && connected ? "Connected" : undefined}
-    >
-      {checking ? (
-        <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
-      ) : connected ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm bg-white border rounded-xl px-4 py-3">
-            <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-            <span>Connected to <strong>{teamName}</strong></span>
-          </div>
-          <div className="bg-white border rounded-xl px-4 py-3 space-y-2">
-            <p className="text-xs font-medium">How to use:</p>
-            <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-              <li>Invite the bot to a channel: <code>/invite @Zavo</code></li>
-              <li>Mention it: <code>@Zavo what is the pricing?</code></li>
-              <li>Or DM the bot directly</li>
-            </ol>
-          </div>
-          <Button variant="destructive" size="sm" onClick={handleDisconnect} disabled={loading}>
-            {loading ? "Disconnecting..." : "Disconnect"}
-          </Button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Connect your Slack workspace to answer questions in channels and DMs.</p>
-          <div className="bg-white border rounded-xl px-4 py-3 space-y-1">
-            <p className="text-xs font-medium">After connecting:</p>
-            <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-              <li>Invite the bot to any channel</li>
-              <li>Mention <code>@Zavo</code> with your question</li>
-              <li>Or DM the bot directly</li>
-            </ol>
-          </div>
-          <Button onClick={handleConnect} disabled={loading} className="w-full">
-            {loading ? <><Loader2 size={13} className="animate-spin mr-2" />Connecting...</> : "Connect Slack Workspace"}
           </Button>
         </div>
       )}

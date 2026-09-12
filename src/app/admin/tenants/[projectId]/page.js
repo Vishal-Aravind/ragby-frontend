@@ -12,7 +12,6 @@ import { toast } from "sonner";
 const INTEGRATIONS = [
   { key: "whatsapp", label: "WhatsApp", detail: d => d.waba_id ? `WABA ${d.waba_id}` : null },
   { key: "telegram", label: "Telegram", detail: d => d.bot_username ? `@${d.bot_username}` : null },
-  { key: "slack", label: "Slack", detail: d => d.team_name || null },
   { key: "shopify", label: "Shopify", detail: d => d.shop_domain || null },
   { key: "razorpay", label: "Razorpay", detail: d => d.razorpay_account_id || null },
 ];

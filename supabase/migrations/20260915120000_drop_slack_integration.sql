@@ -1,0 +1,29 @@
+-- ============================================================
+-- Remove Slack entirely
+-- ============================================================
+-- Slack was a full customer-facing bot channel — a customer messaged the
+-- merchant's Slack workspace and run_chat answered, same as WhatsApp and
+-- Telegram. Removed because it had no validated customer demand (unlike
+-- WhatsApp) and nobody messages a restaurant or salon on Slack to order
+-- food or book an appointment. Zero customers at the time of removal
+-- makes this the cheapest possible moment to cut it.
+--
+-- This drops the one piece of state Slack owned: its stored OAuth access
+-- tokens. Existing `chats` rows with channel = 'slack' are left alone —
+-- they're real conversation history and keep rendering in the dashboard;
+-- they simply stop receiving new messages now that backend/slack.py and
+-- the /api/slack/* routes no longer exist.
+--
+-- Note: slack_integrations was never created by a migration in this repo
+-- (it was made directly in the Supabase dashboard). Two earlier migrations
+-- reference it — 20260824120000 enables RLS on it, 20260911120000 adds a
+-- unique index to it — which means this migration set was already not
+-- replayable from scratch for a reason that predates this change. Those
+-- two files are deliberately left untouched rather than edited to match:
+-- rewriting historical migrations doesn't fix the replay gap, and this
+-- drop doesn't make it any worse.
+--
+-- Safe to re-run.
+-- ============================================================
+
+drop table if exists slack_integrations;

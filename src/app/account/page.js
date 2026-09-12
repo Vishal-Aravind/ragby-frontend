@@ -23,7 +23,7 @@ const PLAN_FEATURES = {
   free: [
     "300 messages / month",
     "Website widget & shareable link",
-    "Telegram & Slack",
+    "Telegram",
   ],
   pro: [
     "5,000 messages / month",

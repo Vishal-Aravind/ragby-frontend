@@ -15,7 +15,7 @@ export async function GET(req) {
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // Only the internal test-chat channel — real customer conversations
-  // (whatsapp/telegram/slack/public) belong in the Conversations tab, not here.
+  // (whatsapp/telegram/public) belong in the Conversations tab, not here.
   const { data, error } = await supabase
     .from("chats")
     .select("*")

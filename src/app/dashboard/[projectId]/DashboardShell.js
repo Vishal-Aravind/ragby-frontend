@@ -38,7 +38,7 @@ const TOUR_STEPS = [
     tourId: "integrations",
     icon: Plug,
     title: "Integrations",
-    content: "Go live by connecting WhatsApp, Slack, Telegram, or Shopify here.",
+    content: "Go live by connecting WhatsApp, Telegram, or Shopify here.",
     access: "integrations",
   },
   {
