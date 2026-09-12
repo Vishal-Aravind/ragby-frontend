@@ -26,7 +26,8 @@ export async function GET(req, { params }) {
     .order("created_at");
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("chat messages load failed:", error);
+    return NextResponse.json({ error: "Could not load messages." }, { status: 500 });
   }
 
   return NextResponse.json(data || []);

@@ -8,6 +8,7 @@
 // know what's already been handled.
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { dbError } from "@/lib/api-error";
 
 const FALLBACK_TEXT = "I couldn't find that in your documents or data sources.";
 
@@ -123,6 +124,6 @@ export async function POST(req) {
     resolved_by: user.id,
   }, { onConflict: "project_id,question_key" });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbError("analytics/unanswered-questions", error);
   return NextResponse.json({ status: "resolved" });
 }

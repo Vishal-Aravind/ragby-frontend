@@ -3,6 +3,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { dbError } from "@/lib/api-error";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -159,7 +160,7 @@ export async function POST(req) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbError("projects create", error, "Could not create the project.");
   }
 
   return NextResponse.json(data);

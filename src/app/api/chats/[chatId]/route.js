@@ -27,7 +27,10 @@ export async function PUT(req, { params }) {
     .update({ title })
     .eq("id", chatId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("chat rename failed:", error);
+    return NextResponse.json({ error: "Could not rename the chat." }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }
 

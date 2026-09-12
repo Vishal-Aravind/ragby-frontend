@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 import { requireStaff, supabaseAdmin, logAdminAction } from "@/lib/admin-auth";
+import { dbError } from "@/lib/api-error";
 
 const VALID_PLANS = ["free", "pro", "business"];
 
@@ -33,8 +34,7 @@ export async function POST(req, { params }) {
     .from("profiles")
     .update({ plan })
     .eq("id", project.user_id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
+  if (error) return dbError("admin/tenants/[projectId]/plan-override", error);
   await logAdminAction(staff.user.id, "plan_override", "project", projectId, { plan, user_id: project.user_id });
 
   return NextResponse.json({ success: true });

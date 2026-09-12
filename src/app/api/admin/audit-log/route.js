@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 import { requireStaff, supabaseAdmin } from "@/lib/admin-auth";
+import { dbError } from "@/lib/api-error";
 
 const PAGE_SIZE = 50;
 
@@ -24,8 +25,7 @@ export async function GET(req) {
   if (action) query = query.eq("action", action);
 
   const { data: rows, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
+  if (error) return dbError("admin/audit-log", error);
   const staffIds = [...new Set((rows || []).map(r => r.staff_user_id))];
   const { data: staffProfiles } = staffIds.length
     ? await supabaseAdmin.from("profiles").select("id, name, email").in("id", staffIds)

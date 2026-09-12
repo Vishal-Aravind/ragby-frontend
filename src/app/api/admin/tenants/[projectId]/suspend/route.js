@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 import { requireStaff, supabaseAdmin, logAdminAction } from "@/lib/admin-auth";
+import { dbError } from "@/lib/api-error";
 
 export async function POST(req, { params }) {
   const { projectId } = await params;
@@ -12,8 +13,7 @@ export async function POST(req, { params }) {
     .from("projects")
     .update({ suspended: true })
     .eq("id", projectId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
+  if (error) return dbError("admin/tenants/[projectId]/suspend", error);
   await logAdminAction(staff.user.id, "suspend", "project", projectId);
 
   return NextResponse.json({ success: true });

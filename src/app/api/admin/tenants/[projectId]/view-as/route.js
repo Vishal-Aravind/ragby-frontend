@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 import { requireStaff, supabaseAdmin, logAdminAction } from "@/lib/admin-auth";
+import { dbError } from "@/lib/api-error";
 
 const SESSION_MINUTES = 30;
 
@@ -33,8 +34,7 @@ export async function POST(req, { params }) {
     .select("id, expires_at")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
+  if (error) return dbError("admin/tenants/[projectId]/view-as", error);
   await logAdminAction(staff.user.id, "view_as_start", "project", projectId, { reason: reason || null, session_id: session.id });
 
   return NextResponse.json({ sessionId: session.id, expiresAt: session.expires_at });

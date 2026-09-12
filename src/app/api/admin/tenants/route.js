@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
 import { requireStaff, supabaseAdmin } from "@/lib/admin-auth";
+import { dbError } from "@/lib/api-error";
 
 const PAGE_SIZE = 25;
 
@@ -62,8 +63,7 @@ export async function GET(req) {
   if (projectIdFilter) projectsQuery = projectsQuery.in("id", projectIdFilter);
 
   const { data: projects, error } = await projectsQuery;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
+  if (error) return dbError("admin/tenants", error);
   const ownerIds = [...new Set((projects || []).map(p => p.user_id))];
   const month = new Date().toISOString().slice(0, 7);
 

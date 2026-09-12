@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { getProjectRole } from "@/lib/supabase-api";
+import { dbError } from "@/lib/api-error";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -44,6 +45,6 @@ export async function GET(req, { params }) {
     .eq("chat_id", chatId)
     .order("created_at", { ascending: true });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbError("conversations/[chatId]/messages", error);
   return NextResponse.json(data || []);
 }

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { getProjectRole } from "@/lib/supabase-api";
+import { dbError } from "@/lib/api-error";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -54,8 +55,7 @@ export async function POST(req, { params }) {
     .update({ assigned_to: assigned_to || null })
     .eq("id", chatId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
+  if (error) return dbError("conversations/[chatId]/assign", error);
   // Log who changed it and to whom — so a chain of delegations (manager
   // assigns to A, A hands it to B) is traceable, not just "currently B".
   await supabaseAdmin.from("chat_assignment_log").insert({

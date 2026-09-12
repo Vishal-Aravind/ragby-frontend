@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { getProjectRole } from "@/lib/supabase-api";
+import { dbError } from "@/lib/api-error";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -53,7 +54,7 @@ export async function PUT(req, { params }) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbError("products/[productId]", error);
   return NextResponse.json(data);
 }
 
