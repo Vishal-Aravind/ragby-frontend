@@ -647,10 +647,19 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
 function ShareableLinkContent({ projectId }) {
   const [copied, setCopied] = useState(false);
   const [enabled, setEnabled] = useState(true);
+  // The stored password is hashed and never leaves the server, so this
+  // holds only a NEW password being typed. `hasPassword` is what the
+  // server reports; `editing` and `clearing` are what the user is doing
+  // about it. Leaving all three alone saves the other settings without
+  // touching the password, so a Save can't silently unlock the chat.
+  const [hasPassword, setHasPassword] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
   const [chatUrl, setChatUrl] = useState("");
 
   useEffect(() => {
@@ -660,7 +669,7 @@ function ShareableLinkContent({ projectId }) {
       if (res.ok) {
         const data = await res.json();
         setEnabled(data.chat_enabled ?? true);
-        setPassword(data.chat_password || "");
+        setHasPassword(!!data.has_chat_password);
       }
     }
     load();
@@ -674,12 +683,29 @@ function ShareableLinkContent({ projectId }) {
 
   async function handleSave() {
     setSaving(true);
-    await fetch(`/api/projects/${projectId}`, {
+    setError("");
+
+    const body = { chat_enabled: enabled };
+    if (clearing) body.chat_password = null;
+    else if (editing && password.trim()) body.chat_password = password.trim();
+
+    const res = await fetch(`/api/projects/${projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_enabled: enabled, chat_password: password.trim() || null }),
+      body: JSON.stringify(body),
     });
     setSaving(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Could not save these settings.");
+      return;
+    }
+
+    if ("chat_password" in body) setHasPassword(body.chat_password !== null);
+    setEditing(false);
+    setClearing(false);
+    setPassword("");
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -714,21 +740,52 @@ function ShareableLinkContent({ projectId }) {
         <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1">
           <Lock size={11} /> Password protection
         </label>
-        <div className="relative">
-          <Input
-            type={showPassword ? "text" : "password"}
-            placeholder="Leave empty for no password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            className="pr-10 bg-white text-sm"
-          />
-          <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-3 top-2.5 text-muted-foreground">
-            {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-        </div>
+        {hasPassword && !editing && !clearing ? (
+          <div className="flex items-center justify-between bg-white border rounded-xl px-4 py-3">
+            <p className="text-sm">Password set</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Change</Button>
+              <Button variant="outline" size="sm" onClick={() => setClearing(true)}>Remove</Button>
+            </div>
+          </div>
+        ) : clearing ? (
+          <div className="flex items-center justify-between bg-white border rounded-xl px-4 py-3">
+            <p className="text-sm text-muted-foreground">Password will be removed on save.</p>
+            <Button variant="outline" size="sm" onClick={() => setClearing(false)}>Undo</Button>
+          </div>
+        ) : (
+          <>
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder={hasPassword ? "New password" : "Leave empty for no password"}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setEditing(true); }}
+                className="pr-10 bg-white text-sm"
+              />
+              <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-3 top-2.5 text-muted-foreground">
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            {hasPassword && (
+              <button
+                type="button"
+                onClick={() => { setEditing(false); setPassword(""); }}
+                className="text-xs text-muted-foreground underline"
+              >
+                Keep the current password
+              </button>
+            )}
+          </>
+        )}
         <p className="text-xs text-muted-foreground">
-          {password.trim() ? "Users will need this password to access the chat." : "No password — anyone with the link can chat."}
+          {clearing
+            ? "Anyone with the link will be able to chat."
+            : hasPassword || password.trim()
+              ? "Visitors need this password to open the chat."
+              : "No password — anyone with the link can chat."}
         </p>
+        {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
 
       <Button onClick={handleSave} disabled={saving} size="sm" className="w-full">

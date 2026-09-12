@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { getProjectRole, getProjectAccess } from "@/lib/supabase-api";
+import { hashChatPassword, validateChatPassword } from "@/lib/chat-password";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -48,7 +49,7 @@ export async function GET(req, { params }) {
 
   const { data, error } = await supabaseAdmin
     .from("projects")
-    .select("id, name, domain, user_id, logo_url, brand_color, chat_enabled, chat_password, allowed_domains")
+    .select("id, name, domain, user_id, logo_url, brand_color, chat_enabled, chat_password_hash, allowed_domains")
     .eq("id", projectId)
     .single();
 
@@ -56,12 +57,13 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // The settings UI prefills the password field from this, but only
-  // owner/admin can open those settings or PATCH them — an agent had no
-  // reason to receive the plaintext chat password and now doesn't.
-  const isOwnerOrAdmin = myRole === "owner" || myRole === "admin";
-  const payload = { ...data };
-  if (!isOwnerOrAdmin) delete payload.chat_password;
+  // The settings UI used to prefill the password input from the stored
+  // value, so the project GET served the password itself. It now receives
+  // only whether one is set — the hash never leaves the server either,
+  // since showing it would be as good as showing the password for the
+  // purpose of the UI, and useless for every other purpose.
+  const { chat_password_hash, ...payload } = data;
+  payload.has_chat_password = !!chat_password_hash;
 
   return NextResponse.json({ ...payload, myRole, myPermissions });
 }
@@ -97,7 +99,6 @@ export async function PATCH(req, { params }) {
     "name",
     "domain",
     "chat_enabled",
-    "chat_password",
     "brand_color",
     "logo_url",
     "allowed_domains",
@@ -106,6 +107,21 @@ export async function PATCH(req, { params }) {
   const update = {};
   for (const key of EDITABLE_FIELDS) {
     if (key in body) update[key] = body[key];
+  }
+
+  // chat_password is handled separately: it is never stored as given, and
+  // the column it writes to is not the one it is named after. Sending null
+  // or "" clears the password; omitting the key leaves it untouched, so
+  // saving other settings can't silently unlock a protected chat.
+  if ("chat_password" in body) {
+    const raw = body.chat_password;
+    if (raw === null || raw === "") {
+      update.chat_password_hash = null;
+    } else {
+      const problem = validateChatPassword(raw);
+      if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+      update.chat_password_hash = hashChatPassword(raw);
+    }
   }
 
   if (Object.keys(update).length === 0) {

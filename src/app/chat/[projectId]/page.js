@@ -13,7 +13,7 @@ export default async function PublicChatPage({ params }) {
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id, name, domain, chat_enabled, chat_password, brand_color, logo_url")
+    .select("id, name, domain, chat_enabled, chat_password_hash, brand_color, logo_url")
     .eq("id", projectId)
     .single();
 
@@ -45,7 +45,7 @@ export default async function PublicChatPage({ params }) {
   return (
     <PublicChatClient
       project={publicProject}
-      isPasswordProtected={!!project.chat_password}
+      isPasswordProtected={!!project.chat_password_hash}
     />
   );
 }
