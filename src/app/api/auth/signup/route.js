@@ -62,11 +62,15 @@ export async function POST(req) {
     password,
     options: {
       data: { name },
-      // Was `/auth/callback`, which does not exist — there is no
-      // src/app/auth directory and no rewrite. Supabase confirms the email
-      // on its own /auth/v1/verify endpoint before redirecting, so
-      // confirmation still worked, but the user landed on a 404 instead of
-      // being signed in and sent to the dashboard.
+      // Not actually used for the link the user clicks anymore — the
+      // Supabase "Confirm signup" email template links straight to
+      // /confirm?token_hash={{ .TokenHash }}, which only calls verifyOtp()
+      // on an explicit button press (see src/app/confirm/page.js for why:
+      // the old {{ .ConfirmationURL }} link let email security scanners
+      // consume the one-time token on their own automatic GET, before the
+      // real user ever clicked). Left set for any client library code path
+      // that still reads it, and as the fallback if the template is ever
+      // reverted to {{ .ConfirmationURL }}.
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback`,
     },
   });
