@@ -1,24 +1,14 @@
 // app/api/files/upload/route.js
+//
+// Step 2 of a two-step upload — see /api/files/upload-url for step 1 and
+// why the file's bytes never come through this route (or any Next.js API
+// route) anymore. By the time this runs, the browser has already put the
+// file directly into Supabase Storage; this just confirms that happened,
+// records it, and kicks off ingestion.
 
 import { NextResponse } from "next/server";
 import { getSupabase, getProjectRole } from "@/lib/supabase-api";
-
-const ALLOWED_EXTENSIONS = ["pdf", "docx", "ppt", "pptx", "xls", "xlsx", "txt"];
-const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB
-
-// file.name is fully caller-controlled on a scripted multipart request —
-// browsers strip directories, curl does not. Without this, a filename of
-// "../<otherProjectId>/x.pdf" produced a storage key outside this
-// project's prefix (and the backend's startswith() guard accepts ".."
-// segments, so it passed there too).
-function safeFilename(name) {
-  const base = String(name).split(/[\/]/).pop() || "";
-  const cleaned = base
-    .replace(/[\x00-\x1f\x7f]/g, "")
-    .replace(/^\.+/, "")
-    .trim();
-  return cleaned.slice(0, 200);
-}
+import { safeFilename, DOCUMENT_EXTENSIONS } from "@/lib/safe-filename";
 
 export async function POST(req) {
   const { supabase } = getSupabase(req);
@@ -36,59 +26,54 @@ export async function POST(req) {
   }
   const token = session.access_token;
 
-  const formData = await req.formData();
-  const file = formData.get("file");
-  const projectId = formData.get("projectId");
-
-  if (!file || !projectId) {
-    return NextResponse.json({ error: "Missing file or projectId" }, { status: 400 });
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  // FIX: previously accepted any projectId with no ownership check — a
-  // user could tag an upload to a project they don't own, triggering
-  // ingestion into that project's knowledge base.
+  const projectId = body?.projectId;
+  if (!projectId) {
+    return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
+  }
+
   const role = await getProjectRole(user.id, projectId);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const filename = safeFilename(file.name);
+  const filename = safeFilename(body?.filename);
   if (!filename) {
     return NextResponse.json({ error: "Invalid file name." }, { status: 400 });
   }
 
-  // Type and size were previously enforced only by the browser (an accept=
-  // attribute and a client-side MIME list), i.e. not at all for a scripted
-  // request. Extension-based, matching what the backend can actually parse.
   const ext = filename.toLowerCase().split(".").pop();
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+  if (!DOCUMENT_EXTENSIONS.includes(ext)) {
     return NextResponse.json(
       { error: "That file type isn't supported. Upload a PDF, Word, PowerPoint, Excel or text file." },
       { status: 400 }
     );
   }
 
-  if (file.size === 0) {
-    return NextResponse.json({ error: "That file is empty." }, { status: 400 });
-  }
-  if (file.size > MAX_FILE_BYTES) {
+  // The path this route trusts is recomputed from projectId + filename,
+  // exactly like /api/files/upload-url does — never taken from the
+  // client's own claimed `path`, so a caller can't point this at a
+  // storage object outside their own project's prefix.
+  const path = `${projectId}/${filename}`;
+
+  // Confirm the object actually exists before trusting it — a client
+  // could call this route without ever having uploaded anything.
+  const { data: exists, error: listError } = await supabase.storage
+    .from("documents")
+    .list(projectId, { search: filename });
+
+  if (listError || !exists?.some((f) => f.name === filename)) {
     return NextResponse.json(
-      { error: "That file is too large. The limit is 25MB." },
+      { error: "Upload did not complete. Please try again." },
       { status: 400 }
     );
   }
 
-  const path = `${projectId}/${filename}`;
-
-  // 1. Upload to Supabase storage
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(path, file, { upsert: true });
-
-  if (uploadError) {
-    console.error("storage upload failed:", uploadError);
-    return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
-  }
-
-  // 2. Upsert file record in DB
+  // Upsert file record in DB
   const { error: dbError } = await supabase
     .from("files")
     .upsert(
@@ -109,12 +94,12 @@ export async function POST(req) {
     return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
   }
 
-  // 3. Call FastAPI ingest with auth token
+  // Call FastAPI ingest with auth token
   const ingestRes = await fetch(`${process.env.BACKEND_BASE_URL}/ingest`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`, // FIX: was missing, caused 401 on ingest
+      "Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify({ projectId, filename, filePath: path }),
   });

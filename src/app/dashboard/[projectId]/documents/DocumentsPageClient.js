@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import DocumentsTab from "./DocumentsTab";
 import AppAlertDialog from "@/components/alertdialog";
+import { supabase } from "@/lib/supabase";
+import { MAX_DOCUMENT_BYTES } from "@/lib/safe-filename";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -12,6 +14,7 @@ const ALLOWED_TYPES = [
 ];
 
 const ALLOWED_EXTENSIONS = ["pdf", "docx", "ppt", "pptx", "xls", "xlsx", "txt"];
+const MAX_DOCUMENT_MB = MAX_DOCUMENT_BYTES / 1024 / 1024;
 
 // Documents is the one tab whose data layer used to live in the shared
 // ProjectClient shell instead of the tab itself — genuinely tab-specific,
@@ -71,6 +74,7 @@ export default function DocumentsPageClient({ projectId }) {
   // --------------------------------------------------
   const handleSelectFiles = (selectedFiles) => {
     const rejected = [];
+    const tooLarge = [];
     for (const file of selectedFiles) {
       // Browser-reported MIME is unreliable (a .docx often arrives as
       // application/octet-stream), so fall back to the extension rather
@@ -78,6 +82,14 @@ export default function DocumentsPageClient({ projectId }) {
       const ext = file.name.toLowerCase().split(".").pop();
       if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXTENSIONS.includes(ext)) {
         rejected.push(file.name);
+        continue;
+      }
+      // Purely a fast, friendly rejection — the file's bytes go straight
+      // to Storage now (see handleUpload), so this browser-side check
+      // can't be trusted as the real limit. The bucket's own file size
+      // limit is what actually enforces it.
+      if (file.size > MAX_DOCUMENT_BYTES) {
+        tooLarge.push(file.name);
         continue;
       }
       const exists = files.find((f) => f.name === file.name && f.fromDb);
@@ -88,10 +100,14 @@ export default function DocumentsPageClient({ projectId }) {
         addFile(file);
       }
     }
-    setUploadError(
-      rejected.length
-        ? `Skipped ${rejected.join(", ")} — only PDF, Word, PowerPoint, Excel and text files are supported.`
-        : null
+    const messages = [];
+    if (rejected.length) {
+      messages.push(`Skipped ${rejected.join(", ")} — only PDF, Word, PowerPoint, Excel and text files are supported.`);
+    }
+    if (tooLarge.length) {
+      messages.push(`Skipped ${tooLarge.join(", ")} — the limit is ${MAX_DOCUMENT_MB}MB per file.`);
+    }
+    setUploadError(messages.length ? messages.join(" ") : null
     );
   };
 
@@ -118,10 +134,48 @@ export default function DocumentsPageClient({ projectId }) {
     for (const item of files) {
       if (item.status !== "pending") continue;
       try {
-        const formData = new FormData();
-        formData.append("file", item.file);
-        formData.append("projectId", projectId);
-        const res = await fetch("/api/files/upload", { method: "POST", body: formData });
+        // Step 1: ask our server for a short-lived signed URL. This
+        // request is tiny (a filename, not a file) — it never hits
+        // Vercel's per-function body limit.
+        const urlRes = await fetch("/api/files/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId, filename: item.name }),
+        });
+        const urlData = await urlRes.json().catch(() => ({}));
+        if (!urlRes.ok) {
+          setFiles((prev) =>
+            prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true } : f)
+          );
+          setUploadError(urlData.error || "Some files couldn't be uploaded.");
+          continue;
+        }
+
+        // Step 2: the actual bytes go straight from this browser to
+        // Supabase Storage, bypassing our server (and its size limit)
+        // entirely.
+        const { error: uploadError } = await supabase.storage
+          .from("documents")
+          .uploadToSignedUrl(urlData.path, urlData.token, item.file);
+        if (uploadError) {
+          setFiles((prev) =>
+            prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true } : f)
+          );
+          setUploadError(
+            /exceeded the maximum allowed size/i.test(uploadError.message || "")
+              ? `${item.name} is too large for the ${MAX_DOCUMENT_MB}MB limit.`
+              : "Some files couldn't be uploaded."
+          );
+          continue;
+        }
+
+        // Step 3: tell our server the upload landed, so it can record it
+        // and kick off ingestion.
+        const res = await fetch("/api/files/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId, filename: item.name }),
+        });
         const data = await res.json().catch(() => ({}));
         // The route used to answer {success:true} even when ingestion had
         // failed, so every file showed as "Indexed" whether or not the bot
