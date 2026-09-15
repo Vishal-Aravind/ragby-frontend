@@ -16,4 +16,8 @@ export function safeFilename(name) {
 }
 
 export const DOCUMENT_EXTENSIONS = ["pdf", "docx", "ppt", "pptx", "xls", "xlsx", "txt"];
-export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024; // 25MB
+// 49MB — 1MB under the Supabase project's own 50MB plan-wide cap, which
+// storage.buckets.file_size_limit (see the matching SQL update wherever
+// this constant's value is changed) can never exceed regardless of what
+// we set here.
+export const MAX_DOCUMENT_BYTES = 49 * 1024 * 1024;
