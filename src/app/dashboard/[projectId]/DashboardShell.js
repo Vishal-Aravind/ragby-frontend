@@ -46,7 +46,7 @@ const TOUR_STEPS = [
     tourId: "flows",
     icon: GitBranch,
     title: "Flows",
-    content: "Build automated conversation flows — no code needed. Inside a flow, click \"+ Add node\" to see every block type with what it does, and click any node on the canvas to edit its settings.",
+    content: "Build automated conversation flows — no code needed. Inside a flow, pick a node type from the panel on the right to add it, and click any node on the canvas to edit its settings.",
     access: "flows",
   },
   {

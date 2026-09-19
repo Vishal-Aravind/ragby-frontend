@@ -2,19 +2,19 @@
 
 // AddNodePanel.js
 //
+// Permanently docked alongside the canvas (not a button you have to click
+// to summon an overlay) — every node type, categorized, with a
+// description and a search box, always visible while editing a flow.
 // Replaces the old two-entry-point add flow: a toolbar button that always
 // dropped a blank "message" node (type picked afterward via a dropdown
-// rendered INSIDE the node), plus a separate drag-only sidebar for six
-// "special" node types. One panel, one list, every type has a description
-// visible before you pick it — the two things new users said they couldn't
-// find (where to add a node, what it does).
+// rendered INSIDE that node), plus a separate drag-only sidebar with a
+// different set of node types.
 import { useMemo, useState } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { NODE_REGISTRY, CATEGORIES } from "./nodeRegistry";
 
-export default function AddNodePanel({ open, onOpenChange, onSelect }) {
+export default function AddNodePanel({ onSelect }) {
   const [query, setQuery] = useState("");
 
   const grouped = useMemo(() => {
@@ -29,59 +29,61 @@ export default function AddNodePanel({ open, onOpenChange, onSelect }) {
   }, [query]);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0">
-        <SheetHeader className="px-5 pt-5 pb-3 border-b">
-          <SheetTitle>Add a node</SheetTitle>
-          <SheetDescription>Pick what this step should do.</SheetDescription>
-          <div className="relative mt-2">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              autoFocus
-              placeholder="Search node types..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-        </SheetHeader>
-
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-          {grouped.length === 0 && (
-            <p className="text-sm text-muted-foreground">No node types match "{query}".</p>
-          )}
-          {grouped.map(({ category, nodes }) => (
-            <div key={category}>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                {category}
-              </p>
-              <div className="space-y-2">
-                {nodes.map(n => {
-                  const Icon = n.icon;
-                  return (
-                    <button
-                      key={n.type}
-                      onClick={() => { onSelect(n.type); onOpenChange(false); setQuery(""); }}
-                      className="w-full text-left flex items-start gap-3 rounded-lg border p-3 transition-colors hover:border-gray-400 hover:bg-gray-50"
-                    >
-                      <div
-                        className="shrink-0 w-8 h-8 rounded-md flex items-center justify-center"
-                        style={{ background: n.badge, color: n.text }}
-                      >
-                        <Icon size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{n.label}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.description}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+    <div
+      data-tour="flows-add-node"
+      style={{ width: 260, flexShrink: 0, borderLeft: "1px solid #e2e8f0", background: "white", display: "flex", flexDirection: "column" }}
+    >
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid #e2e8f0" }}>
+        <p style={{ fontSize: 12, fontWeight: 600, color: "#374151", margin: "0 0 8px" }}>Add a node</p>
+        <div style={{ position: "relative" }}>
+          <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+          <Input
+            placeholder="Search node types..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            className="pl-7 h-8 text-sm"
+          />
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 16 }}>
+        {grouped.length === 0 && (
+          <p style={{ fontSize: 13, color: "#94a3b8" }}>No node types match "{query}".</p>
+        )}
+        {grouped.map(({ category, nodes }) => (
+          <div key={category}>
+            <p style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#94a3b8", margin: "0 0 6px" }}>
+              {category}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {nodes.map(n => {
+                const Icon = n.icon;
+                return (
+                  <button
+                    key={n.type}
+                    onClick={() => onSelect(n.type)}
+                    style={{
+                      textAlign: "left", display: "flex", alignItems: "flex-start", gap: 8,
+                      borderRadius: 8, border: "1px solid #e2e8f0", padding: "8px 9px",
+                      background: "white", cursor: "pointer", transition: "border-color 0.1s, background 0.1s",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = "#94a3b8"; e.currentTarget.style.background = "#f8fafc"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.background = "white"; }}
+                  >
+                    <span style={{ width: 24, height: 24, borderRadius: 6, background: n.badge, color: n.text, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Icon size={13} />
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 12.5, fontWeight: 600, color: "#1f2937" }}>{n.label}</span>
+                      <span style={{ display: "block", fontSize: 11, color: "#94a3b8", lineHeight: 1.35, marginTop: 1 }}>{n.description}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

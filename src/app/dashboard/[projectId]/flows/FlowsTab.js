@@ -174,7 +174,6 @@ export default function FlowsTab({ projectId }) {
   const [flowToDelete, setFlowToDelete]     = useState(null);
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
-  const [addPanelOpen, setAddPanelOpen]     = useState(false);
   const [configNodeId, setConfigNodeId]     = useState(null);
 
   const [saveStatus, setSaveStatus] = useState("saved");
@@ -711,29 +710,8 @@ export default function FlowsTab({ projectId }) {
             </div>
           </div>
 
-          <div style={{ height: "calc(85vh - 45px)" }}>
-            <div ref={reactFlowWrapper} style={{ height: "100%", background: "#f1f5f9", position: "relative" }}>
-              {/* Fixed tab, always visible along the canvas edge — replaces
-                  the old toolbar button as the only way in, so the add-node
-                  panel is discoverable without hunting through the header. */}
-              <button
-                data-tour="flows-add-node"
-                onClick={() => setAddPanelOpen(true)}
-                style={{
-                  position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)",
-                  zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center",
-                  gap: 6, padding: "14px 8px", background: "white",
-                  border: "1px solid #e2e8f0", borderRight: "none",
-                  borderRadius: "10px 0 0 10px", boxShadow: "-2px 0 8px rgba(0,0,0,0.06)",
-                  cursor: "pointer",
-                }}
-              >
-                <Plus size={15} />
-                <span style={{ writingMode: "vertical-rl", fontSize: 12, fontWeight: 600, letterSpacing: "0.02em" }}>
-                  Add node
-                </span>
-              </button>
-
+          <div style={{ height: "calc(85vh - 45px)", display: "flex" }}>
+            <div ref={reactFlowWrapper} style={{ flex: 1, minWidth: 0, background: "#f1f5f9" }}>
               <ReactFlow
                 nodes={rfNodes} edges={rfEdges}
                 onNodesChange={changes => {
@@ -758,12 +736,13 @@ export default function FlowsTab({ projectId }) {
                 {rfNodes.length === 0 && (
                   <Panel position="top-center">
                     <div className="bg-white border rounded-lg px-4 py-3 text-sm text-muted-foreground shadow-sm mt-4">
-                      Click <strong>+ Add node</strong> to start building this flow
+                      Pick a node from the right to start building this flow
                     </div>
                   </Panel>
                 )}
               </ReactFlow>
             </div>
+            <AddNodePanel onSelect={handleAddNode} />
           </div>
 
           {settingsOpen && (
@@ -820,8 +799,6 @@ export default function FlowsTab({ projectId }) {
           </div>
         </div>
       )}
-
-      <AddNodePanel open={addPanelOpen} onOpenChange={setAddPanelOpen} onSelect={handleAddNode} />
 
       <NodeConfigDialog
         node={configNode}
