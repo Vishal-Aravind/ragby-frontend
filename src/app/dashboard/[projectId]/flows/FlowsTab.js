@@ -17,538 +17,103 @@ import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Plus, Trash2, X, ChevronDown, Settings, Save, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Trash2, X, Settings, Save, AlertCircle } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
-
-const NODE_TYPES = [
-  { value: "message",         label: "Message",           emoji: "💬" },
-  { value: "message_buttons", label: "Message + Buttons", emoji: "🔘" },
-  { value: "message_list",    label: "Message + List",    emoji: "📋" },
-  { value: "message_media",   label: "Message + Image",   emoji: "🖼️" },
-  { value: "message_video",    label: "Message + Video",    emoji: "🎥" },
-  { value: "message_document", label: "Message + Document", emoji: "📄" },
-  { value: "message_audio",    label: "Message + Audio",    emoji: "🎵" },
-  { value: "message_location", label: "Message + Location", emoji: "📍" },
-  { value: "message_contact",  label: "Message + Contact",  emoji: "👤" },
-  { value: "call_us",          label: "Message + Call Us",  emoji: "📞" },
-];
-
-const NODE_COLORS = {
-  message:          { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
-  message_buttons:  { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af", badge: "#dbeafe" },
-  message_list:     { bg: "#faf5ff", border: "#c4b5fd", text: "#5b21b6", badge: "#ede9fe" },
-  message_media:    { bg: "#fff7ed", border: "#fdba74", text: "#9a3412", badge: "#ffedd5" },
-  message_video:    { bg: "#fdf4ff", border: "#e879f9", text: "#86198f", badge: "#fae8ff" },
-  message_document: { bg: "#f0f9ff", border: "#7dd3fc", text: "#0c4a6e", badge: "#e0f2fe" },
-  message_audio:    { bg: "#fdf4ff", border: "#d946ef", text: "#701a75", badge: "#fae8ff" },
-  message_location: { bg: "#f0fdf4", border: "#4ade80", text: "#14532d", badge: "#dcfce7" },
-  message_contact:  { bg: "#fafafa", border: "#a1a1aa", text: "#18181b", badge: "#f4f4f5" },
-  ask_a_question:   { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
-  back_to_menu:     { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
-  talk_to_human:    { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
-  time_delay:       { bg: "#f8fafc", border: "#94a3b8", text: "#334155", badge: "#f1f5f9" },
-  message_shop:     { bg: "#f0fdf4", border: "#4ade80", text: "#14532d", badge: "#dcfce7" },
-  message_booking:  { bg: "#eef2ff", border: "#818cf8", text: "#3730a3", badge: "#e0e7ff" },
-  // Legacy
-  text:             { bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7" },
-  buttons:          { bg: "#eff6ff", border: "#93c5fd", text: "#1e40af", badge: "#dbeafe" },
-  list:             { bg: "#faf5ff", border: "#c4b5fd", text: "#5b21b6", badge: "#ede9fe" },
-  rag:              { bg: "#fffbeb", border: "#fcd34d", text: "#78350f", badge: "#fef3c7" },
-  handoff:          { bg: "#fef2f2", border: "#fca5a5", text: "#991b1b", badge: "#fee2e2" },
-  cta_url:          { bg: "#fff7ed", border: "#fdba74", text: "#9a3412", badge: "#ffedd5" },
-};
-
-const NODE_LABELS = {
-  message: "Message", message_buttons: "Buttons", message_list: "List",
-  message_media: "Image", message_video: "Video", message_document: "Document",
-  message_audio: "Audio", message_location: "Location", message_contact: "Contact",
-  ask_a_question: "Ask AI", back_to_menu: "Back to Menu", talk_to_human: "Handoff",
-  time_delay: "Time Delay", message_shop: "Shop", message_booking: "Booking",
-  text: "Text", buttons: "Buttons", list: "List", rag: "AI Answer",
-  handoff: "Handoff", cta_url: "Send Link",
-};
+import AddNodePanel from "./AddNodePanel";
+import NodeConfigDialog from "./NodeConfigDialog";
+import { nodeInfo, emptyContentFor, canonicalType } from "./nodeRegistry";
 
 const toId = (label) =>
   (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `id_${Date.now()}`;
 
-const EMPTY_CONTENT = {
-  message:         { body: "" },
-  message_buttons: { body: "", buttons: [{ label: "Option 1" }, { label: "Option 2" }] },
-  message_list:    { body: "", button_text: "View Options", sections: [{ title: "", rows: [{ label: "Option 1" }, { label: "Option 2" }] }] },
-  message_media:   { body: "", media_url: "" },
-  message_video:    { body: "", video_url: "" },
-  message_document: { body: "", document_url: "", filename: "" },
-  message_audio:    { body: "", audio_url: "" },
-  message_location: { body: "", latitude: "", longitude: "", name: "", address: "" },
-  message_contact:  { body: "", contact_name: "", contact_phone: "" },
-  ask_a_question:  { body: "You can now ask me anything!" },
-  back_to_menu:    { body: "" },
-  talk_to_human:   { body: "Connecting you to our team. Please wait..." },
-  time_delay:      { delay_seconds: 60, delay_unit: "seconds" },
-  call_us:         { body: "Need help? Call us directly!", phone: "" },
-  message_shop:    { body: "Browse our menu and add items to your cart 🛒\nSelect multiple items at once", button_text: "View Menu", catalog_id: "" },
-  message_booking: { body: "Book your appointment 📅\nChoose a date and time that works for you.", button_text: "Book Appointment" },
-};
-
-const SPECIAL_NODES = [
-  { type: "ask_a_question",  label: "Ask a Question", emoji: "🤖", desc: "User enters AI mode" },
-  { type: "back_to_menu",    label: "Back to Menu",   emoji: "↩️", desc: "Restarts flow" },
-  { type: "talk_to_human",   label: "Talk to Human",  emoji: "👤", desc: "Human handoff" },
-  { type: "time_delay",      label: "Time Delay",     emoji: "⏱️", desc: "Wait before next message" },
-  { type: "message_shop",    label: "Shop",           emoji: "🛒", desc: "Opens product catalog" },
-  { type: "message_booking", label: "Booking",        emoji: "📅", desc: "Opens appointment calendar" },
-];
-
 // ─────────────────────────────────────────────────────────
-// MEDIA UPLOAD COMPONENT
-// ─────────────────────────────────────────────────────────
-const MEDIA_CONFIG = {
-  message_media:    { accept: "image/*",                                          label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
-  message_video:    { accept: "video/mp4,video/3gpp",                             label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
-  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt",  label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
-  message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",         label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
-};
-
-function MediaUpload({ nodeType, urlKey, value, onChange }) {
-  const [mode, setMode]           = useState(value ? "upload" : "url");
-  const [uploading, setUploading] = useState(false);
-  const [error, setError]         = useState("");
-  const fileRef = useRef(null);
-  const cfg = MEDIA_CONFIG[nodeType] || MEDIA_CONFIG.message_media;
-
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setError("");
-    if (file.size > cfg.maxMB * 1024 * 1024) { setError(`Max ${cfg.maxMB}MB allowed.`); return; }
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("bucket", "flow-media");
-      formData.append("folder", nodeType);
-      const res = await fetch("/api/storage/upload", { method: "POST", body: formData });
-      if (!res.ok) { setError((await res.json()).error || "Upload failed"); return; }
-      const { url } = await res.json();
-      onChange(urlKey, url);
-      setMode("upload");
-    } catch { setError("Upload failed. Try again."); }
-    finally { setUploading(false); }
-  };
-
-  const handleClear = () => { onChange(urlKey, ""); setMode("url"); setError(""); if (fileRef.current) fileRef.current.value = ""; };
-  const isUploaded = value && mode === "upload";
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }} onClick={e => e.stopPropagation()}>
-      <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-        {["url", "upload"].map(m => (
-          <button key={m} type="button"
-            onClick={() => { if (m === "url" && isUploaded) handleClear(); else setMode(m); }}
-            style={{ flex: 1, padding: "4px 0", fontSize: 11, border: "none", cursor: "pointer", background: mode === m ? "#1e40af" : "white", color: mode === m ? "white" : "#6b7280", fontWeight: mode === m ? 600 : 400 }}>
-            {m === "url" ? "🔗 URL" : "⬆ Upload"}
-          </button>
-        ))}
-      </div>
-      {mode === "url" && (
-        <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", fontFamily: "monospace" }}
-          placeholder="https://example.com/file" value={value || ""}
-          onChange={e => onChange(urlKey, e.target.value)} onClick={e => e.stopPropagation()} />
-      )}
-      {mode === "upload" && (
-        <>
-          {isUploaded ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {nodeType === "message_media" && (
-                <div style={{ position: "relative", borderRadius: 6, overflow: "hidden", border: "1px solid #e2e8f0" }}>
-                  <img src={value} alt="preview" style={{ width: "100%", maxHeight: 140, objectFit: "cover", display: "block" }} />
-                  <button type="button" onClick={handleClear} style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.5)", border: "none", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>✕</button>
-                </div>
-              )}
-              {nodeType !== "message_media" && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "6px 8px" }}>
-                  <span style={{ fontSize: 16 }}>{nodeType === "message_video" ? "🎥" : nodeType === "message_audio" ? "🎵" : "📄"}</span>
-                  <span style={{ fontSize: 11, color: "#166534", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value.split("/").pop()}</span>
-                  <button type="button" onClick={handleClear} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: 13 }}>✕</button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div onClick={() => fileRef.current?.click()} style={{ border: "2px dashed #cbd5e1", borderRadius: 6, padding: "14px 8px", textAlign: "center", cursor: "pointer", background: "#f8fafc" }}>
-              {uploading
-                ? <p style={{ fontSize: 11, color: "#6b7280", margin: 0 }}>Uploading...</p>
-                : <><p style={{ fontSize: 12, color: "#374151", margin: "0 0 2px", fontWeight: 500 }}>Click to upload {cfg.label}</p><p style={{ fontSize: 10, color: "#94a3b8", margin: 0 }}>{cfg.exts} · Max {cfg.maxMB}MB</p></>
-              }
-            </div>
-          )}
-          <input ref={fileRef} type="file" accept={cfg.accept} style={{ display: "none" }} onChange={handleFile} />
-        </>
-      )}
-      {error && <p style={{ fontSize: 11, color: "#dc2626", margin: 0 }}>{error}</p>}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// FLOW NODE
+// FLOW NODE — compact card. Full settings live in NodeConfigDialog now;
+// this used to expand inline into a 300px-wide accordion with its own
+// type-picker dropdown, which is exactly what testing flagged as
+// confusing. Clicking the card opens the dialog; there is nothing left
+// to configure here.
 // ─────────────────────────────────────────────────────────
 function FlowNode({ id, data, selected }) {
-  const [expanded, setExpanded]     = useState(false);
-  const [showTypeDD, setShowTypeDD] = useState(false);
-  const typeRef = useRef(null);
-
-  const type    = data.type    || "message";
+  const type = data.type || "message";
   const content = data.content || {};
   const isStart = data.isStart || false;
+  const info = nodeInfo(type);
+  const Icon = info.icon;
 
-  const isSpecial = ["ask_a_question", "back_to_menu", "talk_to_human", "time_delay", "message_shop", "message_booking"].includes(type);
-  const special   = SPECIAL_NODES.find(s => s.type === type);
-  const colors    = NODE_COLORS[type] || NODE_COLORS.message;
-  const label     = special?.label || NODE_TYPES.find(t => t.value === type)?.label || "Message";
-  const emoji     = special?.emoji || NODE_TYPES.find(t => t.value === type)?.emoji || "💬";
-
-  useEffect(() => {
-    const h = (e) => { if (typeRef.current && !typeRef.current.contains(e.target)) setShowTypeDD(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const update = (patch) => data.onChange(id, patch);
-  const updateContent = (key, val) => update({ content: { ...content, [key]: val } });
-
-  const updateButtonLabel = (idx, val) => {
-    const btns = [...(content.buttons || [])];
-    btns[idx] = { ...btns[idx], label: val };
-    updateContent("buttons", btns);
-  };
-  const addButton = () => {
-    if ((content.buttons || []).length >= 3) return;
-    updateContent("buttons", [...(content.buttons || []), { label: `Option ${(content.buttons||[]).length+1}` }]);
-  };
-  const removeButton = (idx) => { const b = [...(content.buttons||[])]; b.splice(idx,1); updateContent("buttons", b); };
-  const updateRowLabel = (sIdx, rIdx, val) => {
-    const s = JSON.parse(JSON.stringify(content.sections||[]));
-    s[sIdx].rows[rIdx].label = val; updateContent("sections", s);
-  };
-  const addRow = (sIdx) => {
-    const s = JSON.parse(JSON.stringify(content.sections||[]));
-    s[sIdx].rows.push({ label: `Option ${s[sIdx].rows.length+1}` }); updateContent("sections", s);
-  };
-  const removeRow = (sIdx, rIdx) => {
-    const s = JSON.parse(JSON.stringify(content.sections||[]));
-    s[sIdx].rows.splice(rIdx,1); updateContent("sections", s);
-  };
+  const preview = content.body || (
+    type === "time_delay" ? `Wait ${content.delay_seconds || 60} ${content.delay_unit || "seconds"}`
+    : type === "message_shop" ? (content.catalog_id ? "Catalog linked" : "No catalog selected")
+    : type === "message_booking" ? "Opens booking calendar"
+    : type === "message_event" ? (content.event_id ? "Event linked" : "No event selected")
+    : info.description
+  );
 
   return (
     <div
+      onClick={() => data.onOpen(id)}
       style={{
-        background: colors.bg,
-        border: `2px solid ${selected ? "#3b82f6" : colors.border}`,
-        borderRadius: 12, minWidth: 200, maxWidth: expanded ? 300 : 240,
+        background: info.bg,
+        border: `2px solid ${selected ? "#3b82f6" : info.border}`,
+        borderRadius: 12, minWidth: 200, maxWidth: 240,
         boxShadow: selected ? "0 0 0 3px rgba(59,130,246,0.2)" : "0 2px 8px rgba(0,0,0,0.08)",
-        transition: "all 0.15s", position: "relative",
+        cursor: "pointer",
       }}
-      onClick={e => e.stopPropagation()}
+      className="drag-handle"
     >
-      <Handle type="target" position={Position.Left} style={{ background: colors.border, width: 10, height: 10, left: -6 }} />
+      <Handle type="target" position={Position.Left} style={{ background: info.border, width: 10, height: 10, left: -6 }} />
 
-      {/* Header */}
-      <div style={{ padding: "8px 10px", cursor: "pointer" }} className="drag-handle" onClick={() => setExpanded(e => !e)}>
+      <div style={{ padding: "8px 10px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
-          <div ref={typeRef} style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
-            <button onClick={() => !isSpecial && setShowTypeDD(p => !p)}
-              style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: colors.badge, color: colors.text, border: "none", cursor: isSpecial ? "default" : "pointer" }}>
-              {emoji} {label} {!isSpecial && <ChevronDown size={10} />}
-            </button>
-            {showTypeDD && (
-              <div style={{ position: "absolute", zIndex: 9999, top: "100%", left: 0, marginTop: 4, background: "white", border: "1px solid #e2e8f0", borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", padding: 4, minWidth: 180 }}>
-                {NODE_TYPES.map(t => (
-                  <button key={t.value} onClick={() => { update({ type: t.value, content: EMPTY_CONTENT[t.value] }); setShowTypeDD(false); }}
-                    style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 10px", border: "none", background: type === t.value ? colors.badge : "none", borderRadius: 6, cursor: "pointer", fontSize: 13, color: type === t.value ? colors.text : "#374151", fontWeight: type === t.value ? 600 : 400 }}>
-                    {t.emoji} {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+            <span style={{ width: 20, height: 20, borderRadius: 6, background: info.badge, color: info.text, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icon size={12} />
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: info.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {info.label}
+            </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
             {isStart && <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 20, background: "#fef3c7", color: "#92400e" }}>START</span>}
             <button onClick={e => { e.stopPropagation(); data.onDelete(id); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#fca5a5", padding: 2, lineHeight: 1 }}>✕</button>
           </div>
         </div>
 
-        {/* Preview */}
         <p style={{ fontSize: 12, color: content.body ? "#374151" : "#9ca3af", margin: "6px 0 0", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>
-          {content.body || (type === "time_delay"
-            ? `⏱️ Wait ${content.delay_seconds || 60} ${content.delay_unit || "seconds"}`
-            : type === "message_shop"
-            ? `🛒 ${content.catalog_id ? "Catalog linked ✓" : "No catalog selected"}`
-            : type === "message_booking"
-            ? `📅 Opens booking calendar`
-            : isSpecial ? special?.desc : "Click to edit...")}
+          {preview}
         </p>
 
-        {/* Button pills + handles */}
-        {type === "message_buttons" && (content.buttons||[]).length > 0 && (
+        {type === "message_buttons" && (content.buttons || []).length > 0 && (
           <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-            {(content.buttons||[]).map((btn, idx) => (
+            {(content.buttons || []).map((btn, idx) => (
               <div key={idx} style={{ position: "relative" }}>
-                <div style={{ fontSize: 11, padding: "3px 22px 3px 8px", background: "white", border: `1px solid ${colors.border}`, borderRadius: 6, color: colors.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {btn.label || `Button ${idx+1}`}
+                <div style={{ fontSize: 11, padding: "3px 22px 3px 8px", background: "white", border: `1px solid ${info.border}`, borderRadius: 6, color: info.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {btn.label || `Button ${idx + 1}`}
                 </div>
                 <Handle type="source" position={Position.Right} id={toId(btn.label || `btn_${idx}`)}
-                  style={{ background: colors.border, width: 10, height: 10, right: -5, top: "50%", transform: "translateY(-50%)", border: "2px solid white" }} />
+                  style={{ background: info.border, width: 10, height: 10, right: -5, top: "50%", transform: "translateY(-50%)", border: "2px solid white" }} />
               </div>
             ))}
           </div>
         )}
 
-        {type === "message_list" && (content.sections||[]).flatMap(s=>s.rows||[]).length > 0 && (
+        {type === "message_list" && (content.sections || []).flatMap(s => s.rows || []).length > 0 && (
           <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-            {(content.sections||[]).flatMap(s=>s.rows||[]).map((row, idx) => (
+            {(content.sections || []).flatMap(s => s.rows || []).map((row, idx) => (
               <div key={idx} style={{ position: "relative" }}>
-                <div style={{ fontSize: 11, padding: "3px 22px 3px 8px", background: "white", border: `1px solid ${colors.border}`, borderRadius: 6, color: colors.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {row.label || `Row ${idx+1}`}
+                <div style={{ fontSize: 11, padding: "3px 22px 3px 8px", background: "white", border: `1px solid ${info.border}`, borderRadius: 6, color: info.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {row.label || `Row ${idx + 1}`}
                 </div>
                 <Handle type="source" position={Position.Right} id={toId(row.label || `row_${idx}`)}
-                  style={{ background: colors.border, width: 10, height: 10, right: -5, top: "50%", transform: "translateY(-50%)", border: "2px solid white" }} />
+                  style={{ background: info.border, width: 10, height: 10, right: -5, top: "50%", transform: "translateY(-50%)", border: "2px solid white" }} />
               </div>
             ))}
           </div>
         )}
 
         {type !== "message_buttons" && type !== "message_list" && (
-          <Handle type="source" position={Position.Right} style={{ background: colors.border, width: 10, height: 10, right: -6 }} />
+          <Handle type="source" position={Position.Right} style={{ background: info.border, width: 10, height: 10, right: -6 }} />
         )}
       </div>
-
-      {/* Expanded editor */}
-      {expanded && (
-        <div style={{ borderTop: `1px solid ${colors.border}`, padding: "10px" }} onClick={e => e.stopPropagation()}>
-
-          <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, cursor: "pointer", fontSize: 12, color: "#374151" }}>
-            <input type="checkbox" checked={isStart} onChange={e => { data.onSetStart(id, e.target.checked); }} />
-            Set as start node
-          </label>
-
-          {isSpecial && type !== "message_shop" && type !== "message_booking" && (
-            <p style={{ fontSize: 11, color: colors.text, background: colors.badge, borderRadius: 6, padding: "4px 8px", marginBottom: 8 }}>
-              {special?.desc}
-            </p>
-          )}
-
-          {type !== "back_to_menu" && type !== "time_delay" && type !== "message_shop" && type !== "message_booking" && (
-            <>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Message</p>
-              <textarea
-                style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
-                rows={3} value={content.body || ""}
-                onChange={e => updateContent("body", e.target.value)}
-                placeholder="Type your message..."
-                onClick={e => e.stopPropagation()} />
-            </>
-          )}
-
-          {type === "message_buttons" && (
-            <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 6 }}>Buttons (max 3)</p>
-              {(content.buttons||[]).map((btn, idx) => (
-                <div key={idx} style={{ display: "flex", gap: 4, marginBottom: 4, alignItems: "center" }}>
-                  <input style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
-                    placeholder={`Button ${idx+1}`} value={btn.label||""}
-                    onChange={e => updateButtonLabel(idx, e.target.value)} onClick={e => e.stopPropagation()} />
-                  <button onClick={() => removeButton(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 14, lineHeight: 1 }}>✕</button>
-                </div>
-              ))}
-              {(content.buttons||[]).length < 3 && (
-                <button onClick={addButton} style={{ width: "100%", border: "1px dashed #cbd5e1", borderRadius: 6, padding: "4px", fontSize: 12, background: "none", cursor: "pointer", color: "#64748b" }}>+ Add button</button>
-              )}
-              <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 6 }}>💡 Drag → handle on each button to connect</p>
-            </div>
-          )}
-
-          {type === "message_list" && (
-            <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Button text</p>
-              <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", marginBottom: 8 }}
-                placeholder="View Options" value={content.button_text||""}
-                onChange={e => updateContent("button_text", e.target.value)} onClick={e => e.stopPropagation()} />
-              {(content.sections||[]).map((section, sIdx) => (
-                <div key={sIdx}>
-                  <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box", marginBottom: 6 }}
-                    placeholder="Section title (optional)" value={section.title||""}
-                    onChange={e => { const s=JSON.parse(JSON.stringify(content.sections)); s[sIdx].title=e.target.value; updateContent("sections",s); }}
-                    onClick={e => e.stopPropagation()} />
-                  {(section.rows||[]).map((row, rIdx) => (
-                    <div key={rIdx} style={{ display: "flex", gap: 4, marginBottom: 4, alignItems: "center" }}>
-                      <input style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
-                        placeholder={`Row ${rIdx+1}`} value={row.label||""}
-                        onChange={e => updateRowLabel(sIdx, rIdx, e.target.value)} onClick={e => e.stopPropagation()} />
-                      <button onClick={() => removeRow(sIdx, rIdx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#f87171", fontSize: 14, lineHeight: 1 }}>✕</button>
-                    </div>
-                  ))}
-                  <button onClick={() => addRow(sIdx)} style={{ width: "100%", border: "1px dashed #cbd5e1", borderRadius: 6, padding: "4px", fontSize: 12, background: "none", cursor: "pointer", color: "#64748b", marginBottom: 4 }}>+ Add row</button>
-                </div>
-              ))}
-              <p style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>💡 Drag → handle on each row to connect</p>
-            </div>
-          )}
-
-          {type === "message_media" && (
-            <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Image</p>
-              <MediaUpload nodeType="message_media" urlKey="media_url" value={content.media_url||""} onChange={updateContent} />
-            </div>
-          )}
-
-          {type === "message_video" && (
-            <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Video</p>
-              <MediaUpload nodeType="message_video" urlKey="video_url" value={content.video_url||""} onChange={updateContent} />
-            </div>
-          )}
-
-          {type === "message_document" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div>
-                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Document</p>
-                <MediaUpload nodeType="message_document" urlKey="document_url" value={content.document_url||""} onChange={updateContent} />
-              </div>
-              <div>
-                <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Filename (shown to user)</p>
-                <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box" }}
-                  placeholder="e.g. product_catalog.pdf" value={content.filename||""}
-                  onChange={e => updateContent("filename", e.target.value)} onClick={e => e.stopPropagation()} />
-              </div>
-            </div>
-          )}
-
-          {type === "message_audio" && (
-            <div style={{ marginTop: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Audio</p>
-              <MediaUpload nodeType="message_audio" urlKey="audio_url" value={content.audio_url||""} onChange={updateContent} />
-            </div>
-          )}
-
-          {type === "message_location" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Location details <span style={{ color: "#ef4444" }}>— lat & lng required</span></p>
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box" }}
-                placeholder="Location name * e.g. Our Office" value={content.name||""}
-                onChange={e => updateContent("name", e.target.value)} onClick={e => e.stopPropagation()} />
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace", width: "100%", boxSizing: "border-box" }}
-                placeholder="Latitude * e.g. 13.0827" value={content.latitude||""}
-                onChange={e => updateContent("latitude", e.target.value)} onClick={e => e.stopPropagation()} />
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace", width: "100%", boxSizing: "border-box" }}
-                placeholder="Longitude * e.g. 80.2707" value={content.longitude||""}
-                onChange={e => updateContent("longitude", e.target.value)} onClick={e => e.stopPropagation()} />
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", width: "100%", boxSizing: "border-box" }}
-                placeholder="Address (optional)" value={content.address||""}
-                onChange={e => updateContent("address", e.target.value)} onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 10, color: "#94a3b8" }}>💡 Google Maps → right click → first line is lat, lng</p>
-            </div>
-          )}
-
-          {type === "message_contact" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Contact details</p>
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none" }}
-                placeholder="Contact name" value={content.contact_name||""}
-                onChange={e => updateContent("contact_name", e.target.value)} onClick={e => e.stopPropagation()} />
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace" }}
-                placeholder="+91 98765 43210" value={content.contact_phone||""}
-                onChange={e => updateContent("contact_phone", e.target.value)} onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 10, color: "#94a3b8" }}>Sends as a WhatsApp contact card</p>
-            </div>
-          )}
-
-          {type === "time_delay" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Wait duration</p>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input type="number" min="1"
-                  max={content.delay_unit === "hours" ? 22 : content.delay_unit === "minutes" ? 1320 : 79200}
-                  style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 14, outline: "none", fontWeight: 600 }}
-                  value={content.delay_seconds || 60}
-                  onChange={e => { const unit = content.delay_unit || "seconds"; const max = unit === "hours" ? 22 : unit === "minutes" ? 1320 : 79200; const val = Math.min(parseInt(e.target.value) || 1, max); updateContent("delay_seconds", val); }}
-                  onClick={e => e.stopPropagation()} />
-                <select style={{ flex: 1, border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", background: "white" }}
-                  value={content.delay_unit || "seconds"}
-                  onChange={e => { updateContent("delay_unit", e.target.value); const max = e.target.value === "hours" ? 22 : e.target.value === "minutes" ? 1320 : 79200; if ((content.delay_seconds || 60) > max) updateContent("delay_seconds", max); }}
-                  onClick={e => e.stopPropagation()}>
-                  <option value="seconds">Seconds</option>
-                  <option value="minutes">Minutes</option>
-                  <option value="hours">Hours (max 22)</option>
-                </select>
-              </div>
-              <p style={{ fontSize: 10, color: "#f59e0b", background: "#fffbeb", borderRadius: 6, padding: "6px 8px", border: "1px solid #fcd34d" }}>
-                ⚠️ Max 22 hours — keeps a safe 2hr buffer before WhatsApp's 24h window closes
-              </p>
-            </div>
-          )}
-
-          {type === "call_us" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Message</p>
-              <textarea style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
-                rows={2} value={content.body || ""}
-                onChange={e => updateContent("body", e.target.value)}
-                placeholder="Need help? Call us directly!" onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 11, color: "#6b7280" }}>Phone number</p>
-              <input style={{ border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", fontFamily: "monospace", width: "100%", boxSizing: "border-box" }}
-                placeholder="+91 98765 43210" value={content.phone || ""}
-                onChange={e => updateContent("phone", e.target.value)} onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 10, color: "#94a3b8" }}>📞 Tapping the button opens the phone dialer with your number pre-filled</p>
-            </div>
-          )}
-
-          {type === "message_shop" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-              <p style={{ fontSize: 11, color: colors.text, background: colors.badge, borderRadius: 6, padding: "4px 8px" }}>
-                🛒 Sends a "View Menu" link to customer. They browse, add items, then return to WhatsApp to confirm and pay.
-              </p>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Message</p>
-              <textarea style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
-                rows={3} value={content.body || ""}
-                onChange={e => updateContent("body", e.target.value)}
-                placeholder="Browse our menu and add items to your cart 🛒" onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Button Text</p>
-              <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box" }}
-                placeholder="View Menu" value={content.button_text || "View Menu"}
-                onChange={e => updateContent("button_text", e.target.value)} onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Select Catalog</p>
-              <select style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, outline: "none", background: "white", boxSizing: "border-box" }}
-                value={content.catalog_id || ""}
-                onChange={e => updateContent("catalog_id", e.target.value)} onClick={e => e.stopPropagation()}>
-                <option value="">— Select a catalog —</option>
-                {(data.catalogs || []).map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}{!cat.is_active ? " (inactive)" : ""}</option>
-                ))}
-              </select>
-              {!content.catalog_id && <p style={{ fontSize: 10, color: "#f59e0b" }}>⚠️ Select a catalog to link this node to a menu</p>}
-              <p style={{ fontSize: 10, color: "#94a3b8" }}>💡 Connect a node after this — it runs after payment is confirmed</p>
-            </div>
-          )}
-
-          {type === "message_booking" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-              <p style={{ fontSize: 11, color: colors.text, background: colors.badge, borderRadius: 6, padding: "4px 8px" }}>
-                📅 Sends a "Book Appointment" link. Customer picks date & time from your calendar. Confirmation sent via WhatsApp.
-              </p>
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Message</p>
-              <textarea style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "6px 8px", fontSize: 12, resize: "none", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
-                rows={3} value={content.body || ""}
-                onChange={e => updateContent("body", e.target.value)}
-                placeholder="Book your appointment 📅" onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>Button Text</p>
-              <input style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px", fontSize: 12, outline: "none", boxSizing: "border-box" }}
-                placeholder="Book Appointment" value={content.button_text || "Book Appointment"}
-                onChange={e => updateContent("button_text", e.target.value)} onClick={e => e.stopPropagation()} />
-              <p style={{ fontSize: 10, color: "#94a3b8" }}>💡 Set up your availability in the Appointments tab first</p>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -556,11 +121,43 @@ function FlowNode({ id, data, selected }) {
 const nodeTypes = { flowNode: FlowNode };
 
 // ─────────────────────────────────────────────────────────
+// STARTER TEMPLATE — seeded into a brand-new flow instead of a blank
+// canvas. Research on flow/no-code builders consistently flags an empty
+// canvas as where first-time users disengage; this gives them a small,
+// working, fully-editable example instead.
+// ─────────────────────────────────────────────────────────
+function starterGraph() {
+  const startId = "local_start";
+  const menuId = "local_menu";
+  const humanId = "local_human";
+  const aiId = "local_ai";
+  const now = Date.now();
+  return {
+    nodes: [
+      { id: startId, type: "flowNode", position: { x: 80, y: 140 }, dragHandle: ".drag-handle",
+        raw: { type: "message", content: { body: "👋 Hi! How can I help you today?" }, is_start: true } },
+      { id: menuId, type: "flowNode", position: { x: 400, y: 140 }, dragHandle: ".drag-handle",
+        raw: { type: "message_buttons", content: { body: "Choose an option:", buttons: [{ label: "Talk to a human" }, { label: "Ask a question" }] }, is_start: false } },
+      { id: humanId, type: "flowNode", position: { x: 720, y: 40 }, dragHandle: ".drag-handle",
+        raw: { type: "talk_to_human", content: emptyContentFor("talk_to_human"), is_start: false } },
+      { id: aiId, type: "flowNode", position: { x: 720, y: 240 }, dragHandle: ".drag-handle",
+        raw: { type: "ask_a_question", content: emptyContentFor("ask_a_question"), is_start: false } },
+    ],
+    edges: [
+      { id: `e_${now}_1`, source: startId, target: menuId, sourceHandle: "next" },
+      { id: `e_${now}_2`, source: menuId, target: humanId, sourceHandle: toId("Talk to a human") },
+      { id: `e_${now}_3`, source: menuId, target: aiId, sourceHandle: toId("Ask a question") },
+    ],
+  };
+}
+
+// ─────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────
 export default function FlowsTab({ projectId }) {
   const [flows, setFlows]               = useState([]);
   const [catalogs, setCatalogs]         = useState([]);
+  const [events, setEvents]             = useState([]);
   const [loading, setLoading]           = useState(true);
   const [selectedFlow, setSelectedFlow] = useState(null);
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
@@ -577,6 +174,8 @@ export default function FlowsTab({ projectId }) {
   const [flowToDelete, setFlowToDelete]     = useState(null);
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
+  const [addPanelOpen, setAddPanelOpen]     = useState(false);
+  const [configNodeId, setConfigNodeId]     = useState(null);
 
   const [saveStatus, setSaveStatus] = useState("saved");
   const [errorMsg, setErrorMsg]     = useState("");
@@ -588,7 +187,6 @@ export default function FlowsTab({ projectId }) {
   const rfNodesRef      = useRef([]);
   const rfEdgesRef      = useRef([]);
   const selectedFlowRef = useRef(null);
-  const catalogsRef     = useRef([]);
   // The flow's revision as of the last successful load or save. Sent back on
   // every save so the server can reject a write built on a stale copy —
   // two tabs open on the same flow used to silently overwrite each other.
@@ -601,7 +199,6 @@ export default function FlowsTab({ projectId }) {
   useEffect(() => { rfNodesRef.current = rfNodes; }, [rfNodes]);
   useEffect(() => { rfEdgesRef.current = rfEdges; }, [rfEdges]);
   useEffect(() => { selectedFlowRef.current = selectedFlow; }, [selectedFlow]);
-  useEffect(() => { catalogsRef.current = catalogs; }, [catalogs]);
 
   // Every one of these calls used to ignore its response. A 403 rendered as
   // "No flows yet", and a rejected save still showed as success.
@@ -639,6 +236,10 @@ export default function FlowsTab({ projectId }) {
     fetch(`/api/catalogs?project_id=${projectId}`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setCatalogs(data || []));
+    fetch(`/api/events?projectId=${projectId}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setEvents(data || []))
+      .catch(() => {});
   }, [projectId]);
 
   const markDirty = useCallback(() => {
@@ -679,7 +280,10 @@ export default function FlowsTab({ projectId }) {
 
     const payload = {
       nodes: nodes.map(n => ({
-        id: n.id, type: n.data.type, content: n.data.content,
+        // Legacy type strings (text/buttons/list/handoff) are canonicalized
+        // to their modern equivalents here — safe because backend/flows.py
+        // dispatches those pairs identically, confirmed against the source.
+        id: n.id, type: canonicalType(n.data.type), content: n.data.content,
         is_start: n.data.isStart, position: n.position,
       })),
       edges: edges.map(e => ({
@@ -779,8 +383,8 @@ export default function FlowsTab({ projectId }) {
   };
 
   const buildNodeData = (n) => ({
-    catalogs: catalogsRef.current,
     type: n.type, content: n.content, isStart: n.is_start,
+    onOpen: (nodeId) => setConfigNodeId(nodeId),
     onChange: (nodeId, patch) => {
       setRfNodes(nds => {
         const oldNode = nds.find(nd => nd.id === nodeId);
@@ -838,6 +442,27 @@ export default function FlowsTab({ projectId }) {
     await loadFlow(flow);
   };
 
+  // Seeds a small, connected, fully-editable example flow instead of a
+  // blank canvas — research on flow-builder onboarding consistently flags
+  // the blank canvas as where first-time users disengage.
+  const seedStarterTemplate = () => {
+    const { nodes, edges } = starterGraph();
+    const rfN = nodes.map(n => ({
+      id: n.id, type: "flowNode", position: n.position, dragHandle: n.dragHandle,
+      data: buildNodeData({ id: n.id, ...n.raw }),
+    }));
+    const rfE = edges.map(e => ({
+      ...e, type: "smoothstep", label: e.sourceHandle,
+      markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
+      style: { stroke: "#94a3b8", strokeWidth: 2 },
+      labelStyle: { fontSize: 11, fill: "#64748b" },
+      labelBgStyle: { fill: "#f8fafc", fillOpacity: 0.9 },
+    }));
+    setRfNodes(rfN);
+    setRfEdges(rfE);
+    markDirty();
+  };
+
   const handleCreateFlow = async () => {
     if (!newFlowName.trim()) return;
     setCreatingFlow(true);
@@ -856,6 +481,7 @@ export default function FlowsTab({ projectId }) {
         setShowCreateModal(false);
         await fetchFlows();
         await selectFlow(flow);
+        seedStarterTemplate();
       }
     } catch {
       setErrorMsg("Could not reach the server. Try again.");
@@ -915,14 +541,17 @@ export default function FlowsTab({ projectId }) {
     }
   };
 
-  const handleAddNode = (type = "message", position = null) => {
-    const pos = position || { x: 200 + rfNodes.length * 50, y: 100 + rfNodes.length * 30 };
+  // Nodes are now added ONLY through AddNodePanel — there used to be a
+  // second, disconnected path (drag a "special node" card onto the
+  // canvas) that offered a different set of types than this one did.
+  const handleAddNode = (type) => {
+    const pos = { x: 200 + rfNodes.length * 50, y: 100 + rfNodes.length * 30 };
     const newId = `local_${Date.now()}`;
     const isFirst = rfNodes.length === 0;
 
     setRfNodes(nds => [...nds, {
       id: newId, type: "flowNode", position: pos, dragHandle: ".drag-handle",
-      data: buildNodeData({ id: newId, type, content: EMPTY_CONTENT[type] || {}, is_start: isFirst }),
+      data: buildNodeData({ id: newId, type, content: emptyContentFor(type), is_start: isFirst }),
     }]);
     markDirty();
   };
@@ -985,6 +614,8 @@ export default function FlowsTab({ projectId }) {
   useEffect(() => {
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, []);
+
+  const configNode = rfNodes.find(n => n.id === configNodeId) || null;
 
   const SaveIndicator = () => {
     if (saveStatus === "saving") return (
@@ -1067,7 +698,7 @@ export default function FlowsTab({ projectId }) {
               <SaveIndicator />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleAddNode("message")}>
+              <Button data-tour="flows-add-node" variant="outline" size="sm" onClick={() => setAddPanelOpen(true)}>
                 <Plus size={13} className="mr-1" /> Add node
               </Button>
               <Button size="sm" onClick={doSave} disabled={saveStatus === "saving"}>
@@ -1083,43 +714,8 @@ export default function FlowsTab({ projectId }) {
             </div>
           </div>
 
-          <div style={{ display: "flex", height: "calc(85vh - 45px)" }}>
-            {/* Left panel */}
-            <div style={{ width: 160, borderRight: "1px solid #e2e8f0", background: "#fafafa", padding: "12px 10px", display: "flex", flexDirection: "column", gap: 6, overflowY: "auto" }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
-                Special nodes
-              </p>
-              {SPECIAL_NODES.map(sn => {
-                const c = NODE_COLORS[sn.type];
-                return (
-                  <div key={sn.type} draggable
-                    onDragStart={e => e.dataTransfer.setData("nodeType", sn.type)}
-                    style={{ background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: 8, padding: "8px 10px", cursor: "grab", userSelect: "none" }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: c.text, margin: 0 }}>{sn.emoji} {sn.label}</p>
-                    <p style={{ fontSize: 10, color: "#94a3b8", margin: "2px 0 0" }}>{sn.desc}</p>
-                  </div>
-                );
-              })}
-              <div style={{ borderTop: "1px solid #e2e8f0", marginTop: 6, paddingTop: 8 }}>
-                <p style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5 }}>
-                  Drag onto canvas. Changes auto-save every 30s.
-                </p>
-                <p style={{ fontSize: 10, color: "#94a3b8", lineHeight: 1.5, marginTop: 4 }}>
-                  Hold <strong>Shift</strong> + drag to select multiple nodes.
-                </p>
-              </div>
-            </div>
-
-            {/* Canvas */}
-            <div ref={reactFlowWrapper} style={{ flex: 1, background: "#f1f5f9" }}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => {
-                e.preventDefault();
-                const type = e.dataTransfer.getData("nodeType");
-                if (!type || !reactFlowInstance) return;
-                const position = reactFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-                handleAddNode(type, position);
-              }}>
+          <div style={{ height: "calc(85vh - 45px)" }}>
+            <div ref={reactFlowWrapper} style={{ height: "100%", background: "#f1f5f9" }}>
               <ReactFlow
                 nodes={rfNodes} edges={rfEdges}
                 onNodesChange={changes => {
@@ -1140,11 +736,11 @@ export default function FlowsTab({ projectId }) {
                 style={{ cursor: "default" }}>
                 <Background color="#94a3b8" gap={24} size={1.5} variant="dots" />
                 <Controls />
-                <MiniMap nodeColor={n => NODE_COLORS[n.data?.type]?.border || "#ccc"} />
+                <MiniMap nodeColor={n => nodeInfo(n.data?.type).border || "#ccc"} />
                 {rfNodes.length === 0 && (
                   <Panel position="top-center">
                     <div className="bg-white border rounded-lg px-4 py-3 text-sm text-muted-foreground shadow-sm mt-4">
-                      Click <strong>+ Add node</strong> or drag a special node to start
+                      Click <strong>+ Add node</strong> to start building this flow
                     </div>
                   </Panel>
                 )}
@@ -1206,6 +802,17 @@ export default function FlowsTab({ projectId }) {
           </div>
         </div>
       )}
+
+      <AddNodePanel open={addPanelOpen} onOpenChange={setAddPanelOpen} onSelect={handleAddNode} />
+
+      <NodeConfigDialog
+        node={configNode}
+        onOpenChange={(open) => { if (!open) setConfigNodeId(null); }}
+        onChange={(nodeId, patch) => configNode?.data.onChange(nodeId, patch)}
+        onSetStart={(nodeId, val) => configNode?.data.onSetStart(nodeId, val)}
+        catalogs={catalogs}
+        events={events}
+      />
 
       <AppAlertDialog open={deleteFlowOpen} title="Delete flow?"
         description={<>Flow <strong>{flowToDelete?.name}</strong> and all its nodes will be permanently deleted.</>}
