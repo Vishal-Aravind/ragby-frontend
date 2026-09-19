@@ -698,9 +698,6 @@ export default function FlowsTab({ projectId }) {
               <SaveIndicator />
             </div>
             <div className="flex items-center gap-2">
-              <Button data-tour="flows-add-node" variant="outline" size="sm" onClick={() => setAddPanelOpen(true)}>
-                <Plus size={13} className="mr-1" /> Add node
-              </Button>
               <Button size="sm" onClick={doSave} disabled={saveStatus === "saving"}>
                 <Save size={13} className="mr-1" />
                 {saveStatus === "saving" ? "Saving..." : "Save"}
@@ -715,7 +712,28 @@ export default function FlowsTab({ projectId }) {
           </div>
 
           <div style={{ height: "calc(85vh - 45px)" }}>
-            <div ref={reactFlowWrapper} style={{ height: "100%", background: "#f1f5f9" }}>
+            <div ref={reactFlowWrapper} style={{ height: "100%", background: "#f1f5f9", position: "relative" }}>
+              {/* Fixed tab, always visible along the canvas edge — replaces
+                  the old toolbar button as the only way in, so the add-node
+                  panel is discoverable without hunting through the header. */}
+              <button
+                data-tour="flows-add-node"
+                onClick={() => setAddPanelOpen(true)}
+                style={{
+                  position: "absolute", top: "50%", right: 0, transform: "translateY(-50%)",
+                  zIndex: 10, display: "flex", flexDirection: "column", alignItems: "center",
+                  gap: 6, padding: "14px 8px", background: "white",
+                  border: "1px solid #e2e8f0", borderRight: "none",
+                  borderRadius: "10px 0 0 10px", boxShadow: "-2px 0 8px rgba(0,0,0,0.06)",
+                  cursor: "pointer",
+                }}
+              >
+                <Plus size={15} />
+                <span style={{ writingMode: "vertical-rl", fontSize: 12, fontWeight: 600, letterSpacing: "0.02em" }}>
+                  Add node
+                </span>
+              </button>
+
               <ReactFlow
                 nodes={rfNodes} edges={rfEdges}
                 onNodesChange={changes => {
