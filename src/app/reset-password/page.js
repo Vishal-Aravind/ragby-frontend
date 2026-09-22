@@ -69,11 +69,12 @@ function ResetPasswordForm() {
     }
     setLoading(true);
     try {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      );
+
       if (tokenHash) {
-        const supabase = createBrowserClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        );
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: "recovery",
@@ -91,6 +92,16 @@ function ResetPasswordForm() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // Redeeming the link above signed this browser in for real. When
+        // the reset itself then fails unrecoverably the server drops that
+        // session, and this drops the copy the browser is holding —
+        // otherwise a failed reset left the visitor logged in without
+        // ever having entered a valid password.
+        if (data.sessionCleared) {
+          await supabase.auth.signOut().catch(() => {});
+          setInvalid(true);
+          return;
+        }
         toast.error(data.error || "Could not reset your password");
         return;
       }
