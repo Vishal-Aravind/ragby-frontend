@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
@@ -17,6 +17,12 @@ function ResetPasswordForm() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [invalid, setInvalid] = useState(false);
+  // The emailed token is single-use. A retry (wrong password, too short,
+  // same as the current one) must NOT redeem it a second time — the
+  // second attempt always fails and the user is told their link expired
+  // when in fact their first attempt spent it and they are already
+  // signed in from it.
+  const redeemed = useRef(false);
 
   // Two link shapes reach this page.
   //
@@ -74,15 +80,20 @@ function ResetPasswordForm() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
       );
 
-      if (tokenHash) {
+      if (tokenHash && !redeemed.current) {
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: "recovery",
         });
         if (error) {
+          // Nothing was redeemed, but a stale session from an earlier
+          // visit could still be sitting in this browser and would
+          // otherwise quietly sign them in from the dead-link screen.
+          await supabase.auth.signOut().catch(() => {});
           setInvalid(true);
           return;
         }
+        redeemed.current = true;
       }
 
       const res = await fetch("/api/auth/reset/confirm", {
@@ -105,6 +116,11 @@ function ResetPasswordForm() {
         toast.error(data.error || "Could not reset your password");
         return;
       }
+      // The server cleared the session cookies, but this client still
+      // holds the session it built from the link in memory, and
+      // router.replace is a client-side navigation rather than a reload —
+      // so without this the user lands on /login already signed in.
+      await supabase.auth.signOut().catch(() => {});
       toast.success("Password updated. Please sign in.");
       router.replace("/login");
     } catch {
