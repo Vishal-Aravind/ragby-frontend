@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import * as Sentry from "@sentry/nextjs";
 import { checkAuthRateLimit } from "@/lib/auth-rate-limit";
 
 // Always the same body, whatever happened. Saying "no account with that
@@ -54,12 +55,17 @@ export async function POST(req) {
       redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`,
     });
     if (error) {
-      // Logged, never returned — the error text distinguishes a missing
-      // account from a send failure.
+      // Never returned to the caller — the error text distinguishes a
+      // missing account from a send failure. But it must not vanish
+      // either: an exhausted SMTP quota looks exactly like success from
+      // the browser, so without this the whole reset flow can be dead for
+      // everyone and nothing anywhere says so.
       console.error("password reset request failed:", error.message);
+      Sentry.captureMessage(`password reset email not sent: ${error.message}`, "warning");
     }
   } catch (e) {
     console.error("password reset request threw:", e);
+    Sentry.captureException(e);
   }
 
   return NextResponse.json(UNIFORM);

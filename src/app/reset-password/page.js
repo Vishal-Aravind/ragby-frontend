@@ -1,26 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createBrowserClient } from "@supabase/ssr";
 import { MIN_PASSWORD_LENGTH } from "@/lib/password";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tokenHash = searchParams.get("token_hash");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [invalid, setInvalid] = useState(false);
 
-  // Supabase delivers the recovery token in the URL fragment, which never
-  // reaches the server. The browser client reads it, establishes the
-  // recovery session, and only then can the confirm route (which
-  // re-validates server-side) do anything.
+  // Two link shapes reach this page.
+  //
+  // token_hash in the query string is the one we want, and it is NOT
+  // redeemed on page load — only when the user submits a new password
+  // below. Gmail and Outlook run security scanners that automatically GET
+  // every link in an email; redeeming on load meant the scanner burned the
+  // one-time token and the real person then saw "link expired" on their
+  // first click. Same failure that broke signup confirmation, same fix.
+  //
+  // The fragment form (#access_token=...) is the older implicit flow. The
+  // browser client consumes it automatically, so we just wait for a
+  // session to appear.
   useEffect(() => {
+    if (tokenHash) {
+      setReady(true);
+      return;
+    }
+
     const supabase = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -41,7 +56,7 @@ export default function ResetPasswordPage() {
     });
 
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [tokenHash]);
 
   const submit = async () => {
     if (password.length < MIN_PASSWORD_LENGTH) {
@@ -54,6 +69,21 @@ export default function ResetPasswordPage() {
     }
     setLoading(true);
     try {
+      if (tokenHash) {
+        const supabase = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        );
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery",
+        });
+        if (error) {
+          setInvalid(true);
+          return;
+        }
+      }
+
       const res = await fetch("/api/auth/reset/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,5 +161,13 @@ export default function ResetPasswordPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

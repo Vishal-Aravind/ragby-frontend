@@ -90,6 +90,20 @@ export async function POST(req) {
     );
   }
 
+  // Supabase's anti-enumeration behavior: signing up again with an email
+  // that's already registered returns no `error` at all — just a user
+  // object with an empty `identities` array (so this endpoint can't be
+  // used to probe which emails exist). Without this check, that fake user
+  // fell through to the profile upsert below and collided with the real
+  // profile's unique email constraint, producing a scary 500 "setup did
+  // not finish" error for what is actually just a duplicate signup.
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    return NextResponse.json(
+      { success: true, needsVerification: true },
+      { headers: response.headers }
+    );
+  }
+
   // Create profile using service role (bypasses RLS). There is no database
   // trigger doing this — this route is the only thing that creates the row,
   // and `plan` lives on it, so an account without one has no plan at all.
