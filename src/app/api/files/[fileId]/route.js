@@ -3,6 +3,47 @@
 import { NextResponse } from "next/server";
 import { getSupabase, getProjectRole } from "@/lib/supabase-api";
 
+// Lets the Text tab's edit view show what a note currently says. Only ever
+// for notes (is_note) — a real uploaded PDF/DOCX has no plain-text form to
+// hand back this way, and editing one in place was never the feature.
+export async function GET(req, { params }) {
+  const { fileId } = await params;
+
+  const { supabase } = getSupabase(req);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { data: file, error } = await supabase
+    .from("files")
+    .select("id, storage_path, project_id, is_note")
+    .eq("id", fileId)
+    .single();
+
+  if (error || !file) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const role = await getProjectRole(user.id, file.project_id);
+  if (!role) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!file.is_note) {
+    return NextResponse.json({ error: "This document isn't editable text." }, { status: 400 });
+  }
+
+  const { data: blob, error: downloadError } = await supabase.storage
+    .from("documents")
+    .download(file.storage_path);
+
+  if (downloadError || !blob) {
+    return NextResponse.json({ error: "Couldn't load this note." }, { status: 502 });
+  }
+
+  const content = await blob.text();
+  return NextResponse.json({ content });
+}
+
 export async function DELETE(req, { params }) {
   const { fileId } = await params; // FIX: await params in Next.js 15
 

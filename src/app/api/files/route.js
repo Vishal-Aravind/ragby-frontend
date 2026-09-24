@@ -28,7 +28,7 @@ export async function GET(req) {
 
   const { data, error } = await supabase
     .from("files")
-    .select("id, filename, status, updated_at")
+    .select("id, filename, status, updated_at, is_note")
     .eq("project_id", projectId)
     .order("updated_at", { ascending: false });
 

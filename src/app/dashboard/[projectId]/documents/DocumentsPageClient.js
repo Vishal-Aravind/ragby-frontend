@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import DocumentsTab from "./DocumentsTab";
 import AppAlertDialog from "@/components/alertdialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { MAX_DOCUMENT_BYTES } from "@/lib/safe-filename";
 
@@ -66,6 +69,7 @@ export default function DocumentsPageClient({ projectId }) {
           name: f.filename,
           status: f.status,
           fromDb: true,
+          isNote: !!f.is_note,
         }))
       );
     };
@@ -131,10 +135,10 @@ export default function DocumentsPageClient({ projectId }) {
     }
   };
 
-  const addFile = (file) => {
+  const addFile = (file, isNote = false) => {
     setFiles((prev) => {
       const map = new Map(prev.map((f) => [f.name, f]));
-      map.set(file.name, { file, name: file.name, status: "pending", fromDb: false });
+      map.set(file.name, { file, name: file.name, status: "pending", fromDb: false, isNote });
       return Array.from(map.values());
     });
   };
@@ -205,7 +209,7 @@ export default function DocumentsPageClient({ projectId }) {
         const res = await fetch("/api/files/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId, filename: item.name }),
+          body: JSON.stringify({ projectId, filename: item.name, isNote: !!item.isNote }),
         });
         const data = await res.json().catch(() => ({}));
         // The route used to answer {success:true} even when ingestion had
@@ -259,8 +263,71 @@ export default function DocumentsPageClient({ projectId }) {
       return;
     }
     const file = new File([trimmed], filename, { type: "text/plain" });
-    addFile(file);
-    await uploadItems([{ file, name: filename }]);
+    addFile(file, true);
+    await uploadItems([{ file, name: filename, isNote: true }]);
+  };
+
+  // Re-saves an edited note under its EXISTING filename — the upload route
+  // upserts on (project_id, filename), so this reuses the same DB row and
+  // storage object rather than creating a second, orphaned entry, and
+  // ingest.py's existing re-ingest path purges the old Qdrant vectors for
+  // that file_id before adding the new ones. No new backend logic needed:
+  // this is exactly the same mechanism Excel's "Re-upload" already uses.
+  const handleEditText = async (file, newContent) => {
+    const trimmed = newContent.trim();
+    if (!trimmed) {
+      toast.error("A note can't be empty.");
+      return;
+    }
+    if (trimmed.length > MAX_TEXT_CHARS) {
+      toast.error(`Notes are limited to ${MAX_TEXT_CHARS.toLocaleString()} characters.`);
+      return;
+    }
+    const updatedFile = new File([trimmed], file.name, { type: "text/plain" });
+    setFiles((prev) => prev.map((f) => f.id === file.id ? { ...f, status: "pending" } : f));
+    await uploadItems([{ file: updatedFile, name: file.name, isNote: true }]);
+  };
+
+  // --------------------------------------------------
+  // EDIT NOTE DIALOG
+  // --------------------------------------------------
+  const [editingFile, setEditingFile] = useState(null);
+  const [editContent, setEditContent] = useState("");
+  const [loadingEditContent, setLoadingEditContent] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEditNote = async (file) => {
+    setEditingFile(file);
+    setEditContent("");
+    setLoadingEditContent(true);
+    try {
+      const res = await fetch(`/api/files/${file.id}/content`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Couldn't load this note.");
+        setEditingFile(null);
+        return;
+      }
+      setEditContent(data.content || "");
+    } finally {
+      setLoadingEditContent(false);
+    }
+  };
+
+  const closeEditNote = () => {
+    setEditingFile(null);
+    setEditContent("");
+  };
+
+  const saveEditNote = async () => {
+    if (!editingFile) return;
+    setSavingEdit(true);
+    try {
+      await handleEditText(editingFile, editContent);
+    } finally {
+      setSavingEdit(false);
+      closeEditNote();
+    }
   };
 
   // Files now upload the moment they're confirmed (see handleConfirmAdd),
@@ -404,6 +471,7 @@ export default function DocumentsPageClient({ projectId }) {
         onAddText={handleAddText}
         uploading={uploading}
         onDeleteFile={requestDeleteFile}
+        onEditFile={openEditNote}
         onAddSource={handleAddSource}
         connecting={connecting}
         sources={sources}
@@ -444,6 +512,37 @@ export default function DocumentsPageClient({ projectId }) {
         onConfirm={confirmDeleteFile}
         onCancel={cancelDeleteFile}
       />
+
+      <Dialog open={!!editingFile} onOpenChange={(open) => { if (!open) closeEditNote(); }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{editingFile?.name}</DialogTitle>
+          </DialogHeader>
+          {loadingEditContent ? (
+            <div className="flex justify-center py-10">
+              <Loader2 size={20} className="animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div>
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                maxLength={MAX_TEXT_CHARS}
+                rows={12}
+                autoFocus
+                className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 resize-y"
+              />
+              <p className="text-xs text-gray-400 mt-1 text-right">{editContent.length.toLocaleString()} / {MAX_TEXT_CHARS.toLocaleString()}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={closeEditNote} disabled={savingEdit}>Cancel</Button>
+            <Button onClick={saveEditNote} disabled={savingEdit || loadingEditContent || !editContent.trim()}>
+              {savingEdit ? <><Loader2 size={13} className="animate-spin mr-1" />Saving...</> : "Save & Re-index"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -26,6 +26,7 @@ export default function DocumentsTab({
   onAddText,
   uploading,
   onDeleteFile,
+  onEditFile,
   onAddSource,
   connecting,
   sources,
@@ -306,7 +307,17 @@ export default function DocumentsTab({
                       <div className="w-7 h-7 rounded-md bg-white border flex items-center justify-center shrink-0">
                         <FileText size={13} className="text-gray-400" />
                       </div>
-                      <span className="truncate text-sm text-gray-700 max-w-xs">{file.name}</span>
+                      {file.isNote && file.status !== "pending" ? (
+                        <button
+                          onClick={() => onEditFile(file)}
+                          title="Click to edit this note"
+                          className="truncate text-sm text-blue-600 hover:underline max-w-xs text-left"
+                        >
+                          {file.name}
+                        </button>
+                      ) : (
+                        <span className="truncate text-sm text-gray-700 max-w-xs">{file.name}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${

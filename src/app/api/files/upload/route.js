@@ -73,6 +73,11 @@ export async function POST(req) {
     );
   }
 
+  // Set explicitly (not just when true) so re-saving an edited note keeps
+  // is_note true, and a same-named regular upload can't leave a stale true
+  // behind from an unrelated previous row.
+  const isNote = !!body?.isNote;
+
   // Upsert file record in DB
   const { data: fileRow, error: dbError } = await supabase
     .from("files")
@@ -83,6 +88,7 @@ export async function POST(req) {
         filename,
         storage_path: path,
         status: "uploaded",
+        is_note: isNote,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "project_id,filename" }
