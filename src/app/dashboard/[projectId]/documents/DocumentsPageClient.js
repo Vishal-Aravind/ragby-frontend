@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import DocumentsTab from "./DocumentsTab";
 import AppAlertDialog from "@/components/alertdialog";
 import { supabase } from "@/lib/supabase";
@@ -22,7 +23,6 @@ const MAX_DOCUMENT_MB = MAX_DOCUMENT_BYTES / 1024 / 1024;
 export default function DocumentsPageClient({ projectId }) {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState(null);
 
   // Confirm-before-upload — "select a file" used to silently stage it, and
   // a separate "Upload" click (easy to miss, easy to assume already
@@ -100,14 +100,16 @@ export default function DocumentsPageClient({ projectId }) {
       }
       valid.push(file);
     }
-    const messages = [];
+    // These are toasts, not the old static banner — a message that only
+    // appeared as a colored box above the file list was easy to miss
+    // entirely, which is exactly what happened with a 60MB file: it was
+    // silently dropped with no visible feedback at all.
     if (rejected.length) {
-      messages.push(`Skipped ${rejected.join(", ")} — only PDF, Word, PowerPoint, Excel and text files are supported.`);
+      toast.error(`Skipped ${rejected.join(", ")} — only PDF, Word, PowerPoint, Excel and text files are supported.`);
     }
     if (tooLarge.length) {
-      messages.push(`Skipped ${tooLarge.join(", ")} — the limit is ${MAX_DOCUMENT_MB}MB per file.`);
+      toast.error(`${tooLarge.join(", ")} ${tooLarge.length > 1 ? "are" : "is"} too large — the limit is ${MAX_DOCUMENT_MB}MB per file.`);
     }
-    setUploadError(messages.length ? messages.join(" ") : null);
 
     if (valid.length) {
       setDuplicateNames(valid.filter((f) => files.find((existing) => existing.name === f.name && existing.fromDb)).map((f) => f.name));
@@ -148,7 +150,6 @@ export default function DocumentsPageClient({ projectId }) {
   // --------------------------------------------------
   const uploadItems = async (items) => {
     setUploading(true);
-    setUploadError(null);
     for (const item of items) {
       try {
         // Step 1: ask our server for a short-lived signed URL. This
@@ -164,24 +165,24 @@ export default function DocumentsPageClient({ projectId }) {
           setFiles((prev) =>
             prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true } : f)
           );
-          setUploadError(urlData.error || "Some files couldn't be uploaded.");
+          toast.error(urlData.error || `${item.name} couldn't be uploaded.`);
           continue;
         }
 
         // Step 2: the actual bytes go straight from this browser to
         // Supabase Storage, bypassing our server (and its size limit)
         // entirely.
-        const { error: uploadError } = await supabase.storage
+        const { error: storageUploadError } = await supabase.storage
           .from("documents")
           .uploadToSignedUrl(urlData.path, urlData.token, item.file);
-        if (uploadError) {
+        if (storageUploadError) {
           setFiles((prev) =>
             prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true } : f)
           );
-          setUploadError(
-            /exceeded the maximum allowed size/i.test(uploadError.message || "")
+          toast.error(
+            /exceeded the maximum allowed size/i.test(storageUploadError.message || "")
               ? `${item.name} is too large for the ${MAX_DOCUMENT_MB}MB limit.`
-              : "Some files couldn't be uploaded."
+              : `${item.name} couldn't be uploaded.`
           );
           continue;
         }
@@ -201,7 +202,7 @@ export default function DocumentsPageClient({ projectId }) {
           setFiles((prev) =>
             prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true } : f)
           );
-          setUploadError(data.error || "Some files couldn't be processed.");
+          toast.error(data.error || `${item.name} couldn't be processed.`);
           continue;
         }
         setFiles((prev) =>
@@ -212,7 +213,7 @@ export default function DocumentsPageClient({ projectId }) {
         setFiles((prev) =>
           prev.map((f) => f.name === item.name ? { ...f, status: "error" } : f)
         );
-        setUploadError("Some files couldn't be uploaded.");
+        toast.error(`${item.name} couldn't be uploaded.`);
       }
     }
     setUploading(false);
@@ -250,7 +251,7 @@ export default function DocumentsPageClient({ projectId }) {
     } else {
       // Removing it from the list on failure hid the fact that the document
       // was still indexed and still being cited by the bot.
-      setUploadError("Couldn't delete that document. Please try again.");
+      toast.error("Couldn't delete that document. Please try again.");
     }
     setFileToDelete(null);
     setDeleteDialogOpen(false);
@@ -341,12 +342,6 @@ export default function DocumentsPageClient({ projectId }) {
 
   return (
     <>
-      {uploadError && (
-        <div className="mx-6 mt-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          {uploadError}
-        </div>
-      )}
-
       <DocumentsTab
         projectId={projectId}
         files={files}
