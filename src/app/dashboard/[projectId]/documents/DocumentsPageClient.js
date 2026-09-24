@@ -24,8 +24,13 @@ export default function DocumentsPageClient({ projectId }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [pendingFile, setPendingFile] = useState(null);
+  // Confirm-before-upload — "select a file" used to silently stage it, and
+  // a separate "Upload" click (easy to miss, easy to assume already
+  // happened) was the only thing that actually sent it anywhere. Selecting
+  // now always asks first, and confirming uploads immediately.
+  const [confirmAddOpen, setConfirmAddOpen] = useState(false);
+  const [filesToConfirm, setFilesToConfirm] = useState([]);
+  const [duplicateNames, setDuplicateNames] = useState([]);
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [fileToDelete, setFileToDelete] = useState(null);
@@ -75,6 +80,7 @@ export default function DocumentsPageClient({ projectId }) {
   const handleSelectFiles = (selectedFiles) => {
     const rejected = [];
     const tooLarge = [];
+    const valid = [];
     for (const file of selectedFiles) {
       // Browser-reported MIME is unreliable (a .docx often arrives as
       // application/octet-stream), so fall back to the extension rather
@@ -85,20 +91,14 @@ export default function DocumentsPageClient({ projectId }) {
         continue;
       }
       // Purely a fast, friendly rejection — the file's bytes go straight
-      // to Storage now (see handleUpload), so this browser-side check
+      // to Storage now (see uploadItems), so this browser-side check
       // can't be trusted as the real limit. The bucket's own file size
       // limit is what actually enforces it.
       if (file.size > MAX_DOCUMENT_BYTES) {
         tooLarge.push(file.name);
         continue;
       }
-      const exists = files.find((f) => f.name === file.name && f.fromDb);
-      if (exists) {
-        setPendingFile(file);
-        setDialogOpen(true);
-      } else {
-        addFile(file);
-      }
+      valid.push(file);
     }
     const messages = [];
     if (rejected.length) {
@@ -107,8 +107,13 @@ export default function DocumentsPageClient({ projectId }) {
     if (tooLarge.length) {
       messages.push(`Skipped ${tooLarge.join(", ")} — the limit is ${MAX_DOCUMENT_MB}MB per file.`);
     }
-    setUploadError(messages.length ? messages.join(" ") : null
-    );
+    setUploadError(messages.length ? messages.join(" ") : null);
+
+    if (valid.length) {
+      setDuplicateNames(valid.filter((f) => files.find((existing) => existing.name === f.name && existing.fromDb)).map((f) => f.name));
+      setFilesToConfirm(valid);
+      setConfirmAddOpen(true);
+    }
   };
 
   const addFile = (file) => {
@@ -119,20 +124,32 @@ export default function DocumentsPageClient({ projectId }) {
     });
   };
 
-  const handleConfirmReplace = () => {
-    addFile(pendingFile);
-    setPendingFile(null);
-    setDialogOpen(false);
+  const handleConfirmAdd = () => {
+    const toUpload = filesToConfirm.map((file) => ({ file, name: file.name }));
+    for (const file of filesToConfirm) addFile(file);
+    setFilesToConfirm([]);
+    setDuplicateNames([]);
+    setConfirmAddOpen(false);
+    // Upload starts the instant it's confirmed rather than waiting on a
+    // separate button click, which was easy to miss entirely — a file
+    // sitting in the list looked "added" whether or not Upload had ever
+    // been pressed.
+    uploadItems(toUpload);
+  };
+
+  const handleCancelAdd = () => {
+    setFilesToConfirm([]);
+    setDuplicateNames([]);
+    setConfirmAddOpen(false);
   };
 
   // --------------------------------------------------
   // UPLOAD + INGEST
   // --------------------------------------------------
-  const handleUpload = async () => {
+  const uploadItems = async (items) => {
     setUploading(true);
     setUploadError(null);
-    for (const item of files) {
-      if (item.status !== "pending") continue;
+    for (const item of items) {
       try {
         // Step 1: ask our server for a short-lived signed URL. This
         // request is tiny (a filename, not a file) — it never hits
@@ -199,6 +216,14 @@ export default function DocumentsPageClient({ projectId }) {
       }
     }
     setUploading(false);
+  };
+
+  // Files now upload the moment they're confirmed (see handleConfirmAdd),
+  // so nothing sits waiting for a manual "Upload" click anymore — the one
+  // case a button is still useful for is retrying whatever errored.
+  const handleRetryErrors = () => {
+    const errored = files.filter((f) => f.status === "error" && f.file);
+    if (errored.length) uploadItems(errored.map((f) => ({ file: f.file, name: f.name })));
   };
 
   // --------------------------------------------------
@@ -326,7 +351,7 @@ export default function DocumentsPageClient({ projectId }) {
         projectId={projectId}
         files={files}
         onSelectFiles={handleSelectFiles}
-        onUpload={handleUpload}
+        onRetryErrors={handleRetryErrors}
         uploading={uploading}
         onDeleteFile={requestDeleteFile}
         onAddSource={handleAddSource}
@@ -338,13 +363,26 @@ export default function DocumentsPageClient({ projectId }) {
       />
 
       <AppAlertDialog
-        open={dialogOpen}
-        title="Replace file?"
-        description={<><strong>{pendingFile?.name}</strong> already exists. Replacing will overwrite it.</>}
-        confirmText="Replace"
+        open={confirmAddOpen}
+        title={filesToConfirm.length === 1 ? "Add this file?" : `Add ${filesToConfirm.length} files?`}
+        description={
+          <>
+            {filesToConfirm.map((f) => (
+              <span key={f.name} className="block">
+                <strong>{f.name}</strong>
+                {duplicateNames.includes(f.name) && " (replaces the existing file)"}
+              </span>
+            ))}
+            <span className="block mt-2 text-xs text-muted-foreground">
+              This uploads the file{filesToConfirm.length > 1 ? "s" : ""} and adds{" "}
+              {filesToConfirm.length > 1 ? "them" : "it"} to your AI's knowledge right away.
+            </span>
+          </>
+        }
+        confirmText="Add"
         cancelText="Cancel"
-        onConfirm={handleConfirmReplace}
-        onCancel={() => setDialogOpen(false)}
+        onConfirm={handleConfirmAdd}
+        onCancel={handleCancelAdd}
       />
 
       <AppAlertDialog

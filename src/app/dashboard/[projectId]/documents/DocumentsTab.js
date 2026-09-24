@@ -19,7 +19,7 @@ export default function DocumentsTab({
   projectId,
   files,
   onSelectFiles,
-  onUpload,
+  onRetryErrors,
   uploading,
   onDeleteFile,
   onAddSource,
@@ -198,8 +198,7 @@ export default function DocumentsTab({
     return <FileText size={14} className="text-gray-500" />;
   }
 
-  const pendingFiles = files.filter(f => f.status === "pending");
-  const indexedFiles = files.filter(f => f.status !== "pending");
+  const erroredFiles = files.filter(f => f.status === "error");
 
   return (
     <>
@@ -257,20 +256,18 @@ export default function DocumentsTab({
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button asChild variant="outline" size="sm">
-                  <label className="cursor-pointer flex items-center gap-2">
-                    <Upload size={14} />
-                    Select files
-                    <input type="file" multiple accept=".pdf,.docx,.pptx,.txt" className="hidden" onChange={handleFileChange} />
+                <Button asChild variant="outline" size="sm" disabled={uploading}>
+                  <label className={`flex items-center gap-2 ${uploading ? "" : "cursor-pointer"}`}>
+                    {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                    {uploading ? "Adding..." : "Select files"}
+                    <input type="file" multiple accept=".pdf,.docx,.pptx,.txt" className="hidden" disabled={uploading} onChange={handleFileChange} />
                   </label>
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={onUpload}
-                  disabled={uploading || pendingFiles.length === 0}
-                >
-                  {uploading ? <><Loader2 size={13} className="animate-spin mr-1" />Uploading...</> : "Upload"}
-                </Button>
+                {erroredFiles.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={onRetryErrors} disabled={uploading}>
+                    Retry {erroredFiles.length} failed
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -297,7 +294,10 @@ export default function DocumentsTab({
                         file.status === "error"    ? "bg-red-100 text-red-700" :
                         "bg-gray-100 text-gray-600"
                       }`}>
-                        {file.status === "indexed" ? "✓ Indexed" : file.status.toUpperCase()}
+                        {file.status === "indexed" ? "✓ Added to AI Knowledge" :
+                         file.status === "pending" ? "Adding..." :
+                         file.status === "error" ? "Failed" :
+                         file.status.toUpperCase()}
                       </span>
                       <button onClick={() => onDeleteFile(file)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
                         <Trash2 size={13} />
