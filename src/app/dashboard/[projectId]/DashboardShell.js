@@ -235,8 +235,18 @@ export default function DashboardShell({ project, children }) {
   const [domain, setDomain] = useState(project.domain || "");
   const [savingDomain, setSavingDomain] = useState(false);
   const [domainSaved, setDomainSaved] = useState(false);
+  // "Other" was being saved to the database and into the AI's system
+  // prompt as the literal string "Other" -- meaningless to the model and
+  // to anyone reading the project's settings later. It must resolve to
+  // whatever the merchant actually types, same as the create-project form
+  // already does.
+  const KNOWN_DOMAINS = DOMAINS.filter((d) => d !== "Other");
+  const [customDomain, setCustomDomain] = useState(
+    domain && !KNOWN_DOMAINS.includes(domain) ? domain : ""
+  );
+  const [pickingCustom, setPickingCustom] = useState(false);
 
-  const handleDomainChange = async (value) => {
+  const saveDomain = async (value) => {
     setDomain(value);
     setSavingDomain(true);
     setDomainSaved(false);
@@ -252,6 +262,35 @@ export default function DashboardShell({ project, children }) {
       setSavingDomain(false);
     }
   };
+
+  const handleDomainChange = (value) => {
+    if (value === "Other") {
+      setPickingCustom(true);
+      return;
+    }
+    setPickingCustom(false);
+    saveDomain(value);
+  };
+
+  const handleCustomDomainSave = () => {
+    const trimmed = customDomain.trim();
+    setPickingCustom(false);
+    if (!trimmed) {
+      // Nothing typed — there's no meaningful domain to save, so don't
+      // silently persist "Other" or leave the dropdown stuck on it.
+      setCustomDomain("");
+      return;
+    }
+    saveDomain(trimmed);
+  };
+
+  const domainSelectValue = pickingCustom
+    ? "Other"
+    : KNOWN_DOMAINS.includes(domain)
+    ? domain
+    : domain
+    ? "Other"
+    : "";
 
   // --------------------------------------------------
   // PROJECT NAME — auto-created with a default (see dashboard/page.js),
@@ -449,7 +488,7 @@ export default function DashboardShell({ project, children }) {
           {isOwnerOrAdmin && (
             <div className="space-y-1">
               <select
-                value={domain}
+                value={domainSelectValue}
                 onChange={(e) => handleDomainChange(e.target.value)}
                 disabled={savingDomain}
                 className="w-full border rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-700 disabled:opacity-60 cursor-pointer"
@@ -459,6 +498,19 @@ export default function DashboardShell({ project, children }) {
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
+              {pickingCustom && (
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="e.g. Real Estate"
+                  value={customDomain}
+                  disabled={savingDomain}
+                  onChange={(e) => setCustomDomain(e.target.value)}
+                  onBlur={handleCustomDomainSave}
+                  onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+                  className="w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:opacity-60"
+                />
+              )}
               {savingDomain && <span className="text-xs text-muted-foreground">Saving...</span>}
               {domainSaved && <span className="text-xs text-emerald-600 font-medium">✓ Saved</span>}
             </div>
