@@ -66,12 +66,22 @@ export async function POST(req) {
     .from("documents")
     .list(projectId, { search: filename });
 
-  if (listError || !exists?.some((f) => f.name === filename)) {
+  const existingObject = exists?.find((f) => f.name === filename);
+  if (listError || !existingObject) {
     return NextResponse.json(
       { error: "Upload did not complete. Please try again." },
       { status: 400 }
     );
   }
+
+  // This object's size AS SUPABASE'S OWN METADATA API JUST REPORTED IT —
+  // handed to ingest so it can confirm the bytes it downloads actually
+  // match this write, not a stale cached copy. Editing a note overwrites
+  // the SAME storage key; that download raced ahead of the overwrite
+  // once during testing and embedded the file's OLD content into a
+  // freshly-created Qdrant point, so a fully successful-looking re-index
+  // silently kept answering with what the note used to say.
+  const expectedBytes = existingObject.metadata?.size ?? null;
 
   // Set explicitly (not just when true) so re-saving an edited note keeps
   // is_note true, and a same-named regular upload can't leave a stale true
@@ -109,7 +119,7 @@ export async function POST(req) {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}`,
     },
-    body: JSON.stringify({ projectId, filename, filePath: path }),
+    body: JSON.stringify({ projectId, filename, filePath: path, expectedBytes }),
   });
 
   // Previously this returned {success:true} unconditionally, so the UI
