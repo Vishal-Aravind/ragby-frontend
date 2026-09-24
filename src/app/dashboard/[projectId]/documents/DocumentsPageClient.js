@@ -301,7 +301,7 @@ export default function DocumentsPageClient({ projectId }) {
     setEditContent("");
     setLoadingEditContent(true);
     try {
-      const res = await fetch(`/api/files/${file.id}/content`);
+      const res = await fetch(`/api/files/${file.id}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(data.error || "Couldn't load this note.");
