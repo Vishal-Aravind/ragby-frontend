@@ -4,11 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import { Joyride, STATUS } from "react-joyride";
 import { Button } from "@/components/ui/button";
 import { hasProjectTabAccess } from "@/lib/project-access";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import TabNav from "./TabNav";
 import {
   FileText, Plug, GitBranch, ShoppingBag, Inbox, BarChart2, PartyPopper,
-  Sparkles, X, ArrowRight, Pencil,
+  Sparkles, X, ArrowRight, Pencil, Camera,
 } from "lucide-react";
+
+// Same bounds as the create-project form (src/app/dashboard/new/page.js) —
+// this is the only other place a logo file ever reaches the browser, and an
+// unbounded upload here could fill storage or crash the tab on a huge image
+// exactly the same way that route's missing checks would have.
+const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 
 // Guided tour copy — kept short and benefit-oriented on purpose (covers the
 // tabs needed to get a bot live, not every tab) rather than a step per tab.
@@ -273,6 +282,78 @@ export default function DashboardShell({ project, children }) {
     }
   };
 
+  // --------------------------------------------------
+  // LOGO — the create-project form is a one-time chance to set this; there
+  // was no way to add, change, or remove it afterward. Shows up on the
+  // public chat widget, same as the name, so it's worth fixing.
+  // --------------------------------------------------
+  const [logoUrl, setLogoUrl] = useState(project.logo_url || null);
+  const [savingLogo, setSavingLogo] = useState(false);
+
+  const handleLogoChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file later
+    if (!file) return;
+
+    if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
+      toast.error("Logo must be a PNG, JPEG, WEBP, or GIF image.");
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      toast.error("Logo must be 5MB or smaller.");
+      return;
+    }
+
+    setSavingLogo(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const ext = file.name.split(".").pop();
+      const path = `logos/${user.id}_${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("logos")
+        .upload(path, file, { upsert: true });
+      if (uploadError) {
+        toast.error("Logo upload failed: " + uploadError.message);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from("logos").getPublicUrl(path);
+
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logo_url: urlData.publicUrl }),
+      });
+      if (!res.ok) {
+        toast.error("Could not save the new logo.");
+        return;
+      }
+      setLogoUrl(urlData.publicUrl);
+      toast.success("Logo updated.");
+    } finally {
+      setSavingLogo(false);
+    }
+  };
+
+  const handleLogoRemove = async () => {
+    setSavingLogo(true);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logo_url: null }),
+      });
+      if (!res.ok) {
+        toast.error("Could not remove the logo.");
+        return;
+      }
+      setLogoUrl(null);
+    } finally {
+      setSavingLogo(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Joyride
@@ -293,12 +374,44 @@ export default function DashboardShell({ project, children }) {
 
       {/* Project header */}
       <div className="flex items-center gap-3">
-        {project.logo_url && (
-          <img
-            src={project.logo_url}
-            alt={project.name}
-            className="h-10 w-10 object-contain rounded-lg border p-0.5"
-          />
+        {isOwnerOrAdmin ? (
+          <label
+            className={`group relative h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border p-0.5 ${savingLogo ? "opacity-60" : "cursor-pointer"}`}
+            title={logoUrl ? "Change logo" : "Add a logo"}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt={project.name} className="h-full w-full object-contain" />
+            ) : (
+              <Camera size={16} className="text-muted-foreground/50" />
+            )}
+            <span className="absolute inset-0 hidden items-center justify-center rounded-lg bg-black/40 group-hover:flex">
+              <Camera size={14} className="text-white" />
+            </span>
+            <input
+              type="file"
+              accept={ALLOWED_LOGO_TYPES.join(",")}
+              className="hidden"
+              disabled={savingLogo}
+              onChange={handleLogoChange}
+            />
+          </label>
+        ) : (
+          logoUrl && (
+            <img
+              src={logoUrl}
+              alt={project.name}
+              className="h-10 w-10 object-contain rounded-lg border p-0.5"
+            />
+          )
+        )}
+        {isOwnerOrAdmin && logoUrl && !savingLogo && (
+          <button
+            onClick={handleLogoRemove}
+            className="text-xs text-muted-foreground/60 hover:text-red-500 transition-colors -ml-1"
+            title="Remove logo"
+          >
+            <X size={13} />
+          </button>
         )}
         {editingName ? (
           <input
