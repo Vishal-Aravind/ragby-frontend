@@ -205,6 +205,14 @@ export default function DocumentsPageClient({ projectId }) {
   // DELETE DOCUMENT
   // --------------------------------------------------
   const requestDeleteFile = (file) => {
+    // A pending file only exists in this component's state — it has no
+    // `id` because it was never uploaded, so routing it through the
+    // DELETE-by-id flow below hit /api/files/undefined (404). Nothing to
+    // confirm either: there's no indexed data yet to warn about losing.
+    if (file.status === "pending") {
+      setFiles((prev) => prev.filter((f) => f !== file));
+      return;
+    }
     setFileToDelete(file);
     setDeleteDialogOpen(true);
   };
