@@ -241,10 +241,13 @@ export default function DashboardShell({ project, children }) {
   // whatever the merchant actually types, same as the create-project form
   // already does.
   const KNOWN_DOMAINS = DOMAINS.filter((d) => d !== "Other");
-  const [customDomain, setCustomDomain] = useState(
-    domain && !KNOWN_DOMAINS.includes(domain) ? domain : ""
-  );
-  const [pickingCustom, setPickingCustom] = useState(false);
+  const isCustomDomain = (value) => !!value && !KNOWN_DOMAINS.includes(value);
+  const [customDomain, setCustomDomain] = useState(isCustomDomain(domain) ? domain : "");
+  // Stays true after a successful save so the typed value keeps showing
+  // instead of collapsing back to a bare "Other" the moment focus leaves
+  // the box — that hid what had just been saved with no way to see or
+  // edit it again short of retyping from scratch.
+  const [pickingCustom, setPickingCustom] = useState(isCustomDomain(domain));
 
   const saveDomain = async (value) => {
     setDomain(value);
@@ -274,23 +277,17 @@ export default function DashboardShell({ project, children }) {
 
   const handleCustomDomainSave = () => {
     const trimmed = customDomain.trim();
-    setPickingCustom(false);
     if (!trimmed) {
       // Nothing typed — there's no meaningful domain to save, so don't
       // silently persist "Other" or leave the dropdown stuck on it.
+      setPickingCustom(false);
       setCustomDomain("");
       return;
     }
     saveDomain(trimmed);
   };
 
-  const domainSelectValue = pickingCustom
-    ? "Other"
-    : KNOWN_DOMAINS.includes(domain)
-    ? domain
-    : domain
-    ? "Other"
-    : "";
+  const domainSelectValue = pickingCustom ? "Other" : KNOWN_DOMAINS.includes(domain) ? domain : "";
 
   // --------------------------------------------------
   // PROJECT NAME — auto-created with a default (see dashboard/page.js),
