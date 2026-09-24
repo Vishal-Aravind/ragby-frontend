@@ -320,9 +320,11 @@ export default function DocumentsTab({
                          file.status === "error" ? "Failed" :
                          file.status.toUpperCase()}
                       </span>
-                      <button onClick={() => onDeleteFile(file)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
-                        <Trash2 size={13} />
-                      </button>
+                      {file.status !== "pending" && (
+                        <button onClick={() => onDeleteFile(file)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
