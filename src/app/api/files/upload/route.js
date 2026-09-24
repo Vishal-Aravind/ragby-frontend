@@ -114,11 +114,15 @@ export async function POST(req) {
     const detail = await ingestRes.text();
     console.error("Ingest failed:", ingestRes.status, detail);
 
-    // Plan limits (403) and throttling (429) are the user's own situation
-    // and are worth stating plainly — unlike an internal failure, there's
-    // something they can actually do about it.
+    // Every 4xx from ingest (unsupported type, unreadable/corrupt file, plan
+    // limit, rate limit) is the caller's own situation, with a specific
+    // message the backend already wrote for exactly this case — passing it
+    // through beats a generic one. It was being discarded and remapped to a
+    // flat 502 for anything other than 403/429, so a renamed .zip uploaded
+    // as "document.pdf" showed the same "server error" wording and status
+    // as an actual OpenAI/Qdrant/Supabase outage, which it isn't.
     let message = "Uploaded, but we couldn't read the contents. Try re-uploading it.";
-    if (ingestRes.status === 403 || ingestRes.status === 429) {
+    if (ingestRes.status >= 400 && ingestRes.status < 500) {
       try {
         const parsed = JSON.parse(detail);
         if (parsed?.detail) message = parsed.detail;
@@ -127,9 +131,10 @@ export async function POST(req) {
       }
     }
 
+    const status = ingestRes.status >= 400 && ingestRes.status < 500 ? ingestRes.status : 502;
     return NextResponse.json(
       { success: false, status: "failed", error: message, id: fileRow.id },
-      { status: ingestRes.status === 429 ? 429 : 502 }
+      { status }
     );
   }
 
