@@ -3,23 +3,27 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Database, Table, Sheet, RefreshCw, MessageCircle, X } from "lucide-react";
+import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Database, Table, Sheet, RefreshCw, MessageCircle, X, NotepadText } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
 import ChatTab from "./ChatTab";
 
 const SOURCE_TABS = [
   { id: "documents", label: "Documents", icon: FileText },
+  { id: "text",     label: "Text", icon: NotepadText },
   { id: "gsheet",   label: "Google Sheets", icon: Sheet },
   { id: "excel",    label: "Excel", icon: Table },
   { id: "website",  label: "Website", icon: Globe },
   { id: "database", label: "Database", icon: Database },
 ];
 
+const MAX_TEXT_CHARS = 20000;
+
 export default function DocumentsTab({
   projectId,
   files,
   onSelectFiles,
   onRetryErrors,
+  onAddText,
   uploading,
   onDeleteFile,
   onAddSource,
@@ -31,6 +35,23 @@ export default function DocumentsTab({
 }) {
   const [type, setType] = useState("documents");
   const [showChat, setShowChat] = useState(false);
+
+  // ── Raw text state ────────────────────────────────────
+  const [textLabel, setTextLabel] = useState("");
+  const [textContent, setTextContent] = useState("");
+  const [savingText, setSavingText] = useState(false);
+
+  async function handleSaveText() {
+    if (!textContent.trim()) return;
+    setSavingText(true);
+    try {
+      await onAddText(textLabel, textContent);
+      setTextLabel("");
+      setTextContent("");
+    } finally {
+      setSavingText(false);
+    }
+  }
 
   // ── Documents state ──────────────────────────────────
   const handleFileChange = (e) => {
@@ -305,6 +326,46 @@ export default function DocumentsTab({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Raw text tab ── */}
+        {type === "text" && (
+          <div className="border rounded-xl p-6 space-y-4 bg-white shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+                <NotepadText size={16} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Add a Note</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Type anything you want your AI to know — a policy, an FAQ answer, a fact.</p>
+              </div>
+            </div>
+            <Input
+              placeholder="Label (e.g. Return Policy)"
+              value={textLabel}
+              onChange={e => setTextLabel(e.target.value)}
+            />
+            <div>
+              <textarea
+                placeholder="Type or paste your text here..."
+                value={textContent}
+                onChange={e => setTextContent(e.target.value)}
+                maxLength={MAX_TEXT_CHARS}
+                rows={8}
+                className="w-full border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 resize-y"
+              />
+              <p className="text-xs text-gray-400 mt-1 text-right">{textContent.length.toLocaleString()} / {MAX_TEXT_CHARS.toLocaleString()}</p>
+            </div>
+            <Button onClick={handleSaveText} disabled={savingText || !textContent.trim()}>
+              {savingText ? <><Loader2 size={13} className="animate-spin mr-1" />Adding...</> : "Save & Index"}
+            </Button>
+
+            {files.length > 0 && (
+              <div className="pt-2 border-t space-y-2">
+                <p className="text-xs font-medium text-gray-500">Existing notes appear in the Documents tab, alongside uploaded files.</p>
               </div>
             )}
           </div>

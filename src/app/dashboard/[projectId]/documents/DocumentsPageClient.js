@@ -16,6 +16,19 @@ const ALLOWED_TYPES = [
 
 const ALLOWED_EXTENSIONS = ["pdf", "docx", "ppt", "pptx", "xls", "xlsx", "txt"];
 const MAX_DOCUMENT_MB = MAX_DOCUMENT_BYTES / 1024 / 1024;
+// A "note" is meant for a paragraph or two typed straight in, not a whole
+// document pasted in — anything bigger belongs in the Documents tab as a
+// real .txt upload, which has no length surprise like this one would.
+const MAX_TEXT_CHARS = 20000;
+
+function slugifyForFilename(label) {
+  return label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
 
 // Documents is the one tab whose data layer used to live in the shared
 // ProjectClient shell instead of the tab itself — genuinely tab-specific,
@@ -222,6 +235,34 @@ export default function DocumentsPageClient({ projectId }) {
     setUploading(false);
   };
 
+  // --------------------------------------------------
+  // RAW TEXT SOURCE — wraps typed text as a synthetic .txt "file" and
+  // sends it through the exact same upload pipeline as an uploaded
+  // document. That's deliberate, not a shortcut: it means a typed note
+  // shows up in this same file list, gets chunked and embedded the same
+  // way, and — the actual point — deleting it goes through the one
+  // delete route that already purges its Qdrant vectors and its Storage
+  // object together (see api/files/[fileId]/route.js). A separate code
+  // path for "notes" would have needed that cleanup logic rebuilt twice.
+  // --------------------------------------------------
+  const handleAddText = async (label, content) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    if (trimmed.length > MAX_TEXT_CHARS) {
+      toast.error(`Notes are limited to ${MAX_TEXT_CHARS.toLocaleString()} characters — for longer content, upload it as a .txt file instead.`);
+      return;
+    }
+    const slug = slugifyForFilename(label || "") || "note";
+    const filename = `${slug}-${Date.now()}.txt`;
+    if (files.find((f) => f.name === filename)) {
+      toast.error("Please try again in a moment.");
+      return;
+    }
+    const file = new File([trimmed], filename, { type: "text/plain" });
+    addFile(file);
+    await uploadItems([{ file, name: filename }]);
+  };
+
   // Files now upload the moment they're confirmed (see handleConfirmAdd),
   // so nothing sits waiting for a manual "Upload" click anymore — the one
   // case a button is still useful for is retrying whatever errored.
@@ -360,6 +401,7 @@ export default function DocumentsPageClient({ projectId }) {
         files={files}
         onSelectFiles={handleSelectFiles}
         onRetryErrors={handleRetryErrors}
+        onAddText={handleAddText}
         uploading={uploading}
         onDeleteFile={requestDeleteFile}
         onAddSource={handleAddSource}
