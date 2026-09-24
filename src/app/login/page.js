@@ -15,6 +15,12 @@ function LoginContent() {
 
   const error = searchParams.get("error");
 
+  // Only ever a path on this same site — a bare "/x" is safe, but
+  // "//evil.com" or "https://evil.com" parses as a same-origin-looking
+  // string and would send a just-authenticated user off-site.
+  const rawNext = searchParams.get("next");
+  const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
+
   const login = async () => {
     if (!email || !password) {
       toast.error("Please enter email and password");
@@ -32,7 +38,7 @@ function LoginContent() {
         toast.error(data.error || "Login failed");
         return;
       }
-      router.replace("/dashboard");
+      router.replace(next);
     } catch {
       toast.error("Something went wrong");
     } finally {
