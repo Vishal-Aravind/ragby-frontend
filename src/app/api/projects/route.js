@@ -148,6 +148,15 @@ export async function POST(req) {
     name = profile?.name ? `${profile.name}'s Business` : "My Business";
   }
 
+  // Rendered as the dashboard's <h1> and sent to the AI as the business's
+  // own name — an unbounded value here could be an entire pasted paragraph.
+  if (typeof name === "string" && name.trim().length > 100) {
+    return NextResponse.json({ error: "Project name must be 100 characters or fewer." }, { status: 400 });
+  }
+  if (typeof domain === "string" && domain.length > 60) {
+    return NextResponse.json({ error: "Domain must be 60 characters or fewer." }, { status: 400 });
+  }
+
   const { data, error } = await supabaseAdmin
     .from("projects")
     .insert({

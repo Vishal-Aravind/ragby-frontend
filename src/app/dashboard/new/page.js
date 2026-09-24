@@ -46,6 +46,10 @@ export function NewProjectForm() {
 
   const createProject = async () => {
     if (!name.trim()) return;
+    if (name.trim().length > 100) {
+      setError("Project name must be 100 characters or fewer.");
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -109,6 +113,7 @@ export function NewProjectForm() {
       <Input
         placeholder="Project name"
         value={name}
+        maxLength={100}
         onChange={(e) => setName(e.target.value)}
       />
 

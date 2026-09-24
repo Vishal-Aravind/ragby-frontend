@@ -307,11 +307,20 @@ export default function DashboardShell({ project, children }) {
     }
     setSavingName(true);
     try {
-      await fetch(`/api/projects/${project.id}`, {
+      const res = await fetch(`/api/projects/${project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),
       });
+      if (!res.ok) {
+        // The save failed, so the displayed name (below, rendered from
+        // this same state) must not keep showing text the server never
+        // actually stored.
+        toast.error("Could not rename the project.");
+        setProjectName(project.name || "");
+        return;
+      }
+      setProjectName(trimmed);
     } finally {
       setSavingName(false);
       setEditingName(false);
@@ -454,6 +463,7 @@ export default function DashboardShell({ project, children }) {
             autoFocus
             value={projectName}
             disabled={savingName}
+            maxLength={100}
             onChange={(e) => setProjectName(e.target.value)}
             onBlur={handleNameSave}
             onKeyDown={(e) => {
@@ -467,7 +477,7 @@ export default function DashboardShell({ project, children }) {
             className={`text-2xl font-semibold ${isOwnerOrAdmin ? "flex items-center gap-2 group cursor-pointer" : ""}`}
             onClick={() => isOwnerOrAdmin && setEditingName(true)}
           >
-            {project.name}
+            {projectName}
             {isOwnerOrAdmin && (
               <Pencil size={14} className="text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
             )}

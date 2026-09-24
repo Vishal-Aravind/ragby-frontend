@@ -109,6 +109,21 @@ export async function PATCH(req, { params }) {
     if (key in body) update[key] = body[key];
   }
 
+  // No length limit here meant the project name — rendered as a page <h1>
+  // and sent to the AI's system prompt as the business's own name — could
+  // be an entire pasted paragraph, breaking the dashboard header layout.
+  if ("name" in update) {
+    const trimmed = typeof update.name === "string" ? update.name.trim() : "";
+    if (!trimmed) return NextResponse.json({ error: "Project name is required." }, { status: 400 });
+    if (trimmed.length > 100) {
+      return NextResponse.json({ error: "Project name must be 100 characters or fewer." }, { status: 400 });
+    }
+    update.name = trimmed;
+  }
+  if ("domain" in update && typeof update.domain === "string" && update.domain.length > 60) {
+    return NextResponse.json({ error: "Domain must be 60 characters or fewer." }, { status: 400 });
+  }
+
   // chat_password is handled separately: it is never stored as given, and
   // the column it writes to is not the one it is named after. Sending null
   // or "" clears the password; omitting the key leaves it untouched, so
