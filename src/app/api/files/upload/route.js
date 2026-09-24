@@ -74,7 +74,7 @@ export async function POST(req) {
   }
 
   // Upsert file record in DB
-  const { error: dbError } = await supabase
+  const { data: fileRow, error: dbError } = await supabase
     .from("files")
     .upsert(
       {
@@ -86,7 +86,9 @@ export async function POST(req) {
         updated_at: new Date().toISOString(),
       },
       { onConflict: "project_id,filename" }
-    );
+    )
+    .select("id")
+    .single();
 
   if (dbError) {
     console.error("files upsert failed:", dbError);
@@ -126,10 +128,10 @@ export async function POST(req) {
     }
 
     return NextResponse.json(
-      { success: false, status: "failed", error: message },
+      { success: false, status: "failed", error: message, id: fileRow.id },
       { status: ingestRes.status === 429 ? 429 : 502 }
     );
   }
 
-  return NextResponse.json({ success: true, status: "indexed" });
+  return NextResponse.json({ success: true, status: "indexed", id: fileRow.id });
 }

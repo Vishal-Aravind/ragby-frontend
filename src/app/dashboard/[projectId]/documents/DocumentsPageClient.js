@@ -200,13 +200,16 @@ export default function DocumentsPageClient({ projectId }) {
         // could actually read it. Trust the reported status, not the upload.
         if (!res.ok || data.success === false) {
           setFiles((prev) =>
-            prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true } : f)
+            prev.map((f) => f.name === item.name ? { ...f, status: "error", fromDb: true, id: data.id ?? f.id } : f)
           );
           toast.error(data.error || `${item.name} couldn't be processed.`);
           continue;
         }
+        // The route never returned the row's id, so a file uploaded and
+        // deleted in the same session (no page reload in between) had no
+        // id to delete by — the request went to /api/files/undefined.
         setFiles((prev) =>
-          prev.map((f) => f.name === item.name ? { ...f, status: "indexed", fromDb: true } : f)
+          prev.map((f) => f.name === item.name ? { ...f, status: "indexed", fromDb: true, id: data.id } : f)
         );
       } catch (err) {
         console.error(err);
@@ -245,6 +248,16 @@ export default function DocumentsPageClient({ projectId }) {
 
   const confirmDeleteFile = async () => {
     if (!fileToDelete) return;
+    if (!fileToDelete.id) {
+      // Belt and suspenders: this should be unreachable now that a
+      // just-uploaded file always carries the id the upload route
+      // returns, but a request to /api/files/undefined is a 404 that
+      // looks like a real failure with no useful message otherwise.
+      toast.error("Couldn't delete that document — please refresh and try again.");
+      setFileToDelete(null);
+      setDeleteDialogOpen(false);
+      return;
+    }
     const res = await fetch(`/api/files/${fileToDelete.id}`, { method: "DELETE" });
     if (res.ok) {
       setFiles((prev) => prev.filter((f) => f.id !== fileToDelete.id));
