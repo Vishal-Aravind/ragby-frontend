@@ -209,7 +209,12 @@ export default function DocumentsPageClient({ projectId }) {
         const res = await fetch("/api/files/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId, filename: item.name, isNote: !!item.isNote }),
+          // fileSize comes from THIS browser's own File object — a fact
+          // known before any round trip to Storage, unlike re-querying
+          // Storage's own list() metadata after the fact, which turned out
+          // to lag behind an overwrite by exactly the same amount as the
+          // download it was meant to catch (see upload/route.js).
+          body: JSON.stringify({ projectId, filename: item.name, isNote: !!item.isNote, fileSize: item.file.size }),
         });
         const data = await res.json().catch(() => ({}));
         // The route used to answer {success:true} even when ingestion had

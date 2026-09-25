@@ -74,14 +74,15 @@ export async function POST(req) {
     );
   }
 
-  // This object's size AS SUPABASE'S OWN METADATA API JUST REPORTED IT —
-  // handed to ingest so it can confirm the bytes it downloads actually
-  // match this write, not a stale cached copy. Editing a note overwrites
-  // the SAME storage key; that download raced ahead of the overwrite
-  // once during testing and embedded the file's OLD content into a
-  // freshly-created Qdrant point, so a fully successful-looking re-index
-  // silently kept answering with what the note used to say.
-  const expectedBytes = existingObject.metadata?.size ?? null;
+  // Deliberately NOT existingObject.metadata?.size. That first attempt
+  // re-queried Storage's own list() for the size to expect, but that read
+  // is subject to the exact same overwrite-propagation lag as the download
+  // it was meant to catch — on the first save after an edit, both landed
+  // on the same stale replica, so the check passed immediately against
+  // stale data and only started working on a second save once the lag had
+  // cleared. The browser's own File object's size is known before any
+  // round trip to Storage at all, so it can't be stale the same way.
+  const expectedBytes = typeof body?.fileSize === "number" ? body.fileSize : null;
 
   // Set explicitly (not just when true) so re-saving an edited note keeps
   // is_note true, and a same-named regular upload can't leave a stale true
