@@ -13,6 +13,7 @@
 // see the file's size before the browser uploads it, so it isn't the
 // enforcement point for that.
 
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getSupabase, getProjectRole } from "@/lib/supabase-api";
 import { safeFilename, DOCUMENT_EXTENSIONS } from "@/lib/safe-filename";
@@ -53,11 +54,21 @@ export async function POST(req) {
     );
   }
 
-  const path = `${projectId}/${filename}`;
+  // A fresh, never-before-used key per upload — deliberately NOT
+  // `${projectId}/${filename}` reused across re-uploads/edits. Retrying a
+  // download against a byte-count we expect, right after overwriting an
+  // EXISTING key, turned out to still lose the race against Supabase
+  // Storage's own overwrite-propagation delay in real testing even with
+  // several seconds of backoff. A brand-new key has no previous version
+  // to race against — new-object read-after-write is a much simpler
+  // guarantee every object store actually provides. The confirm route
+  // swaps the DB row's storage_path to this new key and only deletes the
+  // old physical object once the new one is confirmed ingested.
+  const path = `${projectId}/${randomUUID()}-${filename}`;
 
   const { data, error } = await supabase.storage
     .from("documents")
-    .createSignedUploadUrl(path, { upsert: true });
+    .createSignedUploadUrl(path);
 
   if (error) {
     console.error("createSignedUploadUrl failed:", error);

@@ -205,16 +205,21 @@ export default function DocumentsPageClient({ projectId }) {
         }
 
         // Step 3: tell our server the upload landed, so it can record it
-        // and kick off ingestion.
+        // and kick off ingestion. path is echoed back exactly as step 1
+        // returned it — a fresh, never-before-used storage key per upload,
+        // not the old `${projectId}/${filename}` reused across re-uploads
+        // and edits, which raced against Supabase Storage's own
+        // overwrite-propagation delay even with a byte-count retry.
         const res = await fetch("/api/files/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          // fileSize comes from THIS browser's own File object — a fact
-          // known before any round trip to Storage, unlike re-querying
-          // Storage's own list() metadata after the fact, which turned out
-          // to lag behind an overwrite by exactly the same amount as the
-          // download it was meant to catch (see upload/route.js).
-          body: JSON.stringify({ projectId, filename: item.name, isNote: !!item.isNote, fileSize: item.file.size }),
+          body: JSON.stringify({
+            projectId,
+            filename: item.name,
+            isNote: !!item.isNote,
+            fileSize: item.file.size,
+            path: urlData.path,
+          }),
         });
         const data = await res.json().catch(() => ({}));
         // The route used to answer {success:true} even when ingestion had

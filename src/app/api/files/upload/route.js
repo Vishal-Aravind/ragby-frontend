@@ -54,19 +54,26 @@ export async function POST(req) {
     );
   }
 
-  // The path this route trusts is recomputed from projectId + filename,
-  // exactly like /api/files/upload-url does — never taken from the
-  // client's own claimed `path`, so a caller can't point this at a
-  // storage object outside their own project's prefix.
-  const path = `${projectId}/${filename}`;
+  // The exact path /api/files/upload-url generated and returned — this
+  // route only ever trusts a path that WE issued, never one the client
+  // could invent from scratch: createSignedUploadUrl's token is bound to
+  // that exact path, so a client can only have a working upload at a path
+  // this same server handed out. Still re-validated below (ownership
+  // prefix + real existence), same defensive posture as the old
+  // deterministic-recompute version.
+  const path = typeof body?.path === "string" ? body.path : null;
+  if (!path || !path.startsWith(`${projectId}/`)) {
+    return NextResponse.json({ error: "Invalid upload path." }, { status: 400 });
+  }
+  const basename = path.slice(projectId.length + 1);
 
   // Confirm the object actually exists before trusting it — a client
   // could call this route without ever having uploaded anything.
   const { data: exists, error: listError } = await supabase.storage
     .from("documents")
-    .list(projectId, { search: filename });
+    .list(projectId, { search: basename });
 
-  const existingObject = exists?.find((f) => f.name === filename);
+  const existingObject = exists?.find((f) => f.name === basename);
   if (listError || !existingObject) {
     return NextResponse.json(
       { error: "Upload did not complete. Please try again." },
@@ -74,14 +81,11 @@ export async function POST(req) {
     );
   }
 
-  // Deliberately NOT existingObject.metadata?.size. That first attempt
-  // re-queried Storage's own list() for the size to expect, but that read
-  // is subject to the exact same overwrite-propagation lag as the download
-  // it was meant to catch — on the first save after an edit, both landed
-  // on the same stale replica, so the check passed immediately against
-  // stale data and only started working on a second save once the lag had
-  // cleared. The browser's own File object's size is known before any
-  // round trip to Storage at all, so it can't be stale the same way.
+  // The browser's own File object's size, known before any round trip to
+  // Storage at all. Kept as a defensive check even though this path is now
+  // brand-new every time (see upload-url's comment for why that alone
+  // already avoids the overwrite-propagation race two earlier attempts at
+  // this fix ran into).
   const expectedBytes = typeof body?.fileSize === "number" ? body.fileSize : null;
 
   // Set explicitly (not just when true) so re-saving an edited note keeps
@@ -89,7 +93,20 @@ export async function POST(req) {
   // behind from an unrelated previous row.
   const isNote = !!body?.isNote;
 
-  // Upsert file record in DB
+  // Captured BEFORE the upsert below overwrites it, so the old physical
+  // object can be cleaned up once — and only once — the new one is
+  // confirmed successfully ingested.
+  const { data: priorRow } = await supabase
+    .from("files")
+    .select("storage_path")
+    .eq("project_id", projectId)
+    .eq("filename", filename)
+    .maybeSingle();
+  const oldStoragePath = priorRow?.storage_path && priorRow.storage_path !== path
+    ? priorRow.storage_path
+    : null;
+
+  // Upsert file record in DB, pointing at the NEW physical object
   const { data: fileRow, error: dbError } = await supabase
     .from("files")
     .upsert(
@@ -153,6 +170,17 @@ export async function POST(req) {
       { success: false, status: "failed", error: message, id: fileRow.id },
       { status }
     );
+  }
+
+  // Only now — the new object is confirmed successfully embedded — is the
+  // OLD physical object (a prior upload or note edit under this same
+  // filename) actually removed. Never deleted eagerly: if ingest above had
+  // failed, the old object is left alone as an orphan rather than lost,
+  // which is the safer direction to fail (a little unused storage beats
+  // destroying the last known-good version of a document).
+  if (oldStoragePath) {
+    const { error: cleanupError } = await supabase.storage.from("documents").remove([oldStoragePath]);
+    if (cleanupError) console.error("old storage object cleanup failed:", cleanupError);
   }
 
   return NextResponse.json({ success: true, status: "indexed", id: fileRow.id });
