@@ -63,8 +63,22 @@ export default function DocumentsTab({
   // ── Google Sheets state ──────────────────────────────
   const [sheetLabel, setSheetLabel]   = useState("");
   const [gsheetUrl, setGsheetUrl]     = useState("");
-  const [sheetRange, setSheetRange]   = useState("");
+  // A list of typed-and-committed tab names, not a single comma-separated
+  // string — a real Google Sheets tab name can itself contain a comma
+  // ("Q1, Actuals"), so splitting on "," could never select it correctly.
+  // Each name is committed with Enter, same pattern as an email chip input.
+  const [sheetTabs, setSheetTabs]     = useState([]);
+  const [sheetTabDraft, setSheetTabDraft] = useState("");
   const [readAll, setReadAll]         = useState(false);
+
+  function commitSheetTabDraft() {
+    const name = sheetTabDraft.trim();
+    if (name && !sheetTabs.includes(name)) setSheetTabs(prev => [...prev, name]);
+    setSheetTabDraft("");
+  }
+  function removeSheetTab(name) {
+    setSheetTabs(prev => prev.filter(t => t !== name));
+  }
 
   // ── Excel state ──────────────────────────────────────
   const [excelLabel, setExcelLabel]   = useState("");
@@ -168,9 +182,15 @@ export default function DocumentsTab({
       );
       return;
     }
-    const range = readAll || !sheetRange.trim() ? "all" : sheetRange.trim();
+    // Committed as a real array — see sheetTabs' declaration for why this
+    // is no longer a comma-joined string. A tab typed but not yet
+    // committed (still sitting in the draft box) is included too, so
+    // clicking Connect right after typing a name doesn't silently drop it.
+    const pendingDraft = sheetTabDraft.trim();
+    const tabs = pendingDraft && !sheetTabs.includes(pendingDraft) ? [...sheetTabs, pendingDraft] : sheetTabs;
+    const range = readAll || tabs.length === 0 ? "all" : tabs;
     onAddSource({ type: "gsheets", label: sheetLabel || "Google Sheet", config: { sheet_id: sheetId, range } });
-    setSheetLabel(""); setGsheetUrl(""); setSheetRange(""); setReadAll(false);
+    setSheetLabel(""); setGsheetUrl(""); setSheetTabs([]); setSheetTabDraft(""); setReadAll(false);
   }
 
   async function handleAddExcel() {
@@ -205,7 +225,14 @@ export default function DocumentsTab({
   }
 
   function sourceTypeLabel(source) {
-    if (source.type === "gsheets")    return `Google Sheets${source.config?.range ? ` · ${source.config.range === "all" ? "all tabs" : source.config.range}` : ""}`;
+    if (source.type === "gsheets") {
+      const range = source.config?.range;
+      // Older sources still have the old comma-joined string; newer ones a
+      // real array — this is a display join, not a parsing boundary, so
+      // either shape is fine to show as-is.
+      const tabsText = Array.isArray(range) ? range.join(", ") : range;
+      return `Google Sheets${tabsText ? ` · ${tabsText === "all" ? "all tabs" : tabsText}` : ""}`;
+    }
     if (source.type === "excel_local") return `Excel · ${source.config?.filename || "local file"}`;
     if (source.type === "postgres")   return "PostgreSQL";
     if (source.type === "website")    return `Website · ${source.config?.full_site ? `full site · max ${source.config?.max_pages} pages` : "single page"}`;
@@ -398,27 +425,50 @@ export default function DocumentsTab({
             </div>
             <Input placeholder="Label (e.g. Product Catalog)" value={sheetLabel} onChange={e => setSheetLabel(e.target.value)} />
             <Input placeholder="Paste Google Sheets link or Sheet ID" value={gsheetUrl} onChange={e => setGsheetUrl(e.target.value)} />
-            <div className="flex gap-2 items-center">
-              <Input
-                placeholder={readAll ? "All tabs will be read" : "Tab names e.g. Sheet1, Sales (leave empty to read all)"}
-                value={sheetRange}
-                onChange={e => { setSheetRange(e.target.value); setReadAll(false); }}
-                disabled={readAll}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant={readAll ? "default" : "outline"}
-                size="sm"
-                onClick={() => { setReadAll(p => !p); if (!readAll) setSheetRange(""); }}
-                className="whitespace-nowrap"
-              >
-                {readAll ? "✓ Read All" : "Read All"}
-              </Button>
+            <div className="space-y-2">
+              <div className="flex gap-2 items-center">
+                <div className={`flex-1 flex flex-wrap items-center gap-1.5 border rounded-md px-2 py-1.5 min-h-9 ${readAll ? "bg-gray-50 opacity-60" : "bg-white"}`}>
+                  {sheetTabs.map(tab => (
+                    <span key={tab} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs rounded-full pl-2.5 pr-1 py-0.5">
+                      {tab}
+                      {!readAll && (
+                        <button type="button" onClick={() => removeSheetTab(tab)} className="text-gray-400 hover:text-red-500 p-0.5">
+                          <X size={11} />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  <input
+                    value={sheetTabDraft}
+                    onChange={e => setSheetTabDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") { e.preventDefault(); commitSheetTabDraft(); }
+                      if (e.key === "Backspace" && !sheetTabDraft && sheetTabs.length > 0) {
+                        removeSheetTab(sheetTabs[sheetTabs.length - 1]);
+                      }
+                    }}
+                    onBlur={commitSheetTabDraft}
+                    disabled={readAll}
+                    placeholder={sheetTabs.length ? "" : readAll ? "All tabs will be read" : "Type a tab name, press Enter"}
+                    className="flex-1 min-w-[100px] text-sm outline-none bg-transparent disabled:cursor-not-allowed"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant={readAll ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => { setReadAll(p => !p); if (!readAll) { setSheetTabs([]); setSheetTabDraft(""); } }}
+                  className="whitespace-nowrap"
+                >
+                  {readAll ? "✓ Read All" : "Read All"}
+                </Button>
+              </div>
+              <p className="text-xs text-gray-400">
+                {readAll
+                  ? "All tabs will be indexed."
+                  : "Leave empty to index every tab. Type a tab name and press Enter to add it — a tab name can safely contain a comma."}
+              </p>
             </div>
-            <p className="text-xs text-gray-400">
-              {readAll ? "All tabs will be indexed." : "Leave empty to index every tab. Separate multiple tab names with commas."}
-            </p>
             <Button onClick={handleAddGsheet} disabled={connecting || !gsheetUrl.trim()}>
               {connecting ? <><Loader2 size={13} className="animate-spin mr-1" />Connecting...</> : "Connect & Index"}
             </Button>
