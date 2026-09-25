@@ -18,6 +18,18 @@ const SOURCE_TABS = [
 
 const MAX_TEXT_CHARS = 20000;
 
+// Every embedding call is billed against Zavo's own OpenAI key, not the
+// merchant's — these are flat safety ceilings on every plan (see
+// backend/config.py's MAX_CHUNKS_PER_INGEST / MAX_SHEET_ROWS), not
+// something a plan upgrade raises. Shown up front here so hitting the cap
+// is an expected outcome instead of a surprise discovered after the fact.
+const CAP_HINTS = {
+  documents: "Up to 3,000 pages are indexed per file — for larger files, split into multiple uploads.",
+  gsheet: "Up to 5,000 rows are indexed per sheet, across all tabs read.",
+  excel: "Up to 3,000 rows are indexed per file — for larger spreadsheets, split into multiple files and upload each as its own source.",
+  website: "Up to 3,000 content chunks are indexed per crawl — very large sites may only get partial coverage.",
+};
+
 export default function DocumentsTab({
   projectId,
   files,
@@ -302,6 +314,7 @@ export default function DocumentsTab({
                 <div>
                   <h3 className="font-semibold text-gray-900">Upload Documents</h3>
                   <p className="text-xs text-gray-500 mt-0.5">PDF, DOCX, PPTX, TXT supported</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.documents}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -421,6 +434,7 @@ export default function DocumentsTab({
               <div>
                 <h3 className="font-semibold text-gray-900">Connect Google Sheets</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Make sure the sheet is set to "Anyone with the link can view"</p>
+                <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.gsheet}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Product Catalog)" value={sheetLabel} onChange={e => setSheetLabel(e.target.value)} />
@@ -485,6 +499,7 @@ export default function DocumentsTab({
               <div>
                 <h3 className="font-semibold text-gray-900">Upload Excel File</h3>
                 <p className="text-xs text-gray-500 mt-0.5">All sheets in the file will be indexed. Re-upload to update.</p>
+                <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.excel}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Sales Data)" value={excelLabel} onChange={e => setExcelLabel(e.target.value)} />
@@ -516,6 +531,7 @@ export default function DocumentsTab({
               <div>
                 <h3 className="font-semibold text-gray-900">Crawl Website</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Website must be publicly accessible. Some sites with Cloudflare may not work.</p>
+                <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.website}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Company Website)" value={websiteLabel} onChange={e => setWebsiteLabel(e.target.value)} />
@@ -628,7 +644,7 @@ export default function DocumentsTab({
                   </div>
                   <div className="flex gap-2 shrink-0">
                     {(source.type === "gsheets" || source.type === "website") && (
-                      <Button variant="outline" size="sm" onClick={() => onReload(source.id)} className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" onClick={() => onReload(source.id, source.label)} className="flex items-center gap-1">
                         <RefreshCw size={12} /> Reload
                       </Button>
                     )}

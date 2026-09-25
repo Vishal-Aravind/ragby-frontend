@@ -33,6 +33,24 @@ function slugifyForFilename(label) {
     .slice(0, 60);
 }
 
+// Every ingest path enforces a hard row/chunk cap (see backend/config.py's
+// MAX_CHUNKS_PER_INGEST / MAX_SHEET_ROWS) to bound our own OpenAI billing.
+// Hitting it used to be silent — the file/source looked "connected"
+// successfully with no hint that anything past the cap was dropped. This
+// builds one consistent message from whatever fields a given source type
+// was able to report (total_count isn't always knowable — gsheets and
+// Shopify stop reading early on purpose, so their true total is unknown).
+function truncationMessage(sourceLabel, data) {
+  if (!data?.truncated) return null;
+  const capped = data.capped_tabs?.length
+    ? ` Tab(s) not read at all due to the limit: ${data.capped_tabs.map((t) => `"${t}"`).join(", ")}.`
+    : "";
+  const base = data.total_count
+    ? `Only the first ${data.indexed_count?.toLocaleString()} of ${data.total_count.toLocaleString()} rows/items in ${sourceLabel} were indexed.`
+    : `${sourceLabel} hit its indexing limit — only part of it was indexed.`;
+  return `${base}${capped} Split the rest into another file or source and upload it separately.`;
+}
+
 // Documents is the one tab whose data layer used to live in the shared
 // ProjectClient shell instead of the tab itself — genuinely tab-specific,
 // so it moves here rather than into DashboardShell.
@@ -238,6 +256,8 @@ export default function DocumentsPageClient({ projectId }) {
         setFiles((prev) =>
           prev.map((f) => f.name === item.name ? { ...f, status: "indexed", fromDb: true, id: data.id } : f)
         );
+        const msg = truncationMessage(item.name, data);
+        if (msg) toast.warning(msg);
       } catch (err) {
         console.error(err);
         setFiles((prev) =>
@@ -405,11 +425,13 @@ export default function DocumentsPageClient({ projectId }) {
         formData.append("projectId", projectId);
         formData.append("label", sourceData.label || sourceData._file.name);
         const res = await fetch("/api/sources/upload-excel", { method: "POST", body: formData });
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const err = await res.json();
-          alert(err.error || "Failed to upload Excel file.");
+          toast.error(data.error || "Failed to upload Excel file.");
           return;
         }
+        const msg = truncationMessage(sourceData.label || sourceData._file.name, data);
+        if (msg) toast.warning(msg);
         await fetchSources();
         return;
       }
@@ -420,23 +442,23 @@ export default function DocumentsPageClient({ projectId }) {
         body: JSON.stringify({ projectId, ...sourceData }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || "Failed to connect source.");
+        toast.error(data.error || "Failed to connect source.");
         return;
       }
 
-      const data = await res.json();
       if (data.skipped_tabs?.length > 0) {
-        alert(
-          `Source connected, but these tab(s) were skipped:\n\n` +
-          data.skipped_tabs.map(t => `• "${t}"`).join("\n")
+        toast.warning(
+          `Source connected, but these tab(s) couldn't be read: ${data.skipped_tabs.map(t => `"${t}"`).join(", ")}.`
         );
       }
+      const msg = truncationMessage(sourceData.label || sourceData.type, data);
+      if (msg) toast.warning(msg);
       await fetchSources();
     } catch (err) {
       console.error("Add source error:", err);
-      alert("Something went wrong connecting the source.");
+      toast.error("Something went wrong connecting the source.");
     } finally {
       setConnecting(false);
     }
@@ -445,11 +467,14 @@ export default function DocumentsPageClient({ projectId }) {
   // --------------------------------------------------
   // RELOAD / REUPLOAD / DELETE SOURCE
   // --------------------------------------------------
-  const handleReloadSource = async (id) => {
+  const handleReloadSource = async (id, label) => {
     const res = await fetch(`/api/sources/sync/${id}`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert(err.error || "Failed to refresh this source.");
+      toast.error(data.error || "Failed to refresh this source.");
+    } else {
+      const msg = truncationMessage(label || "This source", data);
+      if (msg) toast.warning(msg);
     }
     await fetchSources();
   };
@@ -461,7 +486,13 @@ export default function DocumentsPageClient({ projectId }) {
     formData.append("label", label);
     formData.append("source_id", sourceId);
     const res = await fetch("/api/sources/upload-excel", { method: "POST", body: formData });
-    if (!res.ok) { alert("Re-upload failed."); return; }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(data.error || "Re-upload failed.");
+    } else {
+      const msg = truncationMessage(label || "This file", data);
+      if (msg) toast.warning(msg);
+    }
     await fetchSources();
   };
 

@@ -183,5 +183,16 @@ export async function POST(req) {
     if (cleanupError) console.error("old storage object cleanup failed:", cleanupError);
   }
 
-  return NextResponse.json({ success: true, status: "indexed", id: fileRow.id });
+  // ingest's own body carries whether this file hit MAX_CHUNKS_PER_INGEST —
+  // previously discarded here, so a 15,000-row spreadsheet silently lost
+  // everything past row 3,000 with no signal anywhere the user could see.
+  const ingestData = await ingestRes.json().catch(() => ({}));
+  return NextResponse.json({
+    success: true,
+    status: "indexed",
+    id: fileRow.id,
+    truncated: !!ingestData.truncated,
+    indexed_count: ingestData.indexed_count,
+    total_count: ingestData.total_count,
+  });
 }
