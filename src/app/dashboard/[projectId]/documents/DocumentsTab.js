@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Database, Table, Sheet, RefreshCw, MessageCircle, X, NotepadText } from "lucide-react";
+import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Database, Table, Sheet, RefreshCw, MessageCircle, X, NotepadText, Columns3 } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
 import ChatTab from "./ChatTab";
+import SourceColumnsDialog from "./SourceColumnsDialog";
+
+const TABLE_SOURCE_TYPES = ["gsheets", "excel_online", "excel_local"];
+
+const PERSONAL_DATA_HINT =
+  "Columns that look like personal data (emails, phone numbers) are hidden from the AI by default — use Columns on the connected source to change this.";
 
 const SOURCE_TABS = [
   { id: "documents", label: "Documents", icon: FileText },
@@ -54,6 +60,8 @@ export default function DocumentsTab({
 }) {
   const [type, setType] = useState("documents");
   const [showChat, setShowChat] = useState(false);
+  const [columnsSource, setColumnsSource] = useState(null);
+  const closeColumns = useCallback(() => setColumnsSource(null), []);
   const capHints = getCapHints(maxFileMB);
 
   // ── Raw text state ────────────────────────────────────
@@ -442,6 +450,7 @@ export default function DocumentsTab({
                 <h3 className="font-semibold text-gray-900">Connect Google Sheets</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Make sure the sheet is set to "Anyone with the link can view"</p>
                 <p className="text-xs text-gray-400 mt-0.5">{capHints.gsheet}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{PERSONAL_DATA_HINT}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Product Catalog)" value={sheetLabel} onChange={e => setSheetLabel(e.target.value)} />
@@ -507,6 +516,7 @@ export default function DocumentsTab({
                 <h3 className="font-semibold text-gray-900">Upload Excel File</h3>
                 <p className="text-xs text-gray-500 mt-0.5">All sheets in the file will be indexed. Re-upload to update.</p>
                 <p className="text-xs text-gray-400 mt-0.5">{capHints.excel}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{PERSONAL_DATA_HINT}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Sales Data)" value={excelLabel} onChange={e => setExcelLabel(e.target.value)} />
@@ -650,6 +660,11 @@ export default function DocumentsTab({
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
+                    {TABLE_SOURCE_TYPES.includes(source.type) && (
+                      <Button variant="outline" size="sm" onClick={() => setColumnsSource(source)} className="flex items-center gap-1">
+                        <Columns3 size={12} /> Columns
+                      </Button>
+                    )}
                     {(source.type === "gsheets" || source.type === "website") && (
                       <Button variant="outline" size="sm" onClick={() => onReload(source.id, source.label)} className="flex items-center gap-1">
                         <RefreshCw size={12} /> Reload
@@ -696,6 +711,8 @@ export default function DocumentsTab({
         onConfirm={() => { if (sourceToDelete) onDeleteSource(sourceToDelete.id); setDeleteDialogOpen(false); setSourceToDelete(null); }}
         onCancel={() => { setDeleteDialogOpen(false); setSourceToDelete(null); }}
       />
+
+      <SourceColumnsDialog source={columnsSource} onClose={closeColumns} />
 
       {showChat && (
         <div

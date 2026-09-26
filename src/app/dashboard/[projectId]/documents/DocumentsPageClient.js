@@ -51,6 +51,14 @@ function truncationMessage(sourceLabel, data) {
   return `${base}${capped} Split the rest into another file or source and upload it separately.`;
 }
 
+// Spreadsheet columns that look like personal data start hidden from the
+// bot — say so right after connecting, so it's not a silent surprise.
+function hiddenColumnsMessage(data) {
+  const cols = data?.hidden_columns;
+  if (!cols?.length) return null;
+  return `Hidden from the AI to protect personal data: ${cols.map((c) => `"${c}"`).join(", ")}. Use "Columns" on the source to change this.`;
+}
+
 // Documents is the one tab whose data layer used to live in the shared
 // ProjectClient shell instead of the tab itself — genuinely tab-specific,
 // so it moves here rather than into DashboardShell.
@@ -464,6 +472,8 @@ export default function DocumentsPageClient({ projectId }) {
         }
         const msg = truncationMessage(sourceData.label || sourceData._file.name, data);
         if (msg) toast.warning(msg);
+        const hiddenMsg = hiddenColumnsMessage(data);
+        if (hiddenMsg) toast.info(hiddenMsg, { duration: 10000 });
         await fetchSources();
         return;
       }
@@ -487,6 +497,8 @@ export default function DocumentsPageClient({ projectId }) {
       }
       const msg = truncationMessage(sourceData.label || sourceData.type, data);
       if (msg) toast.warning(msg);
+      const hiddenMsg = hiddenColumnsMessage(data);
+      if (hiddenMsg) toast.info(hiddenMsg, { duration: 10000 });
       await fetchSources();
     } catch (err) {
       console.error("Add source error:", err);
