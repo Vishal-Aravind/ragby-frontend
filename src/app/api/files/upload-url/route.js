@@ -8,14 +8,17 @@
 // signed upload URL; this route only ever sees a filename and a project
 // id, never the file itself.
 //
-// The real size limit now lives on the Storage bucket itself (see
-// MAX_DOCUMENT_BYTES's comment at the call site) — this route cannot
-// see the file's size before the browser uploads it, so it isn't the
-// enforcement point for that.
+// The bucket's own file_size_limit (see MAX_DOCUMENT_BYTES's comment at
+// the call site) is still the absolute outer ceiling no plan can exceed.
+// This route additionally enforces the tighter, PLAN-AWARE ceiling before
+// ever issuing a signed URL — the client already reports the file's size
+// (fileSize) before any bytes move, so a free-plan upload past its limit
+// fails fast here instead of only being caught after the fact in ingest.py.
 
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { getSupabase, getProjectRole } from "@/lib/supabase-api";
+import { getSupabase, getProjectRole, getToken } from "@/lib/supabase-api";
+import { proxyToBackend } from "@/lib/backend-proxy";
 import { safeFilename, DOCUMENT_EXTENSIONS } from "@/lib/safe-filename";
 
 export async function POST(req) {
@@ -40,6 +43,26 @@ export async function POST(req) {
 
   const role = await getProjectRole(user.id, projectId);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // fileSize is the browser's own File.size, reported before any bytes
+  // move — lets an over-limit upload fail here instead of only being
+  // caught after the fact in ingest.py. Optional: an older client that
+  // doesn't send it just skips this fast-fail and relies on the backstop.
+  const fileSize = typeof body?.fileSize === "number" ? body.fileSize : null;
+  if (fileSize !== null) {
+    const token = await getToken(supabase);
+    const limitsRes = await proxyToBackend(`/projects/${projectId}/limits`, { token });
+    const limitsData = await limitsRes.json().catch(() => ({}));
+    const maxFileMB = limitsData?.maxFileMB;
+    if (typeof maxFileMB === "number" && fileSize > maxFileMB * 1024 * 1024) {
+      return NextResponse.json(
+        {
+          error: `This file is too large for your plan (limit ${maxFileMB}MB). Upgrade your plan to upload larger files.`,
+        },
+        { status: 413 }
+      );
+    }
+  }
 
   const filename = safeFilename(body?.filename);
   if (!filename) {

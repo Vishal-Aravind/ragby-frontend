@@ -130,15 +130,29 @@ export async function POST(req) {
     return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
   }
 
-  // Call FastAPI ingest with auth token
-  const ingestRes = await fetch(`${process.env.BACKEND_BASE_URL}/ingest`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({ projectId, filename, filePath: path, expectedBytes }),
-  });
+  // Call FastAPI ingest with auth token. Uncaught, this threw straight
+  // through the route on a sleeping/unreachable backend, same bug class
+  // fixed elsewhere in the sources routes via proxyToBackend — this route
+  // has too much of its own DB/storage logic around it to switch to that
+  // helper wholesale, so it just gets the same try/catch treatment inline.
+  let ingestRes;
+  try {
+    ingestRes = await fetch(`${process.env.BACKEND_BASE_URL}/ingest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify({ projectId, filename, filePath: path, expectedBytes }),
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (e) {
+    console.error("ingest fetch failed:", e);
+    return NextResponse.json(
+      { success: false, status: "failed", error: "We couldn't reach the server. Please try again in a moment.", id: fileRow.id },
+      { status: 502 }
+    );
+  }
 
   // Previously this returned {success:true} unconditionally, so the UI
   // marked every file "Indexed" even when ingestion had failed outright —

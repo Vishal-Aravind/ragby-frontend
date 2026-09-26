@@ -73,6 +73,29 @@ export default function DocumentsPageClient({ projectId }) {
   const [sources, setSources] = useState([]);
 
   // --------------------------------------------------
+  // PLAN LIMITS — the real, plan-aware file-size ceiling. MAX_DOCUMENT_BYTES
+  // is only the absolute outer ceiling (matches the Supabase bucket's own
+  // hard file_size_limit); a free/pro project's actual limit is tighter,
+  // and can only be known by asking the backend which plan this PROJECT's
+  // owner is on (a teammate's plan doesn't count — see get_plan_limits).
+  // --------------------------------------------------
+  const [maxFileMB, setMaxFileMB] = useState(MAX_DOCUMENT_MB);
+
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/limits`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (typeof data?.maxFileMB === "number") setMaxFileMB(data.maxFileMB);
+      })
+      .catch(() => {
+        // Falls back to the flat MAX_DOCUMENT_MB already in state — a
+        // slightly-too-generous client-side hint beats blocking uploads
+        // entirely because this one non-critical fetch failed.
+      });
+  }, [projectId]);
+
+  // --------------------------------------------------
   // LOAD FILES
   // --------------------------------------------------
   useEffect(() => {
@@ -127,9 +150,12 @@ export default function DocumentsPageClient({ projectId }) {
       }
       // Purely a fast, friendly rejection — the file's bytes go straight
       // to Storage now (see uploadItems), so this browser-side check
-      // can't be trusted as the real limit. The bucket's own file size
-      // limit is what actually enforces it.
-      if (file.size > MAX_DOCUMENT_BYTES) {
+      // can't be trusted as the real limit. upload-url's own plan-aware
+      // check (and ingest.py's backstop behind that) are what actually
+      // enforce it; maxFileMB here is the real per-plan number, capped at
+      // MAX_DOCUMENT_MB (the bucket's own absolute ceiling) in case the
+      // limits fetch ever returned something looser than that.
+      if (file.size > Math.min(maxFileMB, MAX_DOCUMENT_MB) * 1024 * 1024) {
         tooLarge.push(file.name);
         continue;
       }
@@ -143,7 +169,11 @@ export default function DocumentsPageClient({ projectId }) {
       toast.error(`Skipped ${rejected.join(", ")} — only PDF, Word, PowerPoint, Excel and text files are supported.`);
     }
     if (tooLarge.length) {
-      toast.error(`${tooLarge.join(", ")} ${tooLarge.length > 1 ? "are" : "is"} too large — the limit is ${MAX_DOCUMENT_MB}MB per file.`);
+      const limit = Math.min(maxFileMB, MAX_DOCUMENT_MB);
+      toast.error(
+        `${tooLarge.join(", ")} ${tooLarge.length > 1 ? "are" : "is"} too large — your plan's limit is ${limit}MB per file.` +
+        (limit < MAX_DOCUMENT_MB ? " Upgrade your plan to upload larger files." : "")
+      );
     }
 
     if (valid.length) {
@@ -193,7 +223,7 @@ export default function DocumentsPageClient({ projectId }) {
         const urlRes = await fetch("/api/files/upload-url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId, filename: item.name }),
+          body: JSON.stringify({ projectId, filename: item.name, fileSize: item.file.size }),
         });
         const urlData = await urlRes.json().catch(() => ({}));
         if (!urlRes.ok) {
@@ -427,7 +457,9 @@ export default function DocumentsPageClient({ projectId }) {
         const res = await fetch("/api/sources/upload-excel", { method: "POST", body: formData });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          toast.error(data.error || "Failed to upload Excel file.");
+          // proxyToBackend forwards the backend's error under `detail`, not
+          // `error` — read both so the real message displays either way.
+          toast.error(data.error || data.detail || "Failed to upload Excel file.");
           return;
         }
         const msg = truncationMessage(sourceData.label || sourceData._file.name, data);
@@ -444,7 +476,7 @@ export default function DocumentsPageClient({ projectId }) {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(data.error || "Failed to connect source.");
+        toast.error(data.error || data.detail || "Failed to connect source.");
         return;
       }
 
@@ -471,7 +503,7 @@ export default function DocumentsPageClient({ projectId }) {
     const res = await fetch(`/api/sources/sync/${id}`, { method: "POST" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error(data.error || "Failed to refresh this source.");
+      toast.error(data.error || data.detail || "Failed to refresh this source.");
     } else {
       const msg = truncationMessage(label || "This source", data);
       if (msg) toast.warning(msg);
@@ -488,7 +520,7 @@ export default function DocumentsPageClient({ projectId }) {
     const res = await fetch("/api/sources/upload-excel", { method: "POST", body: formData });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      toast.error(data.error || "Re-upload failed.");
+      toast.error(data.error || data.detail || "Re-upload failed.");
     } else {
       const msg = truncationMessage(label || "This file", data);
       if (msg) toast.warning(msg);
@@ -507,6 +539,7 @@ export default function DocumentsPageClient({ projectId }) {
       <DocumentsTab
         projectId={projectId}
         files={files}
+        maxFileMB={Math.min(maxFileMB, MAX_DOCUMENT_MB)}
         onSelectFiles={handleSelectFiles}
         onRetryErrors={handleRetryErrors}
         onAddText={handleAddText}

@@ -18,21 +18,27 @@ const SOURCE_TABS = [
 
 const MAX_TEXT_CHARS = 20000;
 
-// Every embedding call is billed against Zavo's own OpenAI key, not the
-// merchant's — these are flat safety ceilings on every plan (see
-// backend/config.py's MAX_CHUNKS_PER_INGEST / MAX_SHEET_ROWS), not
-// something a plan upgrade raises. Shown up front here so hitting the cap
-// is an expected outcome instead of a surprise discovered after the fact.
-const CAP_HINTS = {
-  documents: "Up to 3,000 pages are indexed per file — for larger files, split into multiple uploads.",
-  gsheet: "Up to 5,000 rows are indexed per sheet, across all tabs read.",
-  excel: "Up to 3,000 rows are indexed per file — for larger spreadsheets, split into multiple files and upload each as its own source.",
-  website: "Up to 3,000 content chunks are indexed per crawl — very large sites may only get partial coverage.",
-};
+// File size (MB) is the metric a merchant can actually judge before
+// uploading, unlike "chunks" or "pages" — no comparable product (Chatbase,
+// Voiceflow, Intercom Fin) surfaces a page/chunk count as its user-facing
+// limit, they all gate on file size instead. maxFileMB is the real,
+// plan-tiered number (see backend/config.py's PLAN_LIMITS) — a function of
+// it, not a static object, since the number differs by plan and is fetched
+// at runtime. The row-based sheet limit stays as-is: a Google Sheet has no
+// file-size concept the user perceives directly.
+function getCapHints(maxFileMB) {
+  return {
+    documents: `Files up to ${maxFileMB}MB are supported — for larger files, split into multiple uploads.`,
+    gsheet: "Up to 5,000 rows are indexed per sheet, across all tabs read.",
+    excel: `Files up to ${maxFileMB}MB are supported — for larger spreadsheets, split into multiple files and upload each as its own source.`,
+    website: "Very large sites may only get partial coverage — check back after a crawl to confirm everything you need was indexed.",
+  };
+}
 
 export default function DocumentsTab({
   projectId,
   files,
+  maxFileMB,
   onSelectFiles,
   onRetryErrors,
   onAddText,
@@ -48,6 +54,7 @@ export default function DocumentsTab({
 }) {
   const [type, setType] = useState("documents");
   const [showChat, setShowChat] = useState(false);
+  const capHints = getCapHints(maxFileMB);
 
   // ── Raw text state ────────────────────────────────────
   const [textLabel, setTextLabel] = useState("");
@@ -314,7 +321,7 @@ export default function DocumentsTab({
                 <div>
                   <h3 className="font-semibold text-gray-900">Upload Documents</h3>
                   <p className="text-xs text-gray-500 mt-0.5">PDF, DOCX, PPTX, TXT supported</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.documents}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{capHints.documents}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -434,7 +441,7 @@ export default function DocumentsTab({
               <div>
                 <h3 className="font-semibold text-gray-900">Connect Google Sheets</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Make sure the sheet is set to "Anyone with the link can view"</p>
-                <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.gsheet}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{capHints.gsheet}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Product Catalog)" value={sheetLabel} onChange={e => setSheetLabel(e.target.value)} />
@@ -499,7 +506,7 @@ export default function DocumentsTab({
               <div>
                 <h3 className="font-semibold text-gray-900">Upload Excel File</h3>
                 <p className="text-xs text-gray-500 mt-0.5">All sheets in the file will be indexed. Re-upload to update.</p>
-                <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.excel}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{capHints.excel}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Sales Data)" value={excelLabel} onChange={e => setExcelLabel(e.target.value)} />
@@ -531,7 +538,7 @@ export default function DocumentsTab({
               <div>
                 <h3 className="font-semibold text-gray-900">Crawl Website</h3>
                 <p className="text-xs text-gray-500 mt-0.5">Website must be publicly accessible. Some sites with Cloudflare may not work.</p>
-                <p className="text-xs text-gray-400 mt-0.5">{CAP_HINTS.website}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{capHints.website}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Company Website)" value={websiteLabel} onChange={e => setWebsiteLabel(e.target.value)} />

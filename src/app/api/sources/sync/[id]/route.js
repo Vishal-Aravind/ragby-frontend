@@ -3,24 +3,15 @@
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
- 
+import { proxyToBackend } from "@/lib/backend-proxy";
+
 export async function POST(req, { params }) {
   const { id } = await params; // FIX: await params in Next.js 15
- 
+
   const { supabase } = getSupabase(req);
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- 
-  const res = await fetch(`${process.env.BACKEND_BASE_URL}/sources/sync/${id}`, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${session.access_token}` },
-  });
 
-  if (!res.ok) {
-    const err = await res.text();
-    return NextResponse.json({ error: err }, { status: res.status });
-  }
-
-  return NextResponse.json(await res.json());
+  return proxyToBackend(`/sources/sync/${id}`, { token: session.access_token, method: "POST" });
 }
  

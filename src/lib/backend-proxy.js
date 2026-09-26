@@ -33,6 +33,12 @@ export async function proxyToBackend(
   path,
   { token, req, method = "GET", body, timeoutMs = 30000 } = {}
 ) {
+  // FormData (multipart uploads) must NOT be JSON-stringified and must NOT
+  // get a manual Content-Type — fetch sets its own with the multipart
+  // boundary, and hand-setting it here strips that boundary, corrupting
+  // the body on the receiving end.
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+
   let res;
   try {
     res = await fetch(`${BACKEND}${path}`, {
@@ -40,9 +46,9 @@ export async function proxyToBackend(
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(req ? visitorHeaders(req) : {}),
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(body !== undefined && !isFormData ? { "Content-Type": "application/json" } : {}),
       },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
       // Without this a slow (not even down) backend pins the Next.js
       // request until the platform's own timeout kills it, and the user
       // watches a spinner with no error the whole time.
