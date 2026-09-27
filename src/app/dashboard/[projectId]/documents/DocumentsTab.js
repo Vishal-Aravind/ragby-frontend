@@ -324,6 +324,18 @@ export default function DocumentsTab({
     setWebsiteLabel(""); setWebsiteUrl(""); setFullSite(true); setMaxPages(30);
   }
 
+  // The backend marks a source "syncing" before indexing and "done" after
+  // (config.sync_status). One still "syncing" long after it started never
+  // finished — the server died mid-sync — and only has part of its data.
+  // Indexing routes allow up to 5 minutes, so 10 is safely past that.
+  function syncState(source) {
+    const cfg = source.config || {};
+    if (cfg.sync_status !== "syncing") return "done";
+    const started = Date.parse(cfg.sync_started_at || "");
+    if (!started || Date.now() - started > 10 * 60 * 1000) return "incomplete";
+    return "syncing";
+  }
+
   function sourceTypeLabel(source) {
     if (source.type === "gsheets") {
       const range = source.config?.range;
@@ -772,6 +784,15 @@ export default function DocumentsTab({
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{source.label}</p>
                       <p className="text-xs text-gray-400">{sourceTypeLabel(source)}</p>
+                      {syncState(source) === "syncing" && (
+                        <p className="text-xs text-amber-600">Indexing…</p>
+                      )}
+                      {syncState(source) === "incomplete" && (
+                        <p className="text-xs text-red-600">
+                          ⚠ Indexing didn't finish — only part of it is available.{" "}
+                          {source.type === "excel_local" ? "Re-upload the file." : "Press Reload."}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
