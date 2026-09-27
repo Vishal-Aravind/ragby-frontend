@@ -47,7 +47,9 @@ function truncationMessage(sourceLabel, data) {
     : "";
   const base = data.total_count
     ? `Only the first ${data.indexed_count?.toLocaleString()} of ${data.total_count.toLocaleString()} rows/items in ${sourceLabel} were indexed.`
-    : `${sourceLabel} hit its indexing limit — only part of it was indexed.`;
+    : data.indexed_count
+      ? `${sourceLabel} is over the row limit — only the first ${data.indexed_count.toLocaleString()} rows were indexed; the rest were left out.`
+      : `${sourceLabel} hit its indexing limit — only part of it was indexed.`;
   return `${base}${capped} Split the rest into another file or source and upload it separately.`;
 }
 
