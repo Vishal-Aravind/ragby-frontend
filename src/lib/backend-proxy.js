@@ -9,6 +9,11 @@ export const BACKEND =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.BACKEND_BASE_URL;
 
+// For routes that index a whole sheet/file synchronously. Must stay under
+// the route's `maxDuration` (300s) so our own clean error wins over the
+// platform killing the function.
+export const LONG_SYNC_TIMEOUT_MS = 280000;
+
 /**
  * Forward an authenticated request to the FastAPI backend and return its
  * response as JSON.

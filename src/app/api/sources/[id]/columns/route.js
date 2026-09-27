@@ -4,13 +4,19 @@
 // ─────────────────────────────────────────────────────────
 import { NextResponse } from "next/server";
 import { getSupabase } from "@/lib/supabase-api";
-import { proxyToBackend } from "@/lib/backend-proxy";
+import { proxyToBackend, LONG_SYNC_TIMEOUT_MS } from "@/lib/backend-proxy";
 
 async function getToken(req) {
   const { supabase } = getSupabase(req);
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token;
 }
+
+// Indexing a large sheet/file (thousands of rows, embedded in batches)
+// takes well over 30s. The proxy used to give up at 30s and show
+// "couldn't reach the server" while the backend carried on and finished,
+// so the source appeared after a refresh and a retry could add it twice.
+export const maxDuration = 300;
 
 export async function GET(req, { params }) {
   const { id } = await params;
@@ -35,6 +41,6 @@ export async function PUT(req, { params }) {
     token,
     method: "PUT",
     body,
-    timeoutMs: 60000,
+    timeoutMs: LONG_SYNC_TIMEOUT_MS,
   });
 }
