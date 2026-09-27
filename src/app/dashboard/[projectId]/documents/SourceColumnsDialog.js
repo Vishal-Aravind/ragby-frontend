@@ -6,14 +6,33 @@ import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
+function toState(tabs) {
+  return (tabs || []).map(t => ({ ...t, hidden: new Set(t.hidden || []) }));
+}
+
+function toHiddenMap(tabs) {
+  return Object.fromEntries(tabs.map(t => [t.tab, [...t.hidden]]));
+}
+
 // Which spreadsheet columns the bot may read and share. Anyone chatting
-// with the bot can ask for these, so columns that look like personal data
-// (emails, phone numbers) start unticked — the merchant opts them in here.
-export default function SourceColumnsDialog({ source, onClose }) {
-  const [tabs, setTabs] = useState(null); // [{tab, columns, hidden: Set}]
+// with the bot can ask about ticked columns, so columns that look like
+// personal data (emails, phone numbers) start unticked.
+//
+// Two modes:
+// - `preview` ({title, tabs, skippedTabs, onConfirm}): shown when adding a
+//   sheet/Excel file, BEFORE anything is indexed. onConfirm gets
+//   {tab: [hidden columns]} and does the real connect.
+// - `source`: an already-connected source; loads and saves its settings.
+export default function SourceColumnsDialog({ source, preview, onClose }) {
+  const [tabs, setTabs] = useState(null); // [{tab, columns, hidden: Set, row_count?}]
   const [saving, setSaving] = useState(false);
+  const open = !!source || !!preview;
 
   useEffect(() => {
+    if (preview) {
+      setTabs(toState(preview.tabs));
+      return;
+    }
     if (!source) return;
     let cancelled = false;
     setTabs(null);
@@ -26,10 +45,10 @@ export default function SourceColumnsDialog({ source, onClose }) {
         onClose();
         return;
       }
-      setTabs((data.tabs || []).map(t => ({ ...t, hidden: new Set(t.hidden) })));
+      setTabs(toState(data.tabs));
     })();
     return () => { cancelled = true; };
-  }, [source, onClose]);
+  }, [source, preview, onClose]);
 
   function toggle(tabName, col) {
     setTabs(prev => prev.map(t => {
@@ -40,7 +59,12 @@ export default function SourceColumnsDialog({ source, onClose }) {
     }));
   }
 
-  async function save() {
+  async function confirm() {
+    if (preview) {
+      preview.onConfirm(toHiddenMap(tabs));
+      onClose();
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/sources/${source.id}/columns`, {
@@ -60,16 +84,25 @@ export default function SourceColumnsDialog({ source, onClose }) {
     }
   }
 
+  const title = preview ? preview.title : source?.label;
+  const skipped = preview?.skippedTabs || [];
+
   return (
-    <Dialog open={!!source} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Columns the AI can use — {source?.label}</DialogTitle>
+          <DialogTitle>Choose what the AI can use{title ? ` — ${title}` : ""}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-gray-500">
           Anyone chatting with your bot can ask about ticked columns. Columns that look like
-          personal data (emails, phone numbers) start unticked.
+          personal data (emails, phone numbers) start unticked — tick them only if customers
+          should be able to see them.
         </p>
+        {skipped.length > 0 && (
+          <p className="text-xs text-amber-600">
+            Not found, will be skipped: {skipped.map(t => `"${t}"`).join(", ")}
+          </p>
+        )}
         {!tabs ? (
           <div className="flex justify-center py-10">
             <Loader2 size={18} className="animate-spin text-gray-400" />
@@ -82,14 +115,13 @@ export default function SourceColumnsDialog({ source, onClose }) {
           <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
             {tabs.map(t => (
               <div key={t.tab}>
-                {(tabs.length > 1 || t.tab !== "default") && (
-                  <div className="px-3 py-2 bg-gray-50 text-sm font-medium text-gray-700">
-                    {t.tab === "default" ? "First tab" : t.tab}
-                    <span className="text-xs text-gray-400 ml-2">
-                      {t.columns.length - t.hidden.size}/{t.columns.length} columns
-                    </span>
-                  </div>
-                )}
+                <div className="px-3 py-2 bg-gray-50 text-sm font-medium text-gray-700">
+                  {t.tab === "default" ? "First tab" : t.tab}
+                  <span className="text-xs font-normal text-gray-400 ml-2">
+                    {t.columns.length - t.hidden.size}/{t.columns.length} columns
+                    {typeof t.row_count === "number" ? ` · ${t.row_count.toLocaleString()} rows` : ""}
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 py-2">
                   {t.columns.map(col => (
                     <label key={col} className="flex items-center gap-2 cursor-pointer py-0.5 min-w-0">
@@ -104,8 +136,10 @@ export default function SourceColumnsDialog({ source, onClose }) {
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !tabs?.length}>
-            {saving ? <><Loader2 size={13} className="animate-spin mr-1" />Saving...</> : "Save"}
+          <Button onClick={confirm} disabled={saving || !tabs?.length}>
+            {saving
+              ? <><Loader2 size={13} className="animate-spin mr-1" />Saving...</>
+              : preview ? "Connect & Index" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>

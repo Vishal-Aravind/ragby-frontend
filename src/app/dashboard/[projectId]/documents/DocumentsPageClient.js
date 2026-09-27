@@ -51,14 +51,6 @@ function truncationMessage(sourceLabel, data) {
   return `${base}${capped} Split the rest into another file or source and upload it separately.`;
 }
 
-// Spreadsheet columns that look like personal data start hidden from the
-// bot — say so right after connecting, so it's not a silent surprise.
-function hiddenColumnsMessage(data) {
-  const cols = data?.hidden_columns;
-  if (!cols?.length) return null;
-  return `Hidden from the AI to protect personal data: ${cols.map((c) => `"${c}"`).join(", ")}. Use "Columns" on the source to change this.`;
-}
-
 // Documents is the one tab whose data layer used to live in the shared
 // ProjectClient shell instead of the tab itself — genuinely tab-specific,
 // so it moves here rather than into DashboardShell.
@@ -462,6 +454,11 @@ export default function DocumentsPageClient({ projectId }) {
         formData.append("file", sourceData._file);
         formData.append("projectId", projectId);
         formData.append("label", sourceData.label || sourceData._file.name);
+        // Sheets to read ([] = all) and the columns unticked in the preview.
+        formData.append("tabs", JSON.stringify(sourceData.tabs || []));
+        if (sourceData.hidden_columns) {
+          formData.append("hidden_columns", JSON.stringify(sourceData.hidden_columns));
+        }
         const res = await fetch("/api/sources/upload-excel", { method: "POST", body: formData });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -470,10 +467,13 @@ export default function DocumentsPageClient({ projectId }) {
           toast.error(data.error || data.detail || "Failed to upload Excel file.");
           return;
         }
+        if (data.skipped_tabs?.length > 0) {
+          toast.warning(
+            `File uploaded, but these sheet(s) weren't found or were empty: ${data.skipped_tabs.map(t => `"${t}"`).join(", ")}.`
+          );
+        }
         const msg = truncationMessage(sourceData.label || sourceData._file.name, data);
         if (msg) toast.warning(msg);
-        const hiddenMsg = hiddenColumnsMessage(data);
-        if (hiddenMsg) toast.info(hiddenMsg, { duration: 10000 });
         await fetchSources();
         return;
       }
@@ -497,8 +497,6 @@ export default function DocumentsPageClient({ projectId }) {
       }
       const msg = truncationMessage(sourceData.label || sourceData.type, data);
       if (msg) toast.warning(msg);
-      const hiddenMsg = hiddenColumnsMessage(data);
-      if (hiddenMsg) toast.info(hiddenMsg, { duration: 10000 });
       await fetchSources();
     } catch (err) {
       console.error("Add source error:", err);

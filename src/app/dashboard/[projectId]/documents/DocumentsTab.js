@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Database, Table, Sheet, RefreshCw, MessageCircle, X, NotepadText, Columns3 } from "lucide-react";
@@ -11,7 +12,7 @@ import SourceColumnsDialog from "./SourceColumnsDialog";
 const TABLE_SOURCE_TYPES = ["gsheets", "excel_online", "excel_local"];
 
 const PERSONAL_DATA_HINT =
-  "Columns that look like personal data (emails, phone numbers) are hidden from the AI by default — use Columns on the connected source to change this.";
+  "You'll choose which columns the AI can use before anything is indexed. Emails and phone numbers start unticked.";
 
 const SOURCE_TABS = [
   { id: "documents", label: "Documents", icon: FileText },
@@ -61,7 +62,11 @@ export default function DocumentsTab({
   const [type, setType] = useState("documents");
   const [showChat, setShowChat] = useState(false);
   const [columnsSource, setColumnsSource] = useState(null);
-  const closeColumns = useCallback(() => setColumnsSource(null), []);
+  // Set while choosing columns for a sheet/Excel file that isn't connected
+  // yet — see SourceColumnsDialog's preview mode.
+  const [columnsPreview, setColumnsPreview] = useState(null);
+  const [previewing, setPreviewing] = useState(false);
+  const closeColumns = useCallback(() => { setColumnsSource(null); setColumnsPreview(null); }, []);
   const capHints = getCapHints(maxFileMB);
 
   // ── Raw text state ────────────────────────────────────
@@ -111,6 +116,15 @@ export default function DocumentsTab({
   const [excelLabel, setExcelLabel]   = useState("");
   const [excelFile, setExcelFile]     = useState(null);
   const [uploadingExcel, setUploadingExcel] = useState(false);
+  // Same chip input as Google Sheets: empty = every sheet in the file.
+  const [excelTabs, setExcelTabs]     = useState([]);
+  const [excelTabDraft, setExcelTabDraft] = useState("");
+
+  function commitExcelTabDraft() {
+    const name = excelTabDraft.trim();
+    if (name && !excelTabs.includes(name)) setExcelTabs(prev => [...prev, name]);
+    setExcelTabDraft("");
+  }
   const [reuploadingId, setReuploadingId]   = useState(null);
 
   // ── Website state ─────────────────────────────────────
@@ -198,7 +212,7 @@ export default function DocumentsTab({
   }
 
   // ── Submit handlers ──────────────────────────────────
-  function handleAddGsheet() {
+  async function handleAddGsheet() {
     if (!gsheetUrl.trim()) return;
     const sheetId = parseSheetId(gsheetUrl);
     if (!sheetId) {
@@ -216,16 +230,69 @@ export default function DocumentsTab({
     const pendingDraft = sheetTabDraft.trim();
     const tabs = pendingDraft && !sheetTabs.includes(pendingDraft) ? [...sheetTabs, pendingDraft] : sheetTabs;
     const range = readAll || tabs.length === 0 ? "all" : tabs;
-    onAddSource({ type: "gsheets", label: sheetLabel || "Google Sheet", config: { sheet_id: sheetId, range } });
-    setSheetLabel(""); setGsheetUrl(""); setSheetTabs([]); setSheetTabDraft(""); setReadAll(false);
+    const label = sheetLabel || "Google Sheet";
+    const config = { sheet_id: sheetId, range };
+
+    // Read the columns first so the merchant chooses what the bot may use
+    // BEFORE anything is indexed.
+    setPreviewing(true);
+    try {
+      const res = await fetch("/api/sources/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, type: "gsheets", config }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || data.detail || "Couldn't read that sheet.");
+        return;
+      }
+      setColumnsPreview({
+        title: label,
+        tabs: data.tabs,
+        skippedTabs: data.skipped_tabs,
+        onConfirm: (hidden) => {
+          onAddSource({ type: "gsheets", label, config, hidden_columns: hidden });
+          setSheetLabel(""); setGsheetUrl(""); setSheetTabs([]); setSheetTabDraft(""); setReadAll(false);
+        },
+      });
+    } catch {
+      toast.error("Couldn't read that sheet. Please try again.");
+    } finally {
+      setPreviewing(false);
+    }
   }
 
   async function handleAddExcel() {
     if (!excelFile) return;
+    const pendingDraft = excelTabDraft.trim();
+    const tabs = pendingDraft && !excelTabs.includes(pendingDraft) ? [...excelTabs, pendingDraft] : excelTabs;
+    const file = excelFile;
+    const label = excelLabel || file.name;
+
     setUploadingExcel(true);
     try {
-      onAddSource({ type: "excel_local", label: excelLabel || excelFile.name, _file: excelFile });
-      setExcelLabel(""); setExcelFile(null);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
+      formData.append("tabs", JSON.stringify(tabs));
+      const res = await fetch("/api/sources/preview-excel", { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || data.detail || "Couldn't read that file.");
+        return;
+      }
+      setColumnsPreview({
+        title: label,
+        tabs: data.tabs,
+        skippedTabs: data.skipped_tabs,
+        onConfirm: (hidden) => {
+          onAddSource({ type: "excel_local", label, _file: file, tabs, hidden_columns: hidden });
+          setExcelLabel(""); setExcelFile(null); setExcelTabs([]); setExcelTabDraft("");
+        },
+      });
+    } catch {
+      toast.error("Couldn't read that file. Please try again.");
     } finally {
       setUploadingExcel(false);
     }
@@ -499,8 +566,10 @@ export default function DocumentsTab({
                   : "Leave empty to index every tab. Type a tab name and press Enter to add it — a tab name can safely contain a comma."}
               </p>
             </div>
-            <Button onClick={handleAddGsheet} disabled={connecting || !gsheetUrl.trim()}>
-              {connecting ? <><Loader2 size={13} className="animate-spin mr-1" />Connecting...</> : "Connect & Index"}
+            <Button onClick={handleAddGsheet} disabled={connecting || previewing || !gsheetUrl.trim()}>
+              {previewing ? <><Loader2 size={13} className="animate-spin mr-1" />Reading sheet...</>
+                : connecting ? <><Loader2 size={13} className="animate-spin mr-1" />Connecting...</>
+                : "Choose columns"}
             </Button>
           </div>
         )}
@@ -514,7 +583,7 @@ export default function DocumentsTab({
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">Upload Excel File</h3>
-                <p className="text-xs text-gray-500 mt-0.5">All sheets in the file will be indexed. Re-upload to update.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Index every sheet, or only the ones you name. Re-upload to update.</p>
                 <p className="text-xs text-gray-400 mt-0.5">{capHints.excel}</p>
                 <p className="text-xs text-gray-400 mt-0.5">{PERSONAL_DATA_HINT}</p>
               </div>
@@ -532,8 +601,36 @@ export default function DocumentsTab({
                 <button onClick={() => setExcelFile(null)} className="text-xs text-gray-400 hover:text-red-500">Remove</button>
               )}
             </div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-1.5 border rounded-md px-2 py-1.5 min-h-9 bg-white">
+                {excelTabs.map(tab => (
+                  <span key={tab} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs rounded-full pl-2.5 pr-1 py-0.5">
+                    {tab}
+                    <button type="button" onClick={() => setExcelTabs(prev => prev.filter(t => t !== tab))} className="text-gray-400 hover:text-red-500 p-0.5">
+                      <X size={11} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  value={excelTabDraft}
+                  onChange={e => setExcelTabDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") { e.preventDefault(); commitExcelTabDraft(); }
+                    if (e.key === "Backspace" && !excelTabDraft && excelTabs.length > 0) {
+                      setExcelTabs(prev => prev.slice(0, -1));
+                    }
+                  }}
+                  onBlur={commitExcelTabDraft}
+                  placeholder={excelTabs.length ? "" : "Sheet names to index (optional) — type one, press Enter"}
+                  className="flex-1 min-w-[100px] text-sm outline-none bg-transparent"
+                />
+              </div>
+              <p className="text-xs text-gray-400">Leave empty to index every sheet in the file.</p>
+            </div>
             <Button onClick={handleAddExcel} disabled={connecting || uploadingExcel || !excelFile}>
-              {uploadingExcel || connecting ? <><Loader2 size={13} className="animate-spin mr-1" />Uploading...</> : "Upload & Index"}
+              {uploadingExcel ? <><Loader2 size={13} className="animate-spin mr-1" />Reading file...</>
+                : connecting ? <><Loader2 size={13} className="animate-spin mr-1" />Uploading...</>
+                : "Choose columns"}
             </Button>
           </div>
         )}
@@ -712,7 +809,7 @@ export default function DocumentsTab({
         onCancel={() => { setDeleteDialogOpen(false); setSourceToDelete(null); }}
       />
 
-      <SourceColumnsDialog source={columnsSource} onClose={closeColumns} />
+      <SourceColumnsDialog source={columnsSource} preview={columnsPreview} onClose={closeColumns} />
 
       {showChat && (
         <div
