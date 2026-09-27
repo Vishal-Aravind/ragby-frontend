@@ -20,9 +20,9 @@ export const PLAN_PRICES = {
 // "100+". Four places, three different answers. 100 is the enforced number
 // and now the only one, leaving room for an Enterprise tier above it.
 export const PLAN_LIMITS = {
-  free: { conversations: 300, seats: 1 },
-  pro: { conversations: 5000, seats: 5 },
-  business: { conversations: 25000, seats: 100 },
+  free: { conversations: 300, seats: 1, items: 3 },
+  pro: { conversations: 5000, seats: 5, items: 15 },
+  business: { conversations: 25000, seats: 100, items: 50 },
 };
 
 // Resolves a plan name to its seat limit. Deliberately NOT

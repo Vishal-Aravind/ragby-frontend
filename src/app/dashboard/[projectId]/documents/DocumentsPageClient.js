@@ -90,6 +90,9 @@ export default function DocumentsPageClient({ projectId }) {
   // owner is on (a teammate's plan doesn't count — see get_plan_limits).
   // --------------------------------------------------
   const [maxFileMB, setMaxFileMB] = useState(MAX_DOCUMENT_MB);
+  // One shared limit for documents, notes, sheets, Excel, websites and
+  // databases (backend/config.py PLAN_LIMITS "items").
+  const [itemLimit, setItemLimit] = useState(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -97,6 +100,7 @@ export default function DocumentsPageClient({ projectId }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (typeof data?.maxFileMB === "number") setMaxFileMB(data.maxFileMB);
+        if (typeof data?.items === "number") setItemLimit(data.items);
       })
       .catch(() => {
         // Falls back to the flat MAX_DOCUMENT_MB already in state — a
@@ -560,6 +564,7 @@ export default function DocumentsPageClient({ projectId }) {
         projectId={projectId}
         files={files}
         maxFileMB={Math.min(maxFileMB, MAX_DOCUMENT_MB)}
+        itemLimit={itemLimit}
         onSelectFiles={handleSelectFiles}
         onRetryErrors={handleRetryErrors}
         onAddText={handleAddText}

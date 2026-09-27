@@ -20,6 +20,7 @@ const PLANS = [
     yearlyINR: 0,
     features: [
       { text: "300 messages / month", included: true },
+      { text: "3 knowledge sources (docs, sheets, websites…)", included: true },
       { text: "Website widget", included: true },
       { text: "Shareable chat link", included: true },
       { text: "Telegram", included: true },
@@ -37,6 +38,7 @@ const PLANS = [
     yearlyINR: 899,
     features: [
       { text: "5,000 messages / month", included: true },
+      { text: "15 knowledge sources (docs, sheets, websites…)", included: true },
       { text: "All channels incl. WhatsApp", included: true },
       { text: "No Askzavo branding", included: true },
       { text: "Lead capture widget", included: true },
@@ -54,6 +56,7 @@ const PLANS = [
     yearlyINR: 1899,
     features: [
       { text: "25,000 messages / month", included: true },
+      { text: "50 knowledge sources (docs, sheets, websites…)", included: true },
       { text: "All channels incl. WhatsApp", included: true },
       { text: "No Askzavo branding", included: true },
       { text: "Priority support", included: true },

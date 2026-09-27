@@ -46,6 +46,7 @@ export default function DocumentsTab({
   projectId,
   files,
   maxFileMB,
+  itemLimit,
   onSelectFiles,
   onRetryErrors,
   onAddText,
@@ -68,6 +69,11 @@ export default function DocumentsTab({
   const [previewing, setPreviewing] = useState(false);
   const closeColumns = useCallback(() => { setColumnsSource(null); setColumnsPreview(null); }, []);
   const capHints = getCapHints(maxFileMB);
+  // Mirrors backend usage.count_knowledge_items: saved files that didn't
+  // fail, plus connected sources except Shopify (a store integration).
+  const itemsUsed =
+    files.filter(f => f.fromDb && f.status !== "error").length +
+    sources.filter(s => s.type !== "shopify").length;
 
   // ── Raw text state ────────────────────────────────────
   const [textLabel, setTextLabel] = useState("");
@@ -349,8 +355,20 @@ export default function DocumentsTab({
 
         {/* ── Page header ── */}
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Data Sources</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-gray-900">Data Sources</h2>
+            {itemLimit != null && (
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${itemsUsed >= itemLimit ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                {itemsUsed} of {itemLimit} used
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500 mt-0.5">Connect documents, spreadsheets, websites, or databases to power your AI's answers.</p>
+          {itemLimit != null && itemsUsed >= itemLimit && (
+            <p className="text-xs text-amber-700 mt-1">
+              You've used all {itemLimit} items on your plan (documents, notes, sheets, Excel, websites and databases count together). Delete one or upgrade to add more.
+            </p>
+          )}
         </div>
 
         {/* ── Source type tab bar ── */}
