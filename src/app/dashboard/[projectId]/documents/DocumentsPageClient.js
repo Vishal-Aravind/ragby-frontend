@@ -42,15 +42,23 @@ function slugifyForFilename(label) {
 // Shopify stop reading early on purpose, so their true total is unknown).
 function truncationMessage(sourceLabel, data) {
   if (!data?.truncated) return null;
+  const name = `"${sourceLabel}"`;
+  const indexed = data.indexed_count ? data.indexed_count.toLocaleString() : null;
+  const base = indexed && data.total_count
+    ? `Only the first ${indexed} of ${data.total_count.toLocaleString()} rows/items in ${name} were indexed — that's the limit.`
+    : indexed
+      ? `Only the first ${indexed} rows of ${name} were indexed — that's the limit. The rest were not added.`
+      : `${name} is over the limit — only part of it was indexed.`;
   const capped = data.capped_tabs?.length
-    ? ` Tab(s) not read at all due to the limit: ${data.capped_tabs.map((t) => `"${t}"`).join(", ")}.`
+    ? ` Tab(s) not read at all: ${data.capped_tabs.map((t) => `"${t}"`).join(", ")}.`
     : "";
-  const base = data.total_count
-    ? `Only the first ${data.indexed_count?.toLocaleString()} of ${data.total_count.toLocaleString()} rows/items in ${sourceLabel} were indexed.`
-    : data.indexed_count
-      ? `${sourceLabel} is over the row limit — only the first ${data.indexed_count.toLocaleString()} rows were indexed; the rest were left out.`
-      : `${sourceLabel} hit its indexing limit — only part of it was indexed.`;
-  return `${base}${capped} Split the rest into another file or source and upload it separately.`;
+  return `${base}${capped} To add the rest, split it into a separate sheet or file and upload that as a new source.`;
+}
+
+// Stays until the user closes it: it says data was left out, which is easy
+// to miss if it disappears after a few seconds.
+function showTruncationWarning(msg) {
+  if (msg) toast.warning(msg, { duration: Infinity, closeButton: true });
 }
 
 // Documents is the one tab whose data layer used to live in the shared
@@ -289,7 +297,7 @@ export default function DocumentsPageClient({ projectId }) {
           prev.map((f) => f.name === item.name ? { ...f, status: "indexed", fromDb: true, id: data.id } : f)
         );
         const msg = truncationMessage(item.name, data);
-        if (msg) toast.warning(msg);
+        showTruncationWarning(msg);
       } catch (err) {
         console.error(err);
         setFiles((prev) =>
@@ -475,7 +483,7 @@ export default function DocumentsPageClient({ projectId }) {
           );
         }
         const msg = truncationMessage(sourceData.label || sourceData._file.name, data);
-        if (msg) toast.warning(msg);
+        showTruncationWarning(msg);
         await fetchSources();
         return;
       }
@@ -498,7 +506,7 @@ export default function DocumentsPageClient({ projectId }) {
         );
       }
       const msg = truncationMessage(sourceData.label || sourceData.type, data);
-      if (msg) toast.warning(msg);
+      showTruncationWarning(msg);
       await fetchSources();
     } catch (err) {
       console.error("Add source error:", err);
@@ -518,7 +526,7 @@ export default function DocumentsPageClient({ projectId }) {
       toast.error(data.error || data.detail || "Failed to refresh this source.");
     } else {
       const msg = truncationMessage(label || "This source", data);
-      if (msg) toast.warning(msg);
+      showTruncationWarning(msg);
     }
     await fetchSources();
   };
@@ -535,7 +543,7 @@ export default function DocumentsPageClient({ projectId }) {
       toast.error(data.error || data.detail || "Re-upload failed.");
     } else {
       const msg = truncationMessage(label || "This file", data);
-      if (msg) toast.warning(msg);
+      showTruncationWarning(msg);
     }
     await fetchSources();
   };
