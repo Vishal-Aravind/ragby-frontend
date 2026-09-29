@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import DocumentsTab from "./DocumentsTab";
+import { sourceJobState, isSourceBusy, fileUiStatus } from "./jobState";
 import AppAlertDialog from "@/components/alertdialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,18 @@ function showTruncationWarning(msg) {
   if (msg) toast.warning(msg, { duration: Infinity, closeButton: true });
 }
 
+// What a finished sheet/Excel/website sync has to report: tabs it couldn't
+// read, and whether it hit the row limit.
+function showSyncOutcome(label, result) {
+  if (result?.skipped_tabs?.length > 0) {
+    toast.warning(
+      `${label}: these tab(s) couldn't be read: ${result.skipped_tabs.map(t => `"${t}"`).join(", ")}.`,
+      { duration: Infinity, closeButton: true }
+    );
+  }
+  showTruncationWarning(truncationMessage(label, result));
+}
+
 // Documents is the one tab whose data layer used to live in the shared
 // ProjectClient shell instead of the tab itself — genuinely tab-specific,
 // so it moves here rather than into DashboardShell.
@@ -112,23 +125,46 @@ export default function DocumentsPageClient({ projectId }) {
   // --------------------------------------------------
   // LOAD FILES
   // --------------------------------------------------
+  // Indexing runs as a background job, so a file's outcome arrives on a
+  // later fetch, not in the upload response. These remember what each file
+  // and source was last seen as, so finishing (or failing) while this page
+  // is open raises the right toast exactly once.
+  const lastFileStatus = useRef(new Map());
+  const lastSourceState = useRef(new Map());
+
+  const fetchFiles = async () => {
+    const res = await fetch(`/api/files?projectId=${projectId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const fromDb = (data || []).map((f) => ({
+      id: f.id,
+      name: f.filename,
+      status: fileUiStatus(f.status),
+      error: f.error || null,
+      result: f.result || null,
+      fromDb: true,
+      isNote: !!f.is_note,
+    }));
+    for (const f of fromDb) {
+      const before = lastFileStatus.current.get(f.id);
+      if (before === "processing" && f.status === "indexed") {
+        showTruncationWarning(truncationMessage(f.name, f.result));
+      } else if (before === "processing" && f.status === "error") {
+        toast.error(`${f.name}: ${f.error || "couldn't be processed."}`);
+      }
+      lastFileStatus.current.set(f.id, f.status);
+    }
+    // Keep entries that exist only in this browser (still uploading, or a
+    // failed upload kept for Retry) — polling must not wipe them.
+    setFiles((prev) => {
+      const names = new Set(fromDb.map((f) => f.name));
+      return [...prev.filter((f) => f.file && !names.has(f.name)), ...fromDb];
+    });
+  };
+
   useEffect(() => {
     if (!projectId) return;
-    const loadFiles = async () => {
-      const res = await fetch(`/api/files?projectId=${projectId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      setFiles(
-        (data || []).map((f) => ({
-          id: f.id,
-          name: f.filename,
-          status: f.status,
-          fromDb: true,
-          isNote: !!f.is_note,
-        }))
-      );
-    };
-    loadFiles();
+    fetchFiles();
   }, [projectId]);
 
   // --------------------------------------------------
@@ -138,6 +174,19 @@ export default function DocumentsPageClient({ projectId }) {
     const res = await fetch(`/api/sources?project_id=${projectId}`);
     if (!res.ok) return;
     const data = await res.json();
+    for (const s of data || []) {
+      const state = sourceJobState(s);
+      const before = lastSourceState.current.get(s.id);
+      const wasBusy = before === "queued" || before === "syncing";
+      if (wasBusy && state === "done") {
+        showSyncOutcome(s.label || "This source", s.config?.sync_result);
+      } else if (wasBusy && state === "failed") {
+        toast.error(`${s.label || "This source"}: ${s.config?.sync_error || "indexing failed."}`, {
+          duration: Infinity, closeButton: true,
+        });
+      }
+      lastSourceState.current.set(s.id, state);
+    }
     setSources(data || []);
   };
 
@@ -145,6 +194,16 @@ export default function DocumentsPageClient({ projectId }) {
     if (!projectId) return;
     fetchSources();
   }, [projectId]);
+
+  // While any file or source is queued/indexing, refresh every few seconds
+  // so its status (and the finish/failure toast) shows up on its own.
+  useEffect(() => {
+    if (!projectId) return;
+    const busy = files.some((f) => f.fromDb && f.status === "processing") || sources.some(isSourceBusy);
+    if (!busy) return;
+    const t = setTimeout(() => { fetchFiles(); fetchSources(); }, 3000);
+    return () => clearTimeout(t);
+  }, [projectId, files, sources]);
 
   // --------------------------------------------------
   // FILE SELECTION
@@ -297,11 +356,16 @@ export default function DocumentsPageClient({ projectId }) {
         // The route never returned the row's id, so a file uploaded and
         // deleted in the same session (no page reload in between) had no
         // id to delete by — the request went to /api/files/undefined.
+        // Normally "queued": the file is indexed by a background job and its
+        // outcome arrives via fetchFiles (polled while anything is busy).
+        const queued = data.status === "queued";
+        if (queued) lastFileStatus.current.set(data.id, "processing");
         setFiles((prev) =>
-          prev.map((f) => f.name === item.name ? { ...f, status: "indexed", fromDb: true, id: data.id } : f)
+          prev.map((f) => f.name === item.name
+            ? { ...f, status: queued ? "processing" : "indexed", fromDb: true, id: data.id, file: undefined, error: null }
+            : f)
         );
-        const msg = truncationMessage(item.name, data);
-        showTruncationWarning(msg);
+        if (!queued) showTruncationWarning(truncationMessage(item.name, data));
       } catch (err) {
         console.error(err);
         setFiles((prev) =>
@@ -481,13 +545,7 @@ export default function DocumentsPageClient({ projectId }) {
           toast.error(data.error || data.detail || "Failed to upload Excel file.");
           return;
         }
-        if (data.skipped_tabs?.length > 0) {
-          toast.warning(
-            `File uploaded, but these sheet(s) weren't found or were empty: ${data.skipped_tabs.map(t => `"${t}"`).join(", ")}.`
-          );
-        }
-        const msg = truncationMessage(sourceData.label || sourceData._file.name, data);
-        showTruncationWarning(msg);
+        if (data.status !== "queued") showSyncOutcome(sourceData.label || sourceData._file.name, data);
         await fetchSources();
         return;
       }
@@ -504,13 +562,7 @@ export default function DocumentsPageClient({ projectId }) {
         return;
       }
 
-      if (data.skipped_tabs?.length > 0) {
-        toast.warning(
-          `Source connected, but these tab(s) couldn't be read: ${data.skipped_tabs.map(t => `"${t}"`).join(", ")}.`
-        );
-      }
-      const msg = truncationMessage(sourceData.label || sourceData.type, data);
-      showTruncationWarning(msg);
+      if (data.status !== "queued" && data.status !== "done") showSyncOutcome(sourceData.label || sourceData.type, data);
       await fetchSources();
     } catch (err) {
       console.error("Add source error:", err);
@@ -528,9 +580,8 @@ export default function DocumentsPageClient({ projectId }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast.error(data.error || data.detail || "Failed to refresh this source.");
-    } else {
-      const msg = truncationMessage(label || "This source", data);
-      showTruncationWarning(msg);
+    } else if (data.status !== "queued" && data.status !== "done") {
+      showSyncOutcome(label || "This source", data);
     }
     await fetchSources();
   };
@@ -545,9 +596,8 @@ export default function DocumentsPageClient({ projectId }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast.error(data.error || data.detail || "Re-upload failed.");
-    } else {
-      const msg = truncationMessage(label || "This file", data);
-      showTruncationWarning(msg);
+    } else if (data.status !== "queued") {
+      showSyncOutcome(label || "This file", data);
     }
     await fetchSources();
   };
@@ -575,6 +625,7 @@ export default function DocumentsPageClient({ projectId }) {
         connecting={connecting}
         sources={sources}
         onReload={handleReloadSource}
+        onSourcesChanged={fetchSources}
         onDeleteSource={handleDeleteSource}
         onReuploadExcel={handleReuploadExcel}
       />

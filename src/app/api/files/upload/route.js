@@ -143,7 +143,7 @@ export async function POST(req) {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
       },
-      body: JSON.stringify({ projectId, filename, filePath: path, expectedBytes }),
+      body: JSON.stringify({ projectId, filename, filePath: path, expectedBytes, oldStoragePath }),
       signal: AbortSignal.timeout(30000),
     });
   } catch (e) {
@@ -186,21 +186,23 @@ export async function POST(req) {
     );
   }
 
-  // Only now — the new object is confirmed successfully embedded — is the
-  // OLD physical object (a prior upload or note edit under this same
-  // filename) actually removed. Never deleted eagerly: if ingest above had
-  // failed, the old object is left alone as an orphan rather than lost,
-  // which is the safer direction to fail (a little unused storage beats
-  // destroying the last known-good version of a document).
+  const ingestData = await ingestRes.json().catch(() => ({}));
+
+  // Indexing now runs as a background job: ingest only validates and
+  // queues. The job itself removes the OLD storage object (a prior upload
+  // or note edit under this filename) once the new one is indexed, and
+  // records the outcome on the files row, which the dashboard polls.
+  if (ingestData.status === "queued") {
+    return NextResponse.json({ success: true, status: "queued", id: fileRow.id });
+  }
+
+  // An older backend that still indexes inline: same handling as before.
+  // The old object is removed only now that the new one is confirmed
+  // embedded — never eagerly, so a failure never loses the last good copy.
   if (oldStoragePath) {
     const { error: cleanupError } = await supabase.storage.from("documents").remove([oldStoragePath]);
     if (cleanupError) console.error("old storage object cleanup failed:", cleanupError);
   }
-
-  // ingest's own body carries whether this file hit MAX_CHUNKS_PER_INGEST —
-  // previously discarded here, so a 15,000-row spreadsheet silently lost
-  // everything past row 3,000 with no signal anywhere the user could see.
-  const ingestData = await ingestRes.json().catch(() => ({}));
   return NextResponse.json({
     success: true,
     status: "indexed",

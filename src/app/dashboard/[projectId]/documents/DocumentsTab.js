@@ -8,6 +8,7 @@ import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Da
 import AppAlertDialog from "@/components/alertdialog";
 import ChatTab from "./ChatTab";
 import SourceColumnsDialog from "./SourceColumnsDialog";
+import { sourceJobState, isSourceBusy } from "./jobState";
 
 const TABLE_SOURCE_TYPES = ["gsheets", "excel_online", "excel_local"];
 
@@ -59,6 +60,7 @@ export default function DocumentsTab({
   onReload,
   onDeleteSource,
   onReuploadExcel,
+  onSourcesChanged,
 }) {
   const [type, setType] = useState("documents");
   const [showChat, setShowChat] = useState(false);
@@ -73,7 +75,7 @@ export default function DocumentsTab({
   // fail, plus connected sources except Shopify (a store integration).
   const itemsUsed =
     files.filter(f => f.fromDb && f.status !== "error").length +
-    sources.filter(s => s.type !== "shopify").length;
+    sources.filter(s => s.type !== "shopify" && sourceJobState(s) !== "failed").length;
 
   // ── Raw text state ────────────────────────────────────
   const [textLabel, setTextLabel] = useState("");
@@ -324,18 +326,6 @@ export default function DocumentsTab({
     setWebsiteLabel(""); setWebsiteUrl(""); setFullSite(true); setMaxPages(30);
   }
 
-  // The backend marks a source "syncing" before indexing and "done" after
-  // (config.sync_status). One still "syncing" long after it started never
-  // finished — the server died mid-sync — and only has part of its data.
-  // Indexing routes allow up to 5 minutes, so 10 is safely past that.
-  function syncState(source) {
-    const cfg = source.config || {};
-    if (cfg.sync_status !== "syncing") return "done";
-    const started = Date.parse(cfg.sync_started_at || "");
-    if (!started || Date.now() - started > 10 * 60 * 1000) return "incomplete";
-    return "syncing";
-  }
-
   function sourceTypeLabel(source) {
     if (source.type === "gsheets") {
       const range = source.config?.range;
@@ -472,14 +462,18 @@ export default function DocumentsTab({
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      <span
+                        title={file.status === "error" && file.error ? file.error : undefined}
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         file.status === "indexed"  ? "bg-green-100 text-green-700" :
                         file.status === "pending"  ? "bg-yellow-100 text-yellow-700" :
+                        file.status === "processing" ? "bg-amber-50 text-amber-700" :
                         file.status === "error"    ? "bg-red-100 text-red-700" :
                         "bg-gray-100 text-gray-600"
                       }`}>
                         {file.status === "indexed" ? "✓ Added to AI Knowledge" :
                          file.status === "pending" ? "Adding..." :
+                         file.status === "processing" ? "Indexing…" :
                          file.status === "error" ? "Failed" :
                          file.status.toUpperCase()}
                       </span>
@@ -784,10 +778,19 @@ export default function DocumentsTab({
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{source.label}</p>
                       <p className="text-xs text-gray-400">{sourceTypeLabel(source)}</p>
-                      {syncState(source) === "syncing" && (
-                        <p className="text-xs text-amber-600">Indexing…</p>
+                      {sourceJobState(source) === "queued" && (
+                        <p className="text-xs text-amber-600 flex items-center gap-1"><Loader2 size={11} className="animate-spin" />Queued…</p>
                       )}
-                      {syncState(source) === "incomplete" && (
+                      {sourceJobState(source) === "syncing" && (
+                        <p className="text-xs text-amber-600 flex items-center gap-1"><Loader2 size={11} className="animate-spin" />Indexing…</p>
+                      )}
+                      {sourceJobState(source) === "failed" && (
+                        <p className="text-xs text-red-600">
+                          ⚠ {source.config?.sync_error || "Indexing failed."}{" "}
+                          {source.type === "excel_local" ? "Re-upload the file, or delete it." : "Fix it and press Reload, or delete it."}
+                        </p>
+                      )}
+                      {sourceJobState(source) === "incomplete" && (
                         <p className="text-xs text-red-600">
                           ⚠ Indexing didn't finish — only part of it is available.{" "}
                           {source.type === "excel_local" ? "Re-upload the file." : "Press Reload."}
@@ -797,18 +800,18 @@ export default function DocumentsTab({
                   </div>
                   <div className="flex gap-2 shrink-0">
                     {TABLE_SOURCE_TYPES.includes(source.type) && (
-                      <Button variant="outline" size="sm" onClick={() => setColumnsSource(source)} className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" disabled={isSourceBusy(source)} onClick={() => setColumnsSource(source)} className="flex items-center gap-1">
                         <Columns3 size={12} /> Columns
                       </Button>
                     )}
                     {(source.type === "gsheets" || source.type === "website") && (
-                      <Button variant="outline" size="sm" onClick={() => onReload(source.id, source.label)} className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" disabled={isSourceBusy(source)} onClick={() => onReload(source.id, source.label)} className="flex items-center gap-1">
                         <RefreshCw size={12} /> Reload
                       </Button>
                     )}
                     {source.type === "excel_local" && (
-                      <Button asChild={reuploadingId !== source.id} variant="outline" size="sm" disabled={reuploadingId === source.id}>
-                        {reuploadingId === source.id ? (
+                      <Button asChild={reuploadingId !== source.id && !isSourceBusy(source)} variant="outline" size="sm" disabled={reuploadingId === source.id || isSourceBusy(source)}>
+                        {reuploadingId === source.id || isSourceBusy(source) ? (
                           <span className="flex items-center gap-1"><Loader2 size={12} className="animate-spin" />Indexing...</span>
                         ) : (
                           <label className="cursor-pointer flex items-center gap-1">
@@ -848,7 +851,7 @@ export default function DocumentsTab({
         onCancel={() => { setDeleteDialogOpen(false); setSourceToDelete(null); }}
       />
 
-      <SourceColumnsDialog source={columnsSource} preview={columnsPreview} onClose={closeColumns} />
+      <SourceColumnsDialog source={columnsSource} preview={columnsPreview} onClose={closeColumns} onSaved={onSourcesChanged} />
 
       {showChat && (
         <div

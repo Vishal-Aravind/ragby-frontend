@@ -26,11 +26,16 @@ export async function GET(req) {
   const role = await getProjectRole(user.id, projectId);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data, error } = await supabase
+  // error/result record a background indexing job's outcome (migration
+  // 20260929120000). Falls back to the old column list if that migration
+  // hasn't been run yet, rather than failing to list documents at all.
+  const listFiles = (columns) => supabase
     .from("files")
-    .select("id, filename, status, updated_at, is_note")
+    .select(columns)
     .eq("project_id", projectId)
     .order("updated_at", { ascending: false });
+  let { data, error } = await listFiles("id, filename, status, updated_at, is_note, error, result");
+  if (error) ({ data, error } = await listFiles("id, filename, status, updated_at, is_note"));
 
   if (error) {
     console.error("files list error:", error);

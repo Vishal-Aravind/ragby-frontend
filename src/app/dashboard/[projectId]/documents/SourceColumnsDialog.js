@@ -23,7 +23,7 @@ function toHiddenMap(tabs) {
 //   sheet/Excel file, BEFORE anything is indexed. onConfirm gets
 //   {tab: [hidden columns]} and does the real connect.
 // - `source`: an already-connected source; loads and saves its settings.
-export default function SourceColumnsDialog({ source, preview, onClose }) {
+export default function SourceColumnsDialog({ source, preview, onClose, onSaved }) {
   const [tabs, setTabs] = useState(null); // [{tab, columns, hidden: Set, row_count?}]
   const [saving, setSaving] = useState(false);
   const open = !!source || !!preview;
@@ -77,7 +77,10 @@ export default function SourceColumnsDialog({ source, preview, onClose }) {
         toast.error(data.error || data.detail || "Couldn't save column settings.");
         return;
       }
-      toast.success("Column settings saved.");
+      // The table lookup uses the new choice straight away; the search
+      // index is rebuilt in the background (the source shows "Indexing…").
+      toast.success("Column settings saved. Updating the AI's search index…");
+      onSaved?.();
       onClose();
     } finally {
       setSaving(false);
