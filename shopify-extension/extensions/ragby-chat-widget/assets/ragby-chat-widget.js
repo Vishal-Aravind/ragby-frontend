@@ -265,7 +265,13 @@
           overlay.remove();
           unblockInput();
 
-          addMsg("assistant", `Thanks ${name}! How can I help you?`);
+          // A waiting question is answered right below, so a thank-you is all
+          // that's needed; only offer help when there is nothing pending.
+          // (name is typed by the visitor and goes through innerHTML.)
+          const safeName = String(name).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+          addMsg("assistant", pendingQuestion
+            ? `Thanks ${safeName}!`
+            : `Thanks ${safeName}! How can I help you?`);
 
           if (pendingQuestion) {
             await askBot(pendingQuestion);
