@@ -67,9 +67,11 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
   const scrollRef = useRef(null);
   const brandColor = project.brand_color || "#000000";
 
+  // Also when the lead form appears: it is added without a new message, so on
+  // a long chat it used to land below the visible area.
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, leadForm]);
 
   // Load message history on mount if session exists
   useEffect(() => {
