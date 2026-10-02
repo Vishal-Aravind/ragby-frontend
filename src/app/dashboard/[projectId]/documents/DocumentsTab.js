@@ -8,6 +8,9 @@ import { Upload, Trash2, ChevronDown, ChevronRight, Loader2, FileText, Globe, Da
 import AppAlertDialog from "@/components/alertdialog";
 import ChatTab from "./ChatTab";
 import SourceColumnsDialog from "./SourceColumnsDialog";
+import DatabaseColumnsDialog from "./DatabaseColumnsDialog";
+import DatabaseColumnPicker from "./DatabaseColumnPicker";
+import { defaultAllowed } from "./personalColumns";
 import { sourceJobState, isSourceBusy } from "./jobState";
 
 const TABLE_SOURCE_TYPES = ["gsheets", "excel_online", "excel_local"];
@@ -147,7 +150,8 @@ export default function DocumentsTab({
   const [introspecting, setIntrospecting] = useState(false);
   const [schema, setSchema]           = useState(null);
   const [allowed, setAllowed]         = useState({});
-  const [expanded, setExpanded]       = useState({});
+  const [dbColumnsSource, setDbColumnsSource] = useState(null);
+  const closeDbColumns = useCallback(() => setDbColumnsSource(null), []);
 
   // ── Delete source dialog ─────────────────────────────
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -159,50 +163,25 @@ export default function DocumentsTab({
     setIntrospecting(true);
     setSchema(null);
     setAllowed({});
-    const res = await fetch("/api/sources/introspect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ db_url: dbUrl, projectId }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      alert(err.detail || err.error || "Could not connect. Check your database URL.");
+    try {
+      const res = await fetch("/api/sources/introspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ db_url: dbUrl, projectId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.detail || data.error || "Could not connect. Check your database URL.");
+        return;
+      }
+      setSchema(data.schema);
+      // Emails, phone numbers etc. start unticked, like spreadsheet columns.
+      setAllowed(defaultAllowed(data.schema));
+    } catch {
+      toast.error("Could not connect. Please try again.");
+    } finally {
       setIntrospecting(false);
-      return;
     }
-    const data = await res.json();
-    setSchema(data.schema);
-    const initial = {};
-    const exp = {};
-    for (const [table, cols] of Object.entries(data.schema)) {
-      initial[table] = new Set(cols);
-      exp[table] = true;
-    }
-    setAllowed(initial);
-    setExpanded(exp);
-    setIntrospecting(false);
-  }
-
-  function toggleTable(table) {
-    setAllowed(prev => {
-      const next = { ...prev };
-      next[table] = next[table]?.size > 0 ? new Set() : new Set(schema[table]);
-      return next;
-    });
-  }
-
-  function toggleCol(table, col) {
-    setAllowed(prev => {
-      const cols = new Set(prev[table] || []);
-      cols.has(col) ? cols.delete(col) : cols.add(col);
-      return { ...prev, [table]: cols };
-    });
-  }
-
-  function tableChecked(table) { return (allowed[table]?.size || 0) > 0; }
-  function tableIndeterminate(table) {
-    const s = allowed[table]?.size || 0;
-    return s > 0 && s < (schema[table]?.length || 0);
   }
 
   // A "Publish to web" URL is /spreadsheets/d/e/2PACX-.../pubhtml — the old
@@ -708,6 +687,7 @@ export default function DocumentsTab({
               <div>
                 <h3 className="font-semibold text-gray-900">Connect Database</h3>
                 <p className="text-xs text-gray-500 mt-0.5">PostgreSQL and MySQL supported</p>
+                <p className="text-xs text-gray-400 mt-0.5">{PERSONAL_DATA_HINT}</p>
               </div>
             </div>
             <Input placeholder="Label (e.g. Production DB)" value={dbLabel} onChange={e => setDbLabel(e.target.value)} />
@@ -723,40 +703,8 @@ export default function DocumentsTab({
               </Button>
             </div>
             {schema && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-gray-700">Choose what the AI can access</p>
-                  <span className="text-xs text-gray-400">
-                    {Object.values(allowed).filter(s => s.size > 0).length} / {Object.keys(schema).length} tables selected
-                  </span>
-                </div>
-                <div className="border rounded-lg divide-y max-h-72 overflow-y-auto">
-                  {Object.entries(schema).map(([table, cols]) => (
-                    <div key={table}>
-                      <div
-                        className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 cursor-pointer select-none"
-                        onClick={() => setExpanded(prev => ({ ...prev, [table]: !prev[table] }))}
-                      >
-                        <input type="checkbox" checked={tableChecked(table)}
-                          ref={el => { if (el) el.indeterminate = tableIndeterminate(table); }}
-                          onChange={() => toggleTable(table)} onClick={e => e.stopPropagation()} />
-                        {expanded[table] ? <ChevronDown size={13} className="text-gray-400" /> : <ChevronRight size={13} className="text-gray-400" />}
-                        <span className="text-sm font-mono font-medium">{table}</span>
-                        <span className="text-xs text-gray-400 ml-auto">{allowed[table]?.size || 0}/{cols.length} cols</span>
-                      </div>
-                      {expanded[table] && (
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-8 py-2">
-                          {cols.map(col => (
-                            <label key={col} className="flex items-center gap-2 cursor-pointer py-0.5">
-                              <input type="checkbox" checked={allowed[table]?.has(col) || false} onChange={() => toggleCol(table, col)} />
-                              <span className="text-xs font-mono text-gray-600">{col}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+              <div className="space-y-3">
+                <DatabaseColumnPicker key={dbUrl} schema={schema} allowed={allowed} onChange={setAllowed} />
                 <Button onClick={handleAddDatabase} disabled={connecting || !Object.values(allowed).some(s => s.size > 0)}>
                   {connecting ? <><Loader2 size={13} className="animate-spin mr-1" />Connecting...</> : "Connect & Index"}
                 </Button>
@@ -844,6 +792,11 @@ export default function DocumentsTab({
                         <Columns3 size={12} /> Columns
                       </Button>
                     )}
+                    {source.type === "postgres" && (
+                      <Button variant="outline" size="sm" onClick={() => setDbColumnsSource(source)} className="flex items-center gap-1">
+                        <Columns3 size={12} /> Columns
+                      </Button>
+                    )}
                     {(source.type === "gsheets" || source.type === "website") && (
                       <Button variant="outline" size="sm" disabled={isSourceBusy(source)} onClick={() => onReload(source.id, source.label)} className="flex items-center gap-1">
                         <RefreshCw size={12} /> Reload
@@ -891,6 +844,7 @@ export default function DocumentsTab({
         onCancel={() => { setDeleteDialogOpen(false); setSourceToDelete(null); }}
       />
 
+      <DatabaseColumnsDialog source={dbColumnsSource} onClose={closeDbColumns} />
       <SourceColumnsDialog source={columnsSource} preview={columnsPreview} onClose={closeColumns} onSaved={onSourcesChanged} />
 
       {showChat && (
