@@ -326,6 +326,27 @@ export default function DocumentsTab({
     setWebsiteLabel(""); setWebsiteUrl(""); setFullSite(true); setMaxPages(30);
   }
 
+  // Same badge in the Documents tab list and in Connected Sources.
+  function fileStatusBadge(file) {
+    return (
+      <span
+        title={file.status === "error" && file.error ? file.error : undefined}
+        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+        file.status === "indexed"  ? "bg-green-100 text-green-700" :
+        file.status === "pending"  ? "bg-yellow-100 text-yellow-700" :
+        file.status === "processing" ? "bg-amber-50 text-amber-700" :
+        file.status === "error"    ? "bg-red-100 text-red-700" :
+        "bg-gray-100 text-gray-600"
+      }`}>
+        {file.status === "indexed" ? "✓ Added to AI Knowledge" :
+         file.status === "pending" ? "Adding..." :
+         file.status === "processing" ? "Indexing…" :
+         file.status === "error" ? "Failed" :
+         file.status.toUpperCase()}
+      </span>
+    );
+  }
+
   function sourceTypeLabel(source) {
     if (source.type === "gsheets") {
       const range = source.config?.range;
@@ -462,21 +483,7 @@ export default function DocumentsTab({
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span
-                        title={file.status === "error" && file.error ? file.error : undefined}
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        file.status === "indexed"  ? "bg-green-100 text-green-700" :
-                        file.status === "pending"  ? "bg-yellow-100 text-yellow-700" :
-                        file.status === "processing" ? "bg-amber-50 text-amber-700" :
-                        file.status === "error"    ? "bg-red-100 text-red-700" :
-                        "bg-gray-100 text-gray-600"
-                      }`}>
-                        {file.status === "indexed" ? "✓ Added to AI Knowledge" :
-                         file.status === "pending" ? "Adding..." :
-                         file.status === "processing" ? "Indexing…" :
-                         file.status === "error" ? "Failed" :
-                         file.status.toUpperCase()}
-                      </span>
+                      {fileStatusBadge(file)}
                       {file.status !== "pending" && (
                         <button onClick={() => onDeleteFile(file)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
                           <Trash2 size={13} />
@@ -762,13 +769,46 @@ export default function DocumentsTab({
         )}
 
         {/* ── Connected Sources ── */}
-        {sources.length > 0 && (
+        {(sources.length > 0 || files.length > 0) && (
           <div className="border rounded-xl p-6 space-y-3 bg-white shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Connected Sources</h3>
-              <span className="text-xs text-gray-400">{sources.length} connected</span>
+              <span className="text-xs text-gray-400">{sources.length + files.length} connected</span>
             </div>
             <div className="space-y-2">
+              {/* Uploaded documents and notes, so everything feeding the AI is
+                  visible from every tab, not just the Documents tab. */}
+              {files.map((file, idx) => (
+                <div key={`file-${file.id ?? file.name}-${idx}`} className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-md bg-white border flex items-center justify-center shrink-0">
+                      {file.isNote ? <NotepadText size={14} className="text-amber-600" /> : <FileText size={14} className="text-gray-500" />}
+                    </div>
+                    <div className="min-w-0">
+                      {file.isNote && file.status !== "pending" ? (
+                        <button
+                          onClick={() => onEditFile(file)}
+                          title="Click to edit this note"
+                          className="block truncate text-sm font-medium text-blue-600 hover:underline max-w-xs text-left"
+                        >
+                          {file.name}
+                        </button>
+                      ) : (
+                        <p className="text-sm font-medium text-gray-800 truncate">{file.name}</p>
+                      )}
+                      <p className="text-xs text-gray-400">{file.isNote ? "Note" : "Document"}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {fileStatusBadge(file)}
+                    {file.status !== "pending" && (
+                      <button onClick={() => onDeleteFile(file)} className="text-red-400 hover:text-red-600 p-1.5 rounded-md hover:bg-red-50 transition-colors">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
               {sources.map((source) => (
                 <div key={source.id} className="flex items-center justify-between border rounded-lg px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors">
                   <div className="flex items-center gap-2.5 min-w-0">
