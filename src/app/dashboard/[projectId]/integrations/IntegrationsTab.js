@@ -546,7 +546,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         <div>
           <p className="text-sm font-medium">Allowed websites</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Restrict where this widget can run. Leave empty to allow any site.
+            Restrict where this widget can run. Leave empty to allow any site. If your chat link has a password, add your website here so its visitors can chat without it.
             Subdomains of a listed domain are included.
           </p>
         </div>
@@ -779,7 +779,7 @@ function ShareableLinkContent({ projectId }) {
           {clearing
             ? "Anyone with the link will be able to chat."
             : hasPassword || password.trim()
-              ? "Visitors need this password to open the chat."
+              ? "Visitors need this password to open the chat link. The website widget skips it on the sites listed under Allowed domains (Embeddable Chat Widget)."
               : "No password — anyone with the link can chat."}
         </p>
         {error && <p className="text-xs text-red-600">{error}</p>}
