@@ -146,10 +146,16 @@ export async function PATCH(req, { params }) {
   // Normalise the allowlist: bare hostnames, lowercased, no scheme or path.
   if ("allowed_domains" in update) {
     const raw = Array.isArray(update.allowed_domains) ? update.allowed_domains : [];
-    update.allowed_domains = raw
-      .map((d) => String(d).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""))
-      .filter(Boolean)
-      .slice(0, 50);
+    // Same rules as the dashboard's input: just the hostname (no scheme,
+    // path, port or leading www — subdomains of a listed domain are
+    // included anyway), and only things that look like a website.
+    const looksLikeSite = (d) => d === "localhost" || /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/.test(d);
+    update.allowed_domains = [...new Set(
+      raw
+        .map((d) => String(d).trim().toLowerCase()
+          .replace(/^[a-z]+:\/\//, "").replace(/[\/?#].*$/, "").replace(/:\d+$/, "").replace(/^www\./, ""))
+        .filter(looksLikeSite)
+    )].slice(0, 50);
   }
 
   const { error } = await supabaseAdmin

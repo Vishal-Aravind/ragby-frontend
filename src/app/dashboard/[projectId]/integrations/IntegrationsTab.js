@@ -429,8 +429,11 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   // Domain allowlist. The projectId in the embed snippet is visible in the
   // page source of every site the widget runs on, so without this anyone
   // could copy it and run the bot from their own site on this project's
-  // quota. Empty list = allowed anywhere, so nothing changes until opted in.
+  // quota. The backend refuses every site until one is listed, so the
+  // script is not shown until the merchant has said which website it is for.
   const [domains, setDomains] = useState([]);
+  const [domainsLoaded, setDomainsLoaded] = useState(false);
+  const [domainsLoadFailed, setDomainsLoadFailed] = useState(false);
   const [domainInput, setDomainInput] = useState("");
   const [domainsSaving, setDomainsSaving] = useState(false);
   const [domainsSaved, setDomainsSaved] = useState(false);
@@ -438,12 +441,23 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   useEffect(() => {
     fetch(`/api/projects/${projectId}`)
       .then(r => (r.ok ? r.json() : null))
-      .then(data => { if (data?.allowed_domains) setDomains(data.allowed_domains); })
-      .catch(() => {});
+      .then(data => {
+        if (data) setDomains(data.allowed_domains || []);
+        else setDomainsLoadFailed(true);
+      })
+      .catch(() => setDomainsLoadFailed(true))
+      .finally(() => setDomainsLoaded(true));
   }, [projectId]);
 
+  // Just the hostname: no scheme, path or port, and no leading "www" (a
+  // listed domain already covers its subdomains, www included). Mirrors the
+  // server-side normalisation in api/projects/[projectId]/route.js.
   const normalizeDomain = (value) =>
-    value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    value.trim().toLowerCase()
+      .replace(/^[a-z]+:\/\//, "").replace(/[\/?#].*$/, "").replace(/:\d+$/, "").replace(/^www\./, "");
+
+  const looksLikeSite = (d) =>
+    d === "localhost" || /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.[a-z]{2,}$/.test(d);
 
   const saveDomains = async (next) => {
     setDomainsSaving(true);
@@ -471,6 +485,10 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   const addDomain = () => {
     const d = normalizeDomain(domainInput);
     if (!d) return;
+    if (!looksLikeSite(d)) {
+      toast.error("Enter your website's address, like yourstore.com");
+      return;
+    }
     if (domains.includes(d)) { setDomainInput(""); return; }
     saveDomains([...domains, d]);
     setDomainInput("");
@@ -524,6 +542,57 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
     }
   };
 
+  if (!domainsLoaded) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 size={16} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (domainsLoadFailed) {
+    return (
+      <p className="text-sm text-red-600 py-2">
+        Couldn't load your widget settings. Please refresh the page.
+      </p>
+    );
+  }
+
+  // Step 1: no website yet, so no script. Showing the script first would let
+  // someone copy it before the widget is locked to a site.
+  if (domains.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-medium">Which website will you use this chat widget on?</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Your embed code contains your project ID, which anyone can see in your
+            website's source. By telling us your website, the chat works <strong>only there</strong> —
+            nobody can copy the code onto another site and use up your monthly
+            messages. You'll get the code right after.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            value={domainInput}
+            onChange={e => setDomainInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDomain(); } }}
+            placeholder="yourstore.com"
+            className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+          />
+          <Button size="sm" onClick={addDomain} disabled={domainsSaving || !domainInput.trim()}>
+            {domainsSaving ? "Saving..." : "Continue"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Just the website address, like <code className="bg-gray-100 px-1 rounded">yourstore.com</code>. Pages
+          and subdomains such as www are included.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -546,8 +615,9 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         <div>
           <p className="text-sm font-medium">Allowed websites</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Restrict where this widget can run. Leave empty to allow any site. If your chat link has a password, add your website here so its visitors can chat without it.
-            Subdomains of a listed domain are included.
+            The chat works only on these websites (their subdomains, like www, are included).
+            If your chat link has a password, listing your website here also lets its visitors
+            chat without it. Every message counts toward your monthly limit.
           </p>
         </div>
 
@@ -556,7 +626,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
             value={domainInput}
             onChange={e => setDomainInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDomain(); } }}
-            placeholder="yourstore.com"
+            placeholder="another-site.com"
             className="flex-1 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
           />
           <Button size="sm" variant="outline" onClick={addDomain} disabled={domainsSaving || !domainInput.trim()}>
@@ -564,26 +634,24 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
           </Button>
         </div>
 
-        {domains.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {domains.map(d => (
-              <span key={d} className="inline-flex items-center gap-1.5 text-xs bg-gray-50 border rounded-full pl-3 pr-1.5 py-1">
-                {d}
-                <button
-                  onClick={() => saveDomains(domains.filter(x => x !== d))}
-                  disabled={domainsSaving}
-                  className="rounded-full p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50"
-                  aria-label={`Remove ${d}`}
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            Anyone who copies your embed code can currently run this bot on their
-            own site, using your message allowance. Add your domain to prevent that.
+        <div className="flex flex-wrap gap-2">
+          {domains.map(d => (
+            <span key={d} className="inline-flex items-center gap-1.5 text-xs bg-gray-50 border rounded-full pl-3 pr-1.5 py-1">
+              {d}
+              <button
+                onClick={() => saveDomains(domains.filter(x => x !== d))}
+                disabled={domainsSaving}
+                className="rounded-full p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                aria-label={`Remove ${d}`}
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+        {domains.length === 1 && (
+          <p className="text-xs text-muted-foreground">
+            Removing your only website turns the widget off until you add one.
           </p>
         )}
 
@@ -779,7 +847,7 @@ function ShareableLinkContent({ projectId }) {
           {clearing
             ? "Anyone with the link will be able to chat."
             : hasPassword || password.trim()
-              ? "Visitors need this password to open the chat link. The website widget skips it on the sites listed under Allowed domains (Embeddable Chat Widget)."
+              ? "Visitors need this password to open the chat link. The website widget skips it on the websites listed under Allowed websites (Embeddable Chat Widget)."
               : "No password — anyone with the link can chat."}
         </p>
         {error && <p className="text-xs text-red-600">{error}</p>}
