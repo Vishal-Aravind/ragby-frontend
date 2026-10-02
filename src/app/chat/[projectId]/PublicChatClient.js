@@ -163,6 +163,19 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
         }
 
         setMessages(prev => [...prev, { role: "assistant", content: data.answer }]);
+      } else if (res.status === 401) {
+        // The password was changed (or the unlock expired) while this tab
+        // was open. Ask for it again instead of a vague error that no retry
+        // could ever fix.
+        setAccessToken(null);
+        setPassword("");
+        setPasswordError("Please enter the password again to continue.");
+        setUnlocked(false);
+      } else if (res.status === 403) {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "This chat is no longer available."
+        }]);
       } else {
         setMessages(prev => [...prev, {
           role: "assistant",

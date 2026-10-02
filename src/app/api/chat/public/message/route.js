@@ -34,7 +34,15 @@ export async function POST(req) {
   try {
     res = await fetch(`${BACKEND}/public/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
+      headers: {
+        "Content-Type": "application/json",
+        ...visitorHeaders(req),
+        // The browser's own Origin (this app's address for the hosted chat
+        // page). A server-side fetch sends none, and the backend's domain
+        // allowlist rejects a request with no origin — which blocked the
+        // Shareable Chat Link whenever a merchant set an allowlist.
+        ...(req.headers.get("origin") ? { Origin: req.headers.get("origin") } : {}),
+      },
       body: JSON.stringify({ projectId, message, sessionId, accessToken, visitorId }),
       signal: AbortSignal.timeout(60000),
     });
