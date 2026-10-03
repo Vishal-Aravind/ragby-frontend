@@ -285,31 +285,41 @@ export default function LeadsClient({ projectId, initialLeads, initialTotal, ini
 
       {/* Bulk tag bar — shows once at least one lead is selected */}
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2">
-          <span className="text-xs font-medium text-indigo-700 whitespace-nowrap">
-            {selectedIds.size} selected
-          </span>
-          <input
-            className="flex-1 border rounded px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-indigo-200"
-            placeholder="Tag to apply to all selected..."
-            value={bulkTagText}
-            onChange={e => setBulkTagText(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && applyBulkTag()}
-          />
-          <button
-            onClick={applyBulkTag}
-            disabled={!bulkTagText.trim() || bulkApplying}
-            className="text-xs bg-indigo-600 text-white rounded px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1 whitespace-nowrap"
-          >
-            {bulkApplying ? <Loader2 size={12} className="animate-spin" /> : <Tag size={12} />}
-            Apply tag
-          </button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="text-xs text-indigo-400 hover:text-indigo-700 flex items-center gap-1 whitespace-nowrap"
-          >
-            <X size={12} /> Clear
-          </button>
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-indigo-900">
+              <span className="font-semibold">{selectedIds.size} lead{selectedIds.size === 1 ? '' : 's'} selected.</span>{' '}
+              Enter the tag you want to apply to all selected leads.
+            </p>
+            <button
+              onClick={() => { setSelectedIds(new Set()); setBulkTagText('') }}
+              className="text-xs text-indigo-500 hover:text-indigo-800 flex items-center gap-1 whitespace-nowrap"
+            >
+              <X size={12} /> Clear selection
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Tag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
+              <input
+                autoFocus
+                className="w-full bg-white border border-indigo-300 rounded-md pl-9 pr-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+                placeholder="Type a tag name, e.g. vip or follow-up"
+                aria-label="Tag to apply to all selected leads"
+                value={bulkTagText}
+                onChange={e => setBulkTagText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && applyBulkTag()}
+              />
+            </div>
+            <button
+              onClick={applyBulkTag}
+              disabled={!bulkTagText.trim() || bulkApplying}
+              className="text-sm font-medium bg-indigo-600 text-white rounded-md px-4 py-2 hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
+            >
+              {bulkApplying ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
+              Apply tag
+            </button>
+          </div>
         </div>
       )}
 
