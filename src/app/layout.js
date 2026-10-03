@@ -22,7 +22,7 @@ export default function RootLayout({ children }) {
                 appId: "${process.env.NEXT_PUBLIC_META_APP_ID}",
                 autoLogAppEvents: true,
                 xfbml: true,
-                version: "v19.0"
+                version: "v25.0"
               });
             };
           `}
