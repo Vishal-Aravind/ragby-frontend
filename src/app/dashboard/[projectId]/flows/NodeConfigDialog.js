@@ -140,7 +140,11 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
     const s = JSON.parse(JSON.stringify(content.sections || []));
     s[sIdx].rows[rIdx].label = val; updateContent("sections", s);
   };
+  // WhatsApp rejects the whole list message (customer gets nothing) past
+  // 10 rows in total across all sections.
+  const totalRows = (content.sections || []).reduce((n, sec) => n + (sec.rows || []).length, 0);
   const addRow = (sIdx) => {
+    if (totalRows >= 10) return;
     const s = JSON.parse(JSON.stringify(content.sections || []));
     s[sIdx].rows.push({ label: `Option ${s[sIdx].rows.length + 1}` }); updateContent("sections", s);
   };
@@ -185,7 +189,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
               <Label className="text-xs text-muted-foreground">Buttons (max 3)</Label>
               {(content.buttons || []).map((btn, idx) => (
                 <div key={idx} className="flex gap-1.5 items-center">
-                  <Input placeholder={`Button ${idx + 1}`} value={btn.label || ""}
+                  <Input placeholder={`Button ${idx + 1}`} value={btn.label || ""} maxLength={20}
                     onChange={e => updateButtonLabel(idx, e.target.value)} />
                   <button onClick={() => removeButton(idx)} className="text-red-400 shrink-0"><X size={15} /></button>
                 </div>
@@ -205,27 +209,29 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
             <div className="space-y-2">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Button text</Label>
-                <Input placeholder="View Options" value={content.button_text || ""}
+                <Input placeholder="View Options" value={content.button_text || ""} maxLength={20}
                   onChange={e => updateContent("button_text", e.target.value)} />
               </div>
               {(content.sections || []).map((section, sIdx) => (
                 <div key={sIdx} className="space-y-1.5">
-                  <Input placeholder="Section title (optional)" value={section.title || ""}
+                  <Input placeholder="Section title (optional)" value={section.title || ""} maxLength={24}
                     onChange={e => { const s = JSON.parse(JSON.stringify(content.sections)); s[sIdx].title = e.target.value; updateContent("sections", s); }} />
                   {(section.rows || []).map((row, rIdx) => (
                     <div key={rIdx} className="flex gap-1.5 items-center">
-                      <Input placeholder={`Row ${rIdx + 1}`} value={row.label || ""}
+                      <Input placeholder={`Row ${rIdx + 1}`} value={row.label || ""} maxLength={24}
                         onChange={e => updateRowLabel(sIdx, rIdx, e.target.value)} />
                       <button onClick={() => removeRow(sIdx, rIdx)} className="text-red-400 shrink-0"><X size={15} /></button>
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => addRow(sIdx)}>
-                    <Plus size={13} className="mr-1" /> Add row
-                  </Button>
+                  {totalRows < 10 && (
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => addRow(sIdx)}>
+                      <Plus size={13} className="mr-1" /> Add row
+                    </Button>
+                  )}
                 </div>
               ))}
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Info size={11} /> Drag from each row's own handle on the canvas to connect it.
+                <Info size={11} /> Max 10 rows in total (WhatsApp limit). Drag from each row's own handle on the canvas to connect it.
               </p>
             </div>
           )}
