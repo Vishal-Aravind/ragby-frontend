@@ -67,7 +67,20 @@ export default function RazorpayConnectCard({ projectId, compact = false, onStat
         setLoading(false);
         return;
       }
-      window.open(data.auth_url, "razorpay-auth", "width=500,height=700");
+      const popup = window.open(data.auth_url, "razorpay-auth", "width=500,height=700");
+      if (!popup) {
+        toast.error("Please allow pop-ups for this site, then try again.");
+        setLoading(false);
+        return;
+      }
+      // Closing the popup with the X button sends no message, so the
+      // button stayed on "loading" forever.
+      const closedTimer = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(closedTimer);
+          setLoading(false);
+        }
+      }, 800);
     } catch {
       toast.error("Something went wrong.");
       setLoading(false);
