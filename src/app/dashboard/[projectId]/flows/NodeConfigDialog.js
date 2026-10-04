@@ -79,7 +79,7 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
             <div className="space-y-1.5">
               {nodeType === "message_media" ? (
                 <div className="relative rounded-md overflow-hidden border">
-                  <img src={value} alt="preview" className="w-full max-h-36 object-cover block" />
+                  <img src={value} alt="preview" className="w-full max-h-72 object-contain bg-gray-50 block" />
                   <button type="button" onClick={handleClear}
                     className="absolute top-1.5 right-1.5 bg-black/50 rounded-full w-5 h-5 flex items-center justify-center text-white">
                     <X size={11} />
