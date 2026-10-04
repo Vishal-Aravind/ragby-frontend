@@ -6,7 +6,7 @@
 // expanded inline inside each ~240-300px node box on the canvas. The
 // per-type field logic itself is unchanged from the previous inline
 // version; only where it renders moved.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -23,18 +23,17 @@ import { nodeInfo } from "./nodeRegistry";
 import { uploadMedia } from "@/lib/uploadMedia";
 
 const MEDIA_CONFIG = {
-  message_media:    { accept: "image/*",                                         label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
-  message_video:    { accept: "video/mp4,video/3gpp",                            label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
-  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 16,  exts: "PDF, Word, Excel, PPT, CSV" },
-  message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",        label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
+  // Only formats WhatsApp itself accepts — anything else uploads fine and
+  // then silently never reaches the customer.
+  message_media:    { kind: "image",    accept: "image/jpeg,image/png",                          label: "Image",    maxMB: 5,   exts: "JPG, PNG" },
+  message_video:    { kind: "video",    accept: "video/mp4,video/3gpp",                          label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
+  message_document: { kind: "document", accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 16,  exts: "PDF, Word, Excel, PPT, CSV" },
+  message_audio:    { kind: "audio",    accept: "audio/mpeg,audio/ogg,audio/aac,audio/mp4,.m4a",  label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
 };
 
 // Our own uploads live in Supabase Storage; anything else was pasted.
 const isStoredFile = (v) => !!v && v.includes("/storage/v1/object/public/");
 
-// Links to a web page, not a file. WhatsApp downloads the link itself, so
-// these are accepted at send time and then silently never delivered.
-const PAGE_LINK = /(youtube\.com|youtu\.be|vimeo\.com|instagram\.com|facebook\.com|fb\.watch|drive\.google\.com|dropbox\.com\/s\/)/i;
 
 function MediaUpload({ nodeType, urlKey, value, onChange }) {
   const [mode, setMode] = useState(value && !isStoredFile(value) ? "url" : "upload");
@@ -42,6 +41,33 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
   const [error, setError] = useState("");
   const fileRef = useRef(null);
   const cfg = MEDIA_CONFIG[nodeType] || MEDIA_CONFIG.message_media;
+
+  // A pasted link is opened by the backend to confirm it's really a file
+  // WhatsApp can send — a web page or WEBP is accepted by Meta and then
+  // never delivered.
+  const [linkCheck, setLinkCheck] = useState(null); // null | {state, reason}
+  useEffect(() => {
+    const url = (value || "").trim();
+    if (mode !== "url" || !/^https?:\/\/\S+\.\S+/.test(url)) { setLinkCheck(null); return; }
+    let cancelled = false;
+    setLinkCheck({ state: "checking" });
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/flows/check-media-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, kind: cfg.kind }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) setLinkCheck(null);
+        else setLinkCheck(d.ok ? { state: "ok" } : { state: "bad", reason: d.reason });
+      } catch {
+        if (!cancelled) setLinkCheck(null);
+      }
+    }, 700);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [value, mode, cfg.kind]);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -74,10 +100,16 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
         <Input className="font-mono text-xs" placeholder="https://example.com/file"
           value={value || ""} onChange={e => onChange(urlKey, e.target.value)} />
       )}
-      {mode === "url" && PAGE_LINK.test(value || "") && (
+      {mode === "url" && linkCheck?.state === "checking" && (
+        <p className="text-xs text-muted-foreground">Checking link…</p>
+      )}
+      {mode === "url" && linkCheck?.state === "ok" && (
+        <p className="text-xs text-green-700">✓ WhatsApp can send this {cfg.label.toLowerCase()}.</p>
+      )}
+      {mode === "url" && linkCheck?.state === "bad" && (
         <p className="text-xs text-red-600 flex items-start gap-1">
           <TriangleAlert size={12} className="mt-0.5 shrink-0" />
-          This is a web page link, not a {cfg.label.toLowerCase()} file — WhatsApp can&apos;t send it. Upload the file instead, or put the link in a Message node.
+          <span>{linkCheck.reason} Use a link that opens the file itself ({cfg.exts}), or upload it instead. Customers will get the link as text.</span>
         </p>
       )}
       {mode === "upload" && (

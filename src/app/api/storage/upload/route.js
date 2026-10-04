@@ -11,8 +11,13 @@ const IMAGE_TYPES = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
   gif: "image/gif", webp: "image/webp",
 };
+// WhatsApp only delivers JPG/PNG images and MP4/3GP video; a WEBP, GIF,
+// MOV or WEBM uploaded to a flow node was accepted here and then silently
+// never reached the customer. Shop and event images are shown on web pages,
+// not sent over WhatsApp, so they keep the wider IMAGE_TYPES.
+const WA_IMAGE_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
 const VIDEO_TYPES = {
-  mp4: "video/mp4", "3gp": "video/3gpp", mov: "video/quicktime", webm: "video/webm",
+  mp4: "video/mp4", "3gp": "video/3gpp",
 };
 const AUDIO_TYPES = {
   mp3: "audio/mpeg", ogg: "audio/ogg", aac: "audio/aac", m4a: "audio/mp4",
@@ -32,7 +37,7 @@ const DOC_TYPES = {
 // PageBuilder's event pages. Limits mirror the client-side ones so the two
 // can't disagree. Adding a new upload surface means adding a key here.
 const FOLDER_RULES = {
-  message_media:    { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
+  message_media:    { limit: 5 * 1024 * 1024,   types: WA_IMAGE_TYPES },
   message_video:    { limit: 16 * 1024 * 1024,  types: VIDEO_TYPES },
   message_audio:    { limit: 16 * 1024 * 1024,  types: AUDIO_TYPES },
   message_document: { limit: 16 * 1024 * 1024,  types: DOC_TYPES },
