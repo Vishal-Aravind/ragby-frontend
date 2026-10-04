@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { UserPlus, Crown, Shield, Headset, Trash2, Loader2, Clock, SlidersHorizontal } from 'lucide-react'
+import { confirmDialog } from '@/components/confirmDialog'
 
 const ROLE_LABELS = { owner: 'Owner', admin: 'Admin', agent: 'Agent' }
 const ROLE_ICONS = { owner: Crown, admin: Shield, agent: Headset }
@@ -131,7 +132,7 @@ export default function TeamClient({ projectId, initialData }) {
   }
 
   const handleRemove = async (memberId) => {
-    if (!confirm('Remove this teammate from the project?')) return
+    if (!(await confirmDialog({ title: 'Remove this teammate?', description: 'They will lose access to this project.', confirmText: 'Remove' }))) return
     setRemovingId(memberId)
     try {
       const res = await fetch(`/api/team/${memberId}`, { method: 'DELETE' })

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Loader2, Copy, Layout } from 'lucide-react'
 import PageBuilder from '@/components/builder/PageBuilder'
+import { confirmDialog } from '@/components/confirmDialog'
 
 export default function EventsTab({ project }) {
   const projectId = project?.id || project
@@ -140,7 +141,7 @@ export default function EventsTab({ project }) {
   }
 
   const deleteEvent = async (eventId) => {
-    if (!confirm('Delete this event? All registrations will also be deleted.')) return
+    if (!(await confirmDialog({ title: 'Delete this event?', description: 'All registrations will also be deleted.', confirmText: 'Delete' }))) return
     const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' }).catch(() => null)
     if (!res || !res.ok) {
       const err = res ? await res.json().catch(() => ({})) : {}

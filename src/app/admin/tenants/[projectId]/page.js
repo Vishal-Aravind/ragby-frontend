@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { confirmDialog } from "@/components/confirmDialog";
 
 const INTEGRATIONS = [
   { key: "whatsapp", label: "WhatsApp", detail: d => d.waba_id ? `WABA ${d.waba_id}` : null },
@@ -70,13 +71,13 @@ export default function TenantDetailPage() {
   };
 
   const handlePlanOverride = async (plan) => {
-    if (!confirm(`Set this tenant's plan to "${plan}"? This does not touch their Razorpay subscription — the next real billing event will overwrite it.`)) return;
+    if (!(await confirmDialog({ title: `Set plan to "${plan}"?`, description: "This does not touch their Razorpay subscription — the next real billing event will overwrite it.", confirmText: "Set plan" }))) return;
     const result = await runAction("plan-override", { plan }, `Plan set to ${plan}`);
     if (result) load();
   };
 
   const handleSuspend = async () => {
-    if (!confirm("Suspend this tenant? Their bot will stop responding on every channel until reactivated.")) return;
+    if (!(await confirmDialog({ title: "Suspend this tenant?", description: "Their bot will stop responding on every channel until reactivated.", confirmText: "Suspend" }))) return;
     const result = await runAction("suspend", null, "Tenant suspended");
     if (result) load();
   };

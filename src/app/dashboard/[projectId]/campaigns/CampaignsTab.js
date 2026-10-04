@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles, RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { confirmDialog } from '@/components/confirmDialog'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://ragby-backend.onrender.com'
 
@@ -232,10 +233,13 @@ export default function CampaignsTab({ project }) {
 
     const when = sendTiming === 'later' ? 'be scheduled for' : 'send now to'
     const verb = editingCampaignId ? 'Update this campaign to reach' : `This will ${when}`
-    if (!confirm(
-      `${verb} ${recipientCount} ${recipientCount === 1 ? 'person' : 'people'}, using the "${selectedTemplate.name}" template.\n\n` +
-      `Each one is a WhatsApp message billed to your account. This can't be undone once sending starts.`
-    )) return
+    if (!(await confirmDialog({
+      title: editingCampaignId ? 'Update this campaign?' : sendTiming === 'later' ? 'Schedule this campaign?' : 'Send this campaign?',
+      description:
+        `${verb} ${recipientCount} ${recipientCount === 1 ? 'person' : 'people'}, using the "${selectedTemplate.name}" template.\n\n` +
+        `Each one is a WhatsApp message billed to your account. This can't be undone once sending starts.`,
+      confirmText: editingCampaignId ? 'Update' : sendTiming === 'later' ? 'Schedule' : 'Send',
+    }))) return
 
     setSending(true)
 
@@ -308,7 +312,7 @@ export default function CampaignsTab({ project }) {
   }
 
   const handleCancel = async (campaignId) => {
-    if (!confirm('Cancel this scheduled campaign? It will not be sent.')) return
+    if (!(await confirmDialog({ title: 'Cancel this scheduled campaign?', description: 'It will not be sent.', confirmText: 'Cancel campaign', cancelText: 'Keep it' }))) return
     setCancellingId(campaignId)
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/cancel`, { method: 'POST' })

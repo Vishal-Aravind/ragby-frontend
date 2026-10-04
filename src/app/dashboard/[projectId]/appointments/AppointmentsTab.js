@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays, Plus, Pencil, Trash2 } from 'lucide-react'
+import { confirmDialog } from "@/components/confirmDialog";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
@@ -142,7 +143,7 @@ export default function AppointmentsTab({ project }) {
   }
 
   const deleteServiceHandler = async (svc) => {
-    if (!confirm(`Delete "${svc.name}"? This can't be undone.`)) return
+    if (!(await confirmDialog({ title: `Delete "${svc.name}"?`, description: "This can't be undone.", confirmText: "Delete" }))) return
     const res = await fetch(`/api/appointment-services/${svc.id}`, { method: 'DELETE' })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
