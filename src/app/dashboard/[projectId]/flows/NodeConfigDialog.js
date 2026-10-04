@@ -29,8 +29,15 @@ const MEDIA_CONFIG = {
   message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",        label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
 };
 
+// Our own uploads live in Supabase Storage; anything else was pasted.
+const isStoredFile = (v) => !!v && v.includes("/storage/v1/object/public/");
+
+// Links to a web page, not a file. WhatsApp downloads the link itself, so
+// these are accepted at send time and then silently never delivered.
+const PAGE_LINK = /(youtube\.com|youtu\.be|vimeo\.com|instagram\.com|facebook\.com|fb\.watch|drive\.google\.com|dropbox\.com\/s\/)/i;
+
 function MediaUpload({ nodeType, urlKey, value, onChange }) {
-  const [mode, setMode] = useState(value ? "upload" : "url");
+  const [mode, setMode] = useState(value && !isStoredFile(value) ? "url" : "upload");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef(null);
@@ -50,7 +57,7 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
   };
 
   const handleClear = () => { onChange(urlKey, ""); setMode("url"); setError(""); if (fileRef.current) fileRef.current.value = ""; };
-  const isUploaded = value && mode === "upload";
+  const isUploaded = isStoredFile(value) && mode === "upload";
 
   return (
     <div className="space-y-1.5">
@@ -66,6 +73,12 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
       {mode === "url" && (
         <Input className="font-mono text-xs" placeholder="https://example.com/file"
           value={value || ""} onChange={e => onChange(urlKey, e.target.value)} />
+      )}
+      {mode === "url" && PAGE_LINK.test(value || "") && (
+        <p className="text-xs text-red-600 flex items-start gap-1">
+          <TriangleAlert size={12} className="mt-0.5 shrink-0" />
+          This is a web page link, not a {cfg.label.toLowerCase()} file — WhatsApp can&apos;t send it. Upload the file instead, or put the link in a Message node.
+        </p>
       )}
       {mode === "upload" && (
         <>
