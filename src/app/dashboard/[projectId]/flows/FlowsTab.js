@@ -621,9 +621,26 @@ export default function FlowsTab({ projectId }) {
     setShowFlowList(true);
   };
 
+  // Leaving the page cancelled the pending 30s autosave, so a change made
+  // just before clicking another sidebar link was lost — only the in-page
+  // back button saved first. Save on the way out instead, and warn before a
+  // tab close/refresh (a browser can't be made to wait for that save).
+  const saveStatusRef = useRef(saveStatus);
+  useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
+
   useEffect(() => {
-    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, []);
+    const warn = (e) => {
+      if (saveStatusRef.current !== "unsaved" || loadFailedRef.current) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+      if (saveStatusRef.current === "unsaved" && !loadFailedRef.current) doSave();
+    };
+  }, [doSave]);
 
   const configNode = rfNodes.find(n => n.id === configNodeId) || null;
 
