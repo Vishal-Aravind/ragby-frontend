@@ -35,7 +35,7 @@ const FOLDER_RULES = {
   message_media:    { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
   message_video:    { limit: 16 * 1024 * 1024,  types: VIDEO_TYPES },
   message_audio:    { limit: 16 * 1024 * 1024,  types: AUDIO_TYPES },
-  message_document: { limit: 100 * 1024 * 1024, types: DOC_TYPES },
+  message_document: { limit: 50 * 1024 * 1024,  types: DOC_TYPES },  // Supabase free-plan upload cap
   products:         { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
   "event-pages":    { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
 };

@@ -25,7 +25,7 @@ import { uploadMedia } from "@/lib/uploadMedia";
 const MEDIA_CONFIG = {
   message_media:    { accept: "image/*",                                         label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
   message_video:    { accept: "video/mp4,video/3gpp",                            label: "Video",    maxMB: 16,  exts: "MP4, 3GP" },
-  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 100, exts: "PDF, Word, Excel, PPT, CSV" },
+  message_document: { accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 50,  exts: "PDF, Word, Excel, PPT, CSV" },
   message_audio:    { accept: "audio/mp3,audio/ogg,audio/mpeg,audio/aac",        label: "Audio",    maxMB: 16,  exts: "MP3, OGG, AAC, M4A" },
 };
 
