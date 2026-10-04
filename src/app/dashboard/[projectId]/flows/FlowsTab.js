@@ -33,6 +33,13 @@ const toId = (label) =>
 // confusing. Clicking the card opens the dialog; there is nothing left
 // to configure here.
 // ─────────────────────────────────────────────────────────
+// Nodes with a single "next" handle — the only ones the backend continues
+// from (time delay on its timer, shop once paid). Buttons/List get one
+// handle per option instead. Every other node ends the flow, so it gets no
+// outgoing handle at all (a line drawn from it used to be silently ignored).
+const NEXT_HANDLE_TYPES = new Set(["time_delay", "message_shop"]);
+const OUTGOING_TYPES = new Set([...NEXT_HANDLE_TYPES, "message_buttons", "message_list"]);
+
 function FlowNode({ id, data, selected }) {
   const type = data.type || "message";
   const content = data.content || {};
@@ -110,7 +117,7 @@ function FlowNode({ id, data, selected }) {
           </div>
         )}
 
-        {type !== "message_buttons" && type !== "message_list" && (
+        {NEXT_HANDLE_TYPES.has(canonicalType(type)) && (
           <Handle type="source" position={Position.Right} style={{ background: info.border, width: 10, height: 10, right: -6 }} />
         )}
       </div>
@@ -286,7 +293,12 @@ export default function FlowsTab({ projectId }) {
         id: n.id, type: canonicalType(n.data.type), content: n.data.content,
         is_start: n.data.isStart, position: n.position,
       })),
-      edges: edges.map(e => ({
+      // Drops lines left over from end nodes (e.g. Call Us -> Back to Menu)
+      // that were drawable before those nodes lost their outgoing handle.
+      edges: edges.filter(e => {
+        const src = nodes.find(n => n.id === e.source);
+        return src && OUTGOING_TYPES.has(canonicalType(src.data.type));
+      }).map(e => ({
         from_node_id: e.source, trigger: e.sourceHandle || "next", to_node_id: e.target,
       })),
     };
@@ -370,7 +382,10 @@ export default function FlowsTab({ projectId }) {
       dragHandle: ".drag-handle",
       data: buildNodeData(n),
     }));
-    const rfE = edges.map(e => ({
+    // Hide leftover lines out of end nodes — they lead nowhere (see
+    // OUTGOING_TYPES) and are dropped on the next save.
+    const typeById = Object.fromEntries(nodes.map(n => [n.id, canonicalType(n.type)]));
+    const rfE = edges.filter(e => OUTGOING_TYPES.has(typeById[e.from_node_id])).map(e => ({
       id: e.id, source: e.from_node_id, target: e.to_node_id,
       sourceHandle: e.trigger, type: "smoothstep", label: e.trigger,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
