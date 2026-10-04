@@ -10,6 +10,8 @@ import {
   ToggleLeft, ToggleRight, Lock
 } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
+import { toast } from "sonner";
+import { uploadMedia } from "@/lib/uploadMedia";
 import RazorpayConnectCard from "@/components/RazorpayConnectCard";
 
 const TABS = [
@@ -225,15 +227,9 @@ export default function ShopTab({ project }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingImage(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("bucket", "flow-media");
-    formData.append("folder", "products");
-    const res = await fetch("/api/storage/upload", { method: "POST", body: formData });
-    if (res.ok) {
-      const { url } = await res.json();
-      setProductForm(f => ({ ...f, image_url: url }));
-    }
+    const { url, error } = await uploadMedia(file, "products");
+    if (url) setProductForm(f => ({ ...f, image_url: url }));
+    else toast.error(error);
     setUploadingImage(false);
     e.target.value = "";
   };

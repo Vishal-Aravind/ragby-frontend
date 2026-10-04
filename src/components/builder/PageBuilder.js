@@ -5,6 +5,7 @@ import {
   Video, MapPin, Code2, Plus, Trash2, ChevronUp, ChevronDown,
   Settings, X, Eye, Save, Loader2, GripVertical
 } from 'lucide-react'
+import { uploadMedia } from '@/lib/uploadMedia'
 
 // ─────────────────────────────────────────────────────────
 // BLOCK DEFINITIONS
@@ -559,18 +560,9 @@ export default function PageBuilder({ event, onSave, onClose }) {
   const handleDragEnd = () => { dragItem.current = null }
 
   const uploadImage = async (file) => {
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('bucket', 'flow-media')
-      formData.append('folder', 'event-pages')
-      const res = await fetch('/api/storage/upload', { method: 'POST', body: formData })
-      if (res.ok) {
-        const { url } = await res.json()
-        return url
-      }
-    } catch (e) { console.error(e) }
-    return null
+    const { url, error } = await uploadMedia(file, 'event-pages')
+    if (error) console.error(error)
+    return url || null
   }
 
   const updateDetail = (patch) => setDetails(d => ({ ...d, ...patch }))

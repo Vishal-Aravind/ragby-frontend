@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { X, Plus, Info, TriangleAlert } from "lucide-react";
 import { nodeInfo } from "./nodeRegistry";
+import { uploadMedia } from "@/lib/uploadMedia";
 
 const MEDIA_CONFIG = {
   message_media:    { accept: "image/*",                                         label: "Image",    maxMB: 5,   exts: "JPG, PNG, WEBP, GIF" },
@@ -41,18 +42,11 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
     setError("");
     if (file.size > cfg.maxMB * 1024 * 1024) { setError(`Max ${cfg.maxMB}MB allowed.`); return; }
     setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("bucket", "flow-media");
-      formData.append("folder", nodeType);
-      const res = await fetch("/api/storage/upload", { method: "POST", body: formData });
-      if (!res.ok) { setError((await res.json()).error || "Upload failed"); return; }
-      const { url } = await res.json();
-      onChange(urlKey, url);
-      setMode("upload");
-    } catch { setError("Upload failed. Try again."); }
-    finally { setUploading(false); }
+    const { url, error: uploadError } = await uploadMedia(file, nodeType);
+    setUploading(false);
+    if (uploadError) { setError(uploadError); return; }
+    onChange(urlKey, url);
+    setMode("upload");
   };
 
   const handleClear = () => { onChange(urlKey, ""); setMode("url"); setError(""); if (fileRef.current) fileRef.current.value = ""; };

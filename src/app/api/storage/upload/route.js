@@ -79,12 +79,28 @@ export async function POST(req) {
     console.error("upload rate-limit check unreachable; allowing upload");
   }
 
-  const formData = await req.formData();
-  const file     = formData.get("file");
-  const bucket   = formData.get("bucket") || "flow-media";
-  const folder   = formData.get("folder") || "misc";
+  // Two modes. JSON {name, size, folder, bucket} is the normal one: after
+  // the same checks below we hand back a one-time signed upload URL and the
+  // browser sends the file straight to Supabase Storage. That exists because
+  // Vercel caps a function's request body at 4.5MB — a 16MB video or 100MB
+  // document sent through this route was rejected by Vercel before any of
+  // this code ran. The multipart mode (file in the body) is kept so an old
+  // cached page still works for small files.
+  const isJson = (req.headers.get("content-type") || "").includes("application/json");
+  let file, bucket, folder;
+  if (isJson) {
+    const body = await req.json().catch(() => ({}));
+    file   = { name: String(body.name || ""), size: Number(body.size) || 0 };
+    bucket = body.bucket || "flow-media";
+    folder = body.folder || "misc";
+  } else {
+    const formData = await req.formData();
+    file   = formData.get("file");
+    bucket = formData.get("bucket") || "flow-media";
+    folder = formData.get("folder") || "misc";
+  }
 
-  if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
+  if (!file || !file.name) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
   // bucket and folder came straight from the request body and were
   // interpolated into the storage key, so a caller could pick any bucket
@@ -115,6 +131,18 @@ export async function POST(req) {
   }
 
   const filename = `${user.id}/${folder}/${Date.now()}.${ext}`;
+
+  if (isJson) {
+    const { data: signed, error: signError } = await supabase.storage
+      .from(bucket)
+      .createSignedUploadUrl(filename);
+    if (signError) {
+      console.error("Signed upload URL failed:", signError);
+      return NextResponse.json({ error: "Upload failed. Please try again." }, { status: 500 });
+    }
+    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filename);
+    return NextResponse.json({ bucket, path: filename, token: signed.token, contentType, url: publicUrl });
+  }
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer      = Buffer.from(arrayBuffer);
