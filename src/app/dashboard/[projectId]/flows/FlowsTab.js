@@ -174,6 +174,7 @@ export default function FlowsTab({ projectId }) {
   const [flowToDelete, setFlowToDelete]     = useState(null);
   const [deleteNodeId, setDeleteNodeId]     = useState(null);
   const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
+  const [edgeToDelete, setEdgeToDelete]     = useState(null);
   const [configNodeId, setConfigNodeId]     = useState(null);
 
   const [saveStatus, setSaveStatus] = useState("saved");
@@ -570,10 +571,14 @@ export default function FlowsTab({ projectId }) {
 
   const onEdgeClick = useCallback((e, edge) => {
     e.stopPropagation();
-    if (!confirm(`Delete connection "${edge.label}"?`)) return;
-    setRfEdges(eds => eds.filter(ed => ed.id !== edge.id));
+    setEdgeToDelete(edge);
+  }, []);
+
+  const confirmDeleteEdge = () => {
+    setRfEdges(eds => eds.filter(ed => ed.id !== edgeToDelete?.id));
+    setEdgeToDelete(null);
     markDirty();
-  }, [markDirty]);
+  };
 
   const confirmDeleteNode = () => {
     setRfNodes(nds => nds.filter(n => n.id !== deleteNodeId));
@@ -819,6 +824,11 @@ export default function FlowsTab({ projectId }) {
         confirmText="Delete" cancelText="Cancel"
         onConfirm={confirmDeleteNode}
         onCancel={() => { setDeleteNodeOpen(false); setDeleteNodeId(null); }} />
+      <AppAlertDialog open={!!edgeToDelete} title="Delete connection?"
+        description={<>The connection <strong>{edgeToDelete?.label}</strong> will be removed.</>}
+        confirmText="Delete" cancelText="Cancel"
+        onConfirm={confirmDeleteEdge}
+        onCancel={() => setEdgeToDelete(null)} />
     </div>
   );
 }
