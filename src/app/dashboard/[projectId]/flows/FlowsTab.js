@@ -558,7 +558,13 @@ export default function FlowsTab({ projectId }) {
 
   const onConnect = useCallback((params) => {
     const trigger = params.sourceHandle || "next";
-    setRfEdges(eds => [...eds, {
+    // One button/row/"next" leads to exactly one node — the backend follows
+    // a single edge per trigger, so a second one was silently ignored.
+    // Connecting it again moves the connection instead of adding another.
+    // (Many handles pointing INTO one node is still fine.)
+    setRfEdges(eds => [...eds.filter(e =>
+      !(e.source === params.source && (e.sourceHandle || "next") === trigger)
+    ), {
       id: `e_${Date.now()}`, source: params.source, target: params.target,
       sourceHandle: trigger, type: "smoothstep", label: trigger,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
