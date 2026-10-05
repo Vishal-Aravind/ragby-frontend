@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Plus, Trash2, X, Settings, Save, AlertCircle } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
+import { Switch } from "@/components/ui/switch";
 import AddNodePanel from "./AddNodePanel";
 import NodeConfigDialog from "./NodeConfigDialog";
 import { nodeInfo, emptyContentFor, canonicalType, optionId } from "./nodeRegistry";
@@ -509,7 +510,7 @@ export default function FlowsTab({ projectId }) {
       const res = await fetch(`/api/flows/${selectedFlow.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trigger_keywords: keywords, free_questions: editFreeQ }),
+        body: JSON.stringify({ trigger_keywords: keywords }),
       });
       if (!res.ok) {
         // Was applied to local state unconditionally, so a rejected save
@@ -521,7 +522,6 @@ export default function FlowsTab({ projectId }) {
         setSelectedFlow(f => ({
           ...f,
           trigger_keywords: saved?.trigger_keywords ?? keywords,
-          free_questions: saved?.free_questions ?? editFreeQ,
         }));
         await fetchFlows();
         setSettingsOpen(false);
@@ -530,6 +530,30 @@ export default function FlowsTab({ projectId }) {
       setErrorMsg("Could not reach the server. Try again.");
     }
     setSavingSettings(false);
+  };
+
+  // On the toolbar (it used to be buried in Settings) and saved instantly.
+  const toggleFreeQuestions = async (value) => {
+    if (!selectedFlow) return;
+    setEditFreeQ(value);
+    try {
+      const res = await fetch(`/api/flows/${selectedFlow.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ free_questions: value }),
+      });
+      if (!res.ok) {
+        setEditFreeQ(!value);
+        setErrorMsg(await readError(res, "Could not change free questions."));
+        return;
+      }
+      setErrorMsg("");
+      setSelectedFlow(f => ({ ...f, free_questions: value }));
+      await fetchFlows();
+    } catch {
+      setEditFreeQ(!value);
+      setErrorMsg("Could not reach the server. Try again.");
+    }
   };
 
   const toggleActive = async (flow, e) => {
@@ -737,6 +761,11 @@ export default function FlowsTab({ projectId }) {
               <SaveIndicator />
             </div>
             <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-xs font-medium mr-1 cursor-pointer"
+                title="ON: customers can type questions on a menu, and after the flow ends, and get AI answers from your documents. OFF: they must tap buttons; after the flow ends any message shows the menu again.">
+                <Switch checked={editFreeQ} onCheckedChange={toggleFreeQuestions} />
+                Free questions (AI)
+              </label>
               <Button size="sm" onClick={doSave} disabled={saveStatus === "saving"}>
                 <Save size={13} className="mr-1" />
                 {saveStatus === "saving" ? "Saving..." : "Save"}
@@ -796,13 +825,6 @@ export default function FlowsTab({ projectId }) {
                   <p className="text-xs text-muted-foreground">Trigger keywords (comma separated)</p>
                   <Input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="hi, hello, hey, start, menu" />
                   <p className="text-xs text-muted-foreground">User sends any of these → flow starts</p>
-                </div>
-                <div className="flex items-start gap-3">
-                  <input type="checkbox" id="fq" checked={editFreeQ} onChange={e => setEditFreeQ(e.target.checked)} className="mt-0.5" />
-                  <div>
-                    <label htmlFor="fq" className="text-sm font-medium cursor-pointer">Allow free questions</label>
-                    <p className="text-xs text-muted-foreground mt-0.5">When ON — typed messages get AI answers even in a buttons node</p>
-                  </div>
                 </div>
                 <Button onClick={handleSaveSettings} disabled={savingSettings} className="w-full">
                   {savingSettings ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
