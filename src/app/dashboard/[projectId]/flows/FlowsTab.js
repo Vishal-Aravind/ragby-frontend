@@ -544,7 +544,7 @@ export default function FlowsTab({ projectId }) {
       });
       if (!res.ok) {
         setEditFreeQ(!value);
-        setErrorMsg(await readError(res, "Could not change free questions."));
+        setErrorMsg(await readError(res, "Could not change this setting."));
         return;
       }
       setErrorMsg("");
@@ -729,7 +729,7 @@ export default function FlowsTab({ projectId }) {
                     <p className="text-sm font-medium">{flow.name}</p>
                     <p className="text-xs text-muted-foreground">
                       Keywords: {(flow.trigger_keywords||[]).join(", ")}
-                      {flow.free_questions && " · Free questions ON"}
+                      {flow.free_questions && " · AI answers typed messages: ON"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -762,9 +762,9 @@ export default function FlowsTab({ projectId }) {
             </div>
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-2 text-xs font-medium mr-1 cursor-pointer"
-                title="ON: customers can type questions on a menu, and after the flow ends, and get AI answers from your documents. OFF: they must tap buttons; after the flow ends any message shows the menu again.">
+                title="ON: if a customer types instead of tapping a button, or after the flow ends, AI answers from your documents. OFF: customers must tap buttons; typing just shows the menu again.">
                 <Switch checked={editFreeQ} onCheckedChange={toggleFreeQuestions} />
-                Free questions (AI)
+                AI answers typed messages
               </label>
               <Button size="sm" onClick={doSave} disabled={saveStatus === "saving"}>
                 <Save size={13} className="mr-1" />
