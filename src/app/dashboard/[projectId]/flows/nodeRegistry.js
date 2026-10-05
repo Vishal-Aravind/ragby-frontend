@@ -179,19 +179,19 @@ export const NODE_REGISTRY = [
     webEmptyContent: { delay_seconds: 3, delay_unit: "seconds" },
   },
   {
-    type: "condition", category: "Logic", label: "Condition", icon: GitBranch, channels: WEB,
+    type: "condition", advanced: true, category: "Logic", label: "Condition", icon: GitBranch, channels: WEB,
     description: "Branch on an answer: e.g. budget greater than 50, city is Chennai. Anything else goes to Else.",
     bg: "#f5f3ff", border: "#a78bfa", text: "#4c1d95", badge: "#ede9fe",
     emptyContent: { rules: [{ name: "", match: "all", rows: [{ var: "", op: "equals", value: "" }] }] },
   },
   {
-    type: "set_variable", category: "Logic", label: "Set variable", icon: Variable, channels: WEB,
+    type: "set_variable", advanced: true, category: "Logic", label: "Set variable", icon: Variable, channels: WEB,
     description: "Store a value (text or {{other variables}}) to use later in the flow.",
     bg: "#f8fafc", border: "#cbd5e1", text: "#1e293b", badge: "#f1f5f9",
     emptyContent: { assignments: [{ var: "", value: "" }] },
   },
   {
-    type: "random_split", category: "Logic", label: "Random split", icon: Shuffle, channels: WEB,
+    type: "random_split", advanced: true, category: "Logic", label: "Random split", icon: Shuffle, channels: WEB,
     description: "Send visitors down different paths at random (A/B test two welcome messages).",
     bg: "#fff7ed", border: "#fb923c", text: "#7c2d12", badge: "#ffedd5",
     emptyContent: { branches: [{ label: "A", weight: 50 }, { label: "B", weight: 50 }] },
@@ -209,7 +209,7 @@ export const NODE_REGISTRY = [
     emptyContent: { body: "" },
   },
   {
-    type: "webhook", category: "Integrations", label: "Webhook", icon: Webhook, channels: WEB,
+    type: "webhook", advanced: true, category: "Integrations", label: "Webhook", icon: Webhook, channels: WEB,
     description: "Send answers to your own system (CRM, sheet, API) and use its reply. Has Success and Failure paths.",
     bg: "#f0fdfa", border: "#5eead4", text: "#134e4a", badge: "#ccfbf1",
     emptyContent: { method: "POST", url: "", headers: [], body: [], include_all_vars: false, mappings: [], waiting_text: "" },
@@ -243,8 +243,15 @@ export function nodeInfo(type) {
   return NODE_BY_TYPE[canonicalType(type)] || RENDER_ONLY_TYPES[type] || NODE_BY_TYPE.message;
 }
 
+// Advanced nodes (condition, set variable, random split, webhook) are kept
+// out of the Add Node panel for now: most merchants found them confusing.
+// The engine still runs them, so a flow that already has one keeps working
+// and still shows and edits it; set SHOW_ADVANCED_NODES to offer them again.
+export const SHOW_ADVANCED_NODES = false;
+
 export function nodesForChannel(channel) {
-  return NODE_REGISTRY.filter(n => n.channels.includes(channel || "whatsapp"));
+  return NODE_REGISTRY.filter(n =>
+    n.channels.includes(channel || "whatsapp") && (SHOW_ADVANCED_NODES || !n.advanced));
 }
 
 // Website options get stable ids so a renamed chip keeps its connection.
