@@ -220,6 +220,9 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
               <Textarea rows={3} value={content.body || ""}
                 onChange={e => updateContent("body", e.target.value)}
                 placeholder="Type your message..." />
+              {(type === "message_buttons" || type === "message_list") && !(content.body || "").trim() && (
+                <p className="text-xs text-amber-700">WhatsApp needs a message above the options — until you add one, customers see &quot;Please choose an option:&quot;.</p>
+              )}
             </div>
           )}
 
