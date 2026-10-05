@@ -64,7 +64,10 @@ function FlowNode({ id, data, selected }) {
   const info = nodeInfo(type);
   const Icon = info.icon;
 
-  const preview = content.body || (
+  // Only a text body is a preview. The Webhook node's `body` is its list of
+  // JSON fields ({key, value} rows) — rendering that crashed the page.
+  const bodyText = typeof content.body === "string" ? content.body : "";
+  const preview = bodyText || (
     type === "time_delay" ? `Wait ${content.delay_seconds || 60} ${content.delay_unit || "seconds"}`
     : type === "message_shop" ? (content.catalog_id ? "Catalog linked" : "No catalog selected")
     : type === "message_booking" ? "Opens booking calendar"
@@ -114,7 +117,7 @@ function FlowNode({ id, data, selected }) {
           </div>
         </div>
 
-        <p style={{ fontSize: 12, color: content.body ? "#374151" : "#9ca3af", margin: "6px 0 0", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>
+        <p style={{ fontSize: 12, color: bodyText ? "#374151" : "#9ca3af", margin: "6px 0 0", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.4 }}>
           {preview}
         </p>
 
