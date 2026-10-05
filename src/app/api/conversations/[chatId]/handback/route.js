@@ -67,6 +67,15 @@ export async function POST(req, { params }) {
       mode: "flow",
     }, { onConflict: "project_id,phone_number" });
   }
+  // Website chat: the visitor's next message is handled by the bot again
+  // ("ended" = AI answers if the flow allows typed messages, otherwise the
+  // flow starts over — same as reaching the end of the flow).
+  if (chat.channel === "public") {
+    await supabaseAdmin.from("web_flow_sessions")
+      .update({ mode: "ended", awaiting: null })
+      .eq("chat_id", chatId)
+      .eq("project_id", project_id);
+  }
 
   return NextResponse.json({ status: "handed_back" });
 }

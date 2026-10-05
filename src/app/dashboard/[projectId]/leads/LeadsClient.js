@@ -145,7 +145,7 @@ export default function LeadsClient({ projectId, initialLeads, initialTotal, ini
     const matchFilter =
       filter === 'all' ||
       (filter === 'whatsapp' && (l.channel === 'whatsapp' || l.source === 'whatsapp')) ||
-      (filter === 'web' && (l.channel === 'web' || l.source === 'widget'))
+      (filter === 'web' && (l.channel === 'web' || l.source === 'widget' || l.source === 'web_flow'))
     const matchTag = !tagFilter || (l.tags || []).includes(tagFilter)
     return matchSearch && matchFilter && matchTag
   })
@@ -171,13 +171,14 @@ export default function LeadsClient({ projectId, initialLeads, initialTotal, ini
 
   const exportCSV = () => {
     const rows = [
-      ['Name', 'Email', 'Phone', 'Source', 'Tags', 'Date'],
+      ['Name', 'Email', 'Phone', 'Source', 'Tags', 'Details', 'Date'],
       ...filtered.map(l => [
         l.name || '',
         l.email || '',
         l.phone || '',
         l.channel || l.source || '',
         (l.tags || []).join('; '),
+        Object.entries(l.custom_fields || {}).map(([k, v]) => `${k}: ${v}`).join('; '),
         l.created_at ? new Date(l.created_at).toLocaleDateString() : '',
       ]),
     ]
@@ -359,7 +360,17 @@ export default function LeadsClient({ projectId, initialLeads, initialTotal, ini
                     <td className="px-4 py-3">
                       <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} />
                     </td>
-                    <td className="px-4 py-3 font-medium">{lead.name || <span className="text-muted-foreground">—</span>}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {lead.name || <span className="text-muted-foreground">—</span>}
+                      {/* Extra answers from a website flow form (city, budget, ...). */}
+                      {lead.custom_fields && Object.keys(lead.custom_fields).length > 0 && (
+                        <span className="block text-xs font-normal text-muted-foreground mt-0.5"
+                          title={Object.entries(lead.custom_fields).map(([k, v]) => `${k}: ${v}`).join("\n")}>
+                          {Object.entries(lead.custom_fields).slice(0, 3).map(([k, v]) => `${k}: ${v === true ? 'yes' : v === false ? 'no' : v}`).join(' · ')}
+                          {Object.keys(lead.custom_fields).length > 3 && ' …'}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs">{lead.phone || '—'}</td>
                     <td className="px-4 py-3">{lead.email || <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-4 py-3">

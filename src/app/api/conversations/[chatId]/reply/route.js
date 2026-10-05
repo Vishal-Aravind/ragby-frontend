@@ -54,6 +54,19 @@ export async function POST(req, { params }) {
   if (!chat || chat.project_id !== project_id) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  // Website chat (in a website flow): the reply is saved and the visitor's
+  // widget picks it up by polling. The backend re-checks access and that
+  // the chat really has a website flow session.
+  if (chat.channel === "public") {
+    const access = await requireProjectTab(user.id, project_id, { tab: "conversations", minRole: "admin" });
+    if (!access.ok) return access.response;
+    const { data: { session } } = await supabase.auth.getSession();
+    return proxyToBackend("/web-flows/reply", {
+      token: session?.access_token,
+      method: "POST",
+      body: { project_id, chat_id: chatId, message },
+    });
+  }
   if (chat.channel !== "whatsapp" || !chat.external_id) {
     return NextResponse.json({ error: "That conversation is not a WhatsApp chat." }, { status: 400 });
   }

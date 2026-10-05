@@ -44,6 +44,8 @@ const toId = optionId;
 const NEXT_HANDLE_TYPES = new Set(["time_delay", "message_shop"]);
 const OUTGOING_TYPES = new Set([...NEXT_HANDLE_TYPES, "message_buttons", "message_list"]);
 
+const WAITING_TYPES = new Set(["message_buttons", "quick_replies", "message_list", "carousel", "ask_input", "form", "rating"]);
+
 // Is this line one the bot will actually follow? WhatsApp keeps exactly the
 // old rule; website flows check the line leaves from a real handle (a
 // deleted chip's line is dropped instead of being saved and never firing).
@@ -138,7 +140,10 @@ function FlowNode({ id, data, selected }) {
 
         {data.stats && (
           <p style={{ fontSize: 10, color: "#64748b", margin: "6px 0 0" }}>
-            {data.stats.entered} reached{data.stats.dropped ? ` · ${data.stats.dropped} left here` : ""}
+            {data.stats.entered} reached
+            {/* Drop-off only means something where the visitor has to act;
+                messages continue on their own and log no "answered" event. */}
+            {data.stats.dropped && WAITING_TYPES.has(canonicalType(type)) ? ` · ${data.stats.dropped} left here` : ""}
           </p>
         )}
       </div>

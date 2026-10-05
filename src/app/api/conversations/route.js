@@ -20,6 +20,48 @@ function getSupabase(req) {
   };
 }
 
+async function listWebChats(supabase, project_id) {
+  const { data: sessions } = await supabase
+    .from("web_flow_sessions")
+    .select("chat_id, mode, updated_at")
+    .eq("project_id", project_id)
+    .eq("chat_materialized", true)
+    .order("updated_at", { ascending: false })
+    .limit(300);
+  if (!sessions?.length) return NextResponse.json([]);
+
+  const modeById = Object.fromEntries(sessions.map(s => [s.chat_id, s.mode]));
+  const ids = sessions.map(s => s.chat_id);
+  const { data: chats } = await supabase
+    .from("chats")
+    .select("id, external_id, channel, title, created_at, assigned_to")
+    .eq("project_id", project_id)
+    .eq("channel", "public")
+    .in("id", ids);
+  if (!chats?.length) return NextResponse.json([]);
+
+  const { data: allMsgs } = await supabase
+    .from("chat_messages")
+    .select("chat_id, content, role, created_at")
+    .in("chat_id", chats.map(c => c.id))
+    .order("created_at", { ascending: false });
+  const lastMsgMap = {};
+  for (const msg of (allMsgs || [])) if (!lastMsgMap[msg.chat_id]) lastMsgMap[msg.chat_id] = msg;
+
+  const result = chats.map(c => ({
+    ...c,
+    // Website visitors have no phone number; the list shows this label
+    // where WhatsApp chats show the number. Display only — every action
+    // route reads the chat from the database by id.
+    external_id: `Visitor ${c.id.slice(0, 4).toUpperCase()}`,
+    last_message: lastMsgMap[c.id]?.content?.slice(0, 60) || null,
+    last_message_at: lastMsgMap[c.id]?.created_at || c.created_at,
+    session_mode: modeById[c.id] || null,
+  }));
+  result.sort((a, b) => new Date(b.last_message_at) - new Date(a.last_message_at));
+  return NextResponse.json(result);
+}
+
 export async function GET(req) {
   const { supabase } = getSupabase(req);
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,6 +73,10 @@ export async function GET(req) {
 
   const role = await getProjectRole(user.id, project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Website chats that went through a website flow (the only website chats
+  // a person can reply into: the visitor's widget polls for those replies).
+  if (searchParams.get("channel") === "web") return listWebChats(supabase, project_id);
 
   const { data: chats } = await supabase
     .from("chats")

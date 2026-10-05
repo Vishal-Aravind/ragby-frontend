@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2, ArrowRightLeft } from "lucide-react";
+import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2, ArrowRightLeft, Globe } from "lucide-react";
 
 export default function ConversationsTab({ projectId }) {
   const [chats, setChats]           = useState([]);
+  // WhatsApp chats, or website chats that went through a website flow.
+  const [channel, setChannel]       = useState("whatsapp");
   const [loading, setLoading]       = useState(true);
   const [selected, setSelected]     = useState(null);
   const [messages, setMessages]     = useState([]);
@@ -55,7 +57,7 @@ export default function ConversationsTab({ projectId }) {
 
   // ── Fetch all chats ─────────────────────────────────────
   const fetchChats = useCallback(async () => {
-    const res = await fetch(`/api/conversations?project_id=${projectId}`);
+    const res = await fetch(`/api/conversations?project_id=${projectId}&channel=${channel}`);
     if (res.ok) {
       const data = await res.json();
       setChats(data || []);
@@ -66,14 +68,19 @@ export default function ConversationsTab({ projectId }) {
       }
     }
     setLoading(false);
-  }, [projectId, selected?.id]);
+  }, [projectId, selected?.id, channel]);
 
   useEffect(() => {
+    setLoading(true);
+    setChats([]);
+    setSelected(null);
+    setMessages([]);
+    if (pollRef.current) clearInterval(pollRef.current);
     fetchChats();
     // Poll chats every 10s to update handoff badges
     chatsPollRef.current = setInterval(fetchChats, 10000);
     return () => clearInterval(chatsPollRef.current);
-  }, [projectId]);
+  }, [projectId, channel]);
 
   // ── Fetch messages for selected chat ────────────────────
   const fetchMessages = useCallback(async (chatId) => {
@@ -263,11 +270,23 @@ export default function ConversationsTab({ projectId }) {
               </span>
             </div>
           </div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 10, background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
+            {[["whatsapp", "WhatsApp"], ["web", "Website"]].map(([key, label]) => (
+              <button key={key} onClick={() => setChannel(key)}
+                style={{
+                  flex: 1, fontSize: 12, fontWeight: 600, padding: "5px 0", borderRadius: 6, border: "none", cursor: "pointer",
+                  background: channel === key ? "white" : "transparent", color: channel === key ? "#0f172a" : "#64748b",
+                  boxShadow: channel === key ? "0 1px 2px rgba(0,0,0,.08)" : "none",
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div style={{ position: "relative", marginBottom: 10 }}>
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
             <input
               style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px 7px 32px", fontSize: 13, outline: "none", boxSizing: "border-box", background: "#f8fafc" }}
-              placeholder="Search by number..."
+              placeholder={channel === "web" ? "Search visitors..." : "Search by number..."}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -298,7 +317,9 @@ export default function ConversationsTab({ projectId }) {
             <div style={{ padding: 32, textAlign: "center" }}>
               <MessageSquare size={32} style={{ color: "#cbd5e1", marginBottom: 8 }} />
               <p style={{ color: "#94a3b8", fontSize: 13, margin: 0 }}>No conversations yet</p>
-              <p style={{ color: "#cbd5e1", fontSize: 12, margin: "4px 0 0" }}>Messages appear here when users contact you on WhatsApp</p>
+              <p style={{ color: "#cbd5e1", fontSize: 12, margin: "4px 0 0" }}>{channel === "web"
+                ? "Website chats appear here once a visitor uses your website flow"
+                : "Messages appear here when users contact you on WhatsApp"}</p>
             </div>
           )}
           {filtered.map(chat => {
@@ -384,7 +405,7 @@ export default function ConversationsTab({ projectId }) {
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", margin: 0 }}>{selected.external_id}</p>
               <p style={{ fontSize: 11, color: "#94a3b8", margin: 0, display: "flex", alignItems: "center", gap: 3 }}>
-                <Phone size={10} /> WhatsApp
+                {channel === "web" ? <><Globe size={10} /> Website</> : <><Phone size={10} /> WhatsApp</>}
                 {isHandoff && <span style={{ marginLeft: 6, color: "#dc2626", fontWeight: 600 }}>· Waiting for human reply</span>}
               </p>
             </div>

@@ -76,6 +76,13 @@ export async function POST(req, { params }) {
       mode: "human",
     }, { onConflict: "project_id,phone_number" });
   }
+  // Website chat in a website flow: pause the flow bot the same way.
+  if (chat.channel === "public") {
+    await supabaseAdmin.from("web_flow_sessions")
+      .update({ mode: "human", awaiting: null })
+      .eq("chat_id", chatId)
+      .eq("project_id", project_id);
+  }
 
   // Auto-claim the conversation for whoever took it over, but don't steal
   // it from someone who already has it assigned.
