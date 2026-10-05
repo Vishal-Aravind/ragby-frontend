@@ -147,6 +147,21 @@ export const NODE_REGISTRY = [
 
 export const NODE_BY_TYPE = Object.fromEntries(NODE_REGISTRY.map(n => [n.type, n]));
 
+// The id a button/list option is sent to WhatsApp with, and the id its
+// connection is saved under. MUST match backend/flows.py option_id() exactly
+// — when they differed ("Price?" -> "price" here but "price?" there) a tap
+// found no connection and nothing happened. Labels with no a-z/0-9 at all
+// (Tamil, emoji) get a stable hash of their UTF-8 bytes; this used to be
+// id_<timestamp>, which changed on every render.
+export function optionId(label) {
+  const text = (label || "").trim();
+  const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  if (slug) return slug;
+  let h = 5381;
+  for (const b of new TextEncoder().encode(text)) h = ((h * 33) ^ b) >>> 0;
+  return "opt_" + h.toString(36);
+}
+
 export function canonicalType(type) {
   return LEGACY_ALIASES[type] || type;
 }

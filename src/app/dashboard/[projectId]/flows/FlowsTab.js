@@ -21,10 +21,9 @@ import { Loader2, Plus, Trash2, X, Settings, Save, AlertCircle } from "lucide-re
 import AppAlertDialog from "@/components/alertdialog";
 import AddNodePanel from "./AddNodePanel";
 import NodeConfigDialog from "./NodeConfigDialog";
-import { nodeInfo, emptyContentFor, canonicalType } from "./nodeRegistry";
+import { nodeInfo, emptyContentFor, canonicalType, optionId } from "./nodeRegistry";
 
-const toId = (label) =>
-  (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || `id_${Date.now()}`;
+const toId = optionId;
 
 // ─────────────────────────────────────────────────────────
 // FLOW NODE — compact card. Full settings live in NodeConfigDialog now;
@@ -266,8 +265,7 @@ export default function FlowsTab({ projectId }) {
 
     setSaveStatus("saving");
 
-    const toIdFn = (label) =>
-      (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "next";
+    const toIdFn = optionId;
 
     const handleRemap = {};
     nodes.forEach(n => {
@@ -407,8 +405,7 @@ export default function FlowsTab({ projectId }) {
         const newButtons = patch?.content?.buttons || oldButtons;
 
         if (patch?.content?.buttons && oldButtons.length === newButtons.length) {
-          const toIdFn = (label) =>
-            (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "next";
+          const toIdFn = optionId;
           const handleMap = {};
           oldButtons.forEach((oldBtn, idx) => {
             const oldHandle = toIdFn(oldBtn.label);
