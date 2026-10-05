@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
 import {
+  FLOW_CHANNELS,
   MAX_FLOWS_PER_PROJECT,
   normalizeTriggerKeywords,
   validateFlowName,
@@ -24,7 +25,7 @@ export async function GET(req) {
 
   const { data, error } = await supabase
     .from("flows")
-    .select("id, name, is_active, trigger_keywords, free_questions, revision, created_at")
+    .select("id, name, channel, is_active, trigger_keywords, free_questions, web_settings, revision, created_at")
     .eq("project_id", project_id)
     .order("created_at", { ascending: false });
 
@@ -53,6 +54,11 @@ export async function POST(req) {
   const nameError = validateFlowName(body.name);
   if (nameError) return NextResponse.json({ error: nameError }, { status: 400 });
 
+  const channel = body.channel ?? "whatsapp";
+  if (!FLOW_CHANNELS.has(channel)) {
+    return NextResponse.json({ error: "Unknown flow type." }, { status: 400 });
+  }
+
   const keywords = normalizeTriggerKeywords(
     body.trigger_keywords ?? DEFAULT_KEYWORDS
   );
@@ -80,7 +86,12 @@ export async function POST(req) {
     .insert({
       project_id: body.project_id,
       name: body.name.trim(),
-      is_active: body.is_active === true,
+      // Never active on create: activation goes through set_flow_active,
+      // which switches the project's other flow on that channel off in the
+      // same transaction. Creating straight into "active" skipped that and
+      // could leave two live bots.
+      is_active: false,
+      channel,
       trigger_keywords: keywords.value.length ? keywords.value : DEFAULT_KEYWORDS,
       free_questions: body.free_questions === true,
     })

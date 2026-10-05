@@ -2,6 +2,9 @@
 import { NextResponse } from "next/server";
 import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
 import { validateGraph } from "@/lib/flow-validation";
+import { getSourceHandles } from "@/lib/flow-handles";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(req, { params }) {
   const { flowId } = await params;
@@ -11,7 +14,7 @@ export async function POST(req, { params }) {
 
   const { data: flow } = await supabase
     .from("flows")
-    .select("project_id")
+    .select("project_id, channel")
     .eq("id", flowId)
     .maybeSingle();
   if (!flow) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -29,7 +32,8 @@ export async function POST(req, { params }) {
   const nodes = body.nodes || [];
   const edges = body.edges || [];
 
-  const graphError = validateGraph(nodes, edges);
+  const channel = flow.channel || "whatsapp";
+  const graphError = validateGraph(nodes, edges, channel);
   if (graphError) return NextResponse.json({ error: graphError }, { status: 400 });
 
   // Client ids ("local_1738..." for unsaved nodes, real UUIDs for saved
@@ -38,9 +42,24 @@ export async function POST(req, { params }) {
   // map ONLY — an edge whose endpoint isn't in it is dropped rather than
   // being passed through raw, which is how an edge could previously come to
   // point at another project's node.
+  //
+  // Ids of nodes that ALREADY belong to this flow are kept. Minting new ones
+  // on every save (the old behaviour) restarted every website visitor who
+  // was part-way through the flow each time the 30-second autosave ran,
+  // because their saved position pointed at an id that no longer existed.
+  // Only ids read back from this flow's own rows are reused, so the browser
+  // still can't choose an id.
+  const { data: existingRows } = await supabase
+    .from("flow_nodes")
+    .select("id")
+    .eq("flow_id", flowId);
+  const existingIds = new Set((existingRows || []).map((r) => r.id));
   const idMap = {};
   for (const node of nodes) {
-    if (node?.id != null) idMap[String(node.id)] = crypto.randomUUID();
+    if (node?.id == null) continue;
+    const key = String(node.id);
+    if (idMap[key]) continue;
+    idMap[key] = UUID_RE.test(key) && existingIds.has(key) ? key : crypto.randomUUID();
   }
 
   const nodeRows = nodes.map((node) => ({
@@ -51,20 +70,30 @@ export async function POST(req, { params }) {
     position: node.position || { x: 0, y: 0 },
   }));
 
+  // Website flows: an edge must leave from a real handle of its node (a
+  // chip, a condition rule, success/failure...). A leftover line from an
+  // option that was deleted would otherwise be saved and never fire.
+  const handleSets = {};
+  if (channel === "web") {
+    for (const node of nodes) {
+      const type = node.data?.type || node.type;
+      const content = node.data?.content ?? node.content ?? {};
+      handleSets[String(node.id)] = new Set(getSourceHandles(type, content, "web").map((h) => h.id));
+    }
+  }
+
   const edgeRows = [];
   let droppedEdges = 0;
   for (const edge of edges) {
     const from = idMap[String(edge.source ?? edge.from_node_id)];
     const to = idMap[String(edge.target ?? edge.to_node_id)];
-    if (!from || !to) {
+    const trigger = edge.sourceHandle || edge.trigger || "next";
+    const handles = handleSets[String(edge.source ?? edge.from_node_id)];
+    if (!from || !to || (handles && !handles.has(trigger))) {
       droppedEdges += 1;
       continue;
     }
-    edgeRows.push({
-      from_node_id: from,
-      trigger: edge.sourceHandle || edge.trigger || "next",
-      to_node_id: to,
-    });
+    edgeRows.push({ from_node_id: from, trigger, to_node_id: to });
   }
 
   // Everything below happens inside ONE transaction in the database.

@@ -17,12 +17,16 @@ import "reactflow/dist/style.css";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Plus, Trash2, X, Settings, Save, AlertCircle } from "lucide-react";
+import { Loader2, Plus, Trash2, X, Settings, Save, AlertCircle, Play, BarChart3, MessageCircle, Globe } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
 import { Switch } from "@/components/ui/switch";
 import AddNodePanel from "./AddNodePanel";
 import NodeConfigDialog from "./NodeConfigDialog";
-import { nodeInfo, emptyContentFor, canonicalType, optionId } from "./nodeRegistry";
+import FlowPreview from "./FlowPreview";
+import WebTriggerSettings from "./WebTriggerSettings";
+import { nodeInfo, emptyContentFor, canonicalType, optionId, newOptionId } from "./nodeRegistry";
+import { getSourceHandles, hasSingleNext } from "@/lib/flow-handles";
+import { flowWarnings, flowVariables } from "./flowChecks";
 
 const toId = optionId;
 
@@ -40,10 +44,21 @@ const toId = optionId;
 const NEXT_HANDLE_TYPES = new Set(["time_delay", "message_shop"]);
 const OUTGOING_TYPES = new Set([...NEXT_HANDLE_TYPES, "message_buttons", "message_list"]);
 
+// Is this line one the bot will actually follow? WhatsApp keeps exactly the
+// old rule; website flows check the line leaves from a real handle (a
+// deleted chip's line is dropped instead of being saved and never firing).
+function edgeIsLive(e, nodes, channel) {
+  const src = nodes.find(n => n.id === e.source);
+  if (!src) return false;
+  if (channel !== "web") return OUTGOING_TYPES.has(canonicalType(src.data.type));
+  return getSourceHandles(src.data.type, src.data.content, "web").some(h => h.id === (e.sourceHandle || "next"));
+}
+
 function FlowNode({ id, data, selected }) {
   const type = data.type || "message";
   const content = data.content || {};
   const isStart = data.isStart || false;
+  const channel = data.channel || "whatsapp";
   const info = nodeInfo(type);
   const Icon = info.icon;
 
@@ -52,17 +67,29 @@ function FlowNode({ id, data, selected }) {
     : type === "message_shop" ? (content.catalog_id ? "Catalog linked" : "No catalog selected")
     : type === "message_booking" ? "Opens booking calendar"
     : type === "message_event" ? (content.event_id ? "Event linked" : "No event selected")
+    : type === "condition" ? `${(content.rules || []).length} rule(s), then Else`
+    : type === "set_variable" ? (content.assignments || []).filter(a => a.var).map(a => a.var).join(", ") || "No variables set"
+    : type === "webhook" ? (content.url ? `${content.method || "POST"} ${content.url}` : "No URL yet")
+    : type === "random_split" ? "Random path"
+    : type === "form" ? (content.title || `${(content.fields || []).length} field(s)`)
+    : type === "carousel" ? `${(content.cards || []).length} card(s)`
     : info.description
   );
+
+  // One source of truth for which dots this node has — shared with the
+  // save filter and the server's validation (see lib/flow-handles.js).
+  const handles = getSourceHandles(type, content, channel);
+  const singleNext = hasSingleNext(handles);
+  const highlighted = data.highlight;
 
   return (
     <div
       onClick={() => data.onOpen(id)}
       style={{
         background: info.bg,
-        border: `2px solid ${selected ? "#3b82f6" : info.border}`,
+        border: `2px solid ${highlighted ? "#16a34a" : selected ? "#3b82f6" : info.border}`,
         borderRadius: 12, minWidth: 200, maxWidth: 240,
-        boxShadow: selected ? "0 0 0 3px rgba(59,130,246,0.2)" : "0 2px 8px rgba(0,0,0,0.08)",
+        boxShadow: highlighted ? "0 0 0 4px rgba(22,163,74,0.25)" : selected ? "0 0 0 3px rgba(59,130,246,0.2)" : "0 2px 8px rgba(0,0,0,0.08)",
         cursor: "pointer",
       }}
       className="drag-handle"
@@ -89,36 +116,30 @@ function FlowNode({ id, data, selected }) {
           {preview}
         </p>
 
-        {type === "message_buttons" && (content.buttons || []).length > 0 && (
+        {!singleNext && handles.length > 0 && (
           <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-            {(content.buttons || []).map((btn, idx) => (
-              <div key={idx} style={{ position: "relative" }}>
-                <div style={{ fontSize: 11, padding: "3px 22px 3px 8px", background: "white", border: `1px solid ${info.border}`, borderRadius: 6, color: info.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {btn.label || `Button ${idx + 1}`}
+            {handles.map((h) => (
+              <div key={h.id} style={{ position: "relative" }}>
+                <div style={{ fontSize: 11, padding: "3px 22px 3px 8px", background: "white", border: `1px solid ${info.border}`, borderRadius: 6,
+                  color: h.id === "failure" ? "#b91c1c" : h.id === "else" ? "#6b7280" : info.text,
+                  fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {h.label}
                 </div>
-                <Handle type="source" position={Position.Right} id={toId(btn.label || `btn_${idx}`)}
+                <Handle type="source" position={Position.Right} id={h.id}
                   style={{ background: info.border, width: 10, height: 10, right: -5, top: "50%", transform: "translateY(-50%)", border: "2px solid white" }} />
               </div>
             ))}
           </div>
         )}
 
-        {type === "message_list" && (content.sections || []).flatMap(s => s.rows || []).length > 0 && (
-          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-            {(content.sections || []).flatMap(s => s.rows || []).map((row, idx) => (
-              <div key={idx} style={{ position: "relative" }}>
-                <div style={{ fontSize: 11, padding: "3px 22px 3px 8px", background: "white", border: `1px solid ${info.border}`, borderRadius: 6, color: info.text, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {row.label || `Row ${idx + 1}`}
-                </div>
-                <Handle type="source" position={Position.Right} id={toId(row.label || `row_${idx}`)}
-                  style={{ background: info.border, width: 10, height: 10, right: -5, top: "50%", transform: "translateY(-50%)", border: "2px solid white" }} />
-              </div>
-            ))}
-          </div>
+        {singleNext && (
+          <Handle type="source" position={Position.Right} id="next" style={{ background: info.border, width: 10, height: 10, right: -6 }} />
         )}
 
-        {NEXT_HANDLE_TYPES.has(canonicalType(type)) && (
-          <Handle type="source" position={Position.Right} style={{ background: info.border, width: 10, height: 10, right: -6 }} />
+        {data.stats && (
+          <p style={{ fontSize: 10, color: "#64748b", margin: "6px 0 0" }}>
+            {data.stats.entered} reached{data.stats.dropped ? ` · ${data.stats.dropped} left here` : ""}
+          </p>
         )}
       </div>
     </div>
@@ -133,6 +154,32 @@ const nodeTypes = { flowNode: FlowNode };
 // canvas as where first-time users disengage; this gives them a small,
 // working, fully-editable example instead.
 // ─────────────────────────────────────────────────────────
+// Website starter: welcome -> quick replies -> (AI | contact form -> thanks).
+// Shows off what the website can do that WhatsApp can't: chips, a form that
+// saves to Leads, and a {{variable}} in the reply.
+function webStarterGraph() {
+  const ask = newOptionId("o"), talk = newOptionId("o");
+  const now = Date.now();
+  return {
+    nodes: [
+      { id: "local_menu", position: { x: 80, y: 140 },
+        raw: { type: "quick_replies", is_start: true, content: { body: "Hi! How can we help you today?", var: "",
+          options: [{ id: ask, label: "Ask a question" }, { id: talk, label: "Talk to us" }] } } },
+      { id: "local_ai", position: { x: 420, y: 40 },
+        raw: { type: "ask_a_question", is_start: false, content: emptyContentFor("ask_a_question", "web") } },
+      { id: "local_form", position: { x: 420, y: 240 },
+        raw: { type: "form", is_start: false, content: emptyContentFor("form", "web") } },
+      { id: "local_thanks", position: { x: 760, y: 240 },
+        raw: { type: "message", is_start: false, content: { body: "Thanks {{name}}! We'll get back to you shortly." } } },
+    ],
+    edges: [
+      { id: `e_${now}_1`, source: "local_menu", target: "local_ai", sourceHandle: ask },
+      { id: `e_${now}_2`, source: "local_menu", target: "local_form", sourceHandle: talk },
+      { id: `e_${now}_3`, source: "local_form", target: "local_thanks", sourceHandle: "next" },
+    ],
+  };
+}
+
 function starterGraph() {
   const startId = "local_start";
   const menuId = "local_menu";
@@ -183,6 +230,13 @@ export default function FlowsTab({ projectId }) {
   const [deleteNodeOpen, setDeleteNodeOpen] = useState(false);
   const [edgeToDelete, setEdgeToDelete]     = useState(null);
   const [configNodeId, setConfigNodeId]     = useState(null);
+  // WhatsApp and Website flows are separate lists, each with its own active flow.
+  const [listChannel, setListChannel]       = useState("whatsapp");
+  const [newFlowChannel, setNewFlowChannel] = useState("whatsapp");
+  const [previewOpen, setPreviewOpen]       = useState(false);
+  const [previewNodeId, setPreviewNodeId]   = useState(null);
+  const [stats, setStats]                   = useState(null);
+  const [showWarnings, setShowWarnings]     = useState(false);
 
   const [saveStatus, setSaveStatus] = useState("saved");
   const [errorMsg, setErrorMsg]     = useState("");
@@ -284,6 +338,7 @@ export default function FlowsTab({ projectId }) {
       }
     });
 
+    const channel = flow.channel || "whatsapp";
     const payload = {
       nodes: nodes.map(n => ({
         // Legacy type strings (text/buttons/list/handoff) are canonicalized
@@ -293,11 +348,9 @@ export default function FlowsTab({ projectId }) {
         is_start: n.data.isStart, position: n.position,
       })),
       // Drops lines left over from end nodes (e.g. Call Us -> Back to Menu)
-      // that were drawable before those nodes lost their outgoing handle.
-      edges: edges.filter(e => {
-        const src = nodes.find(n => n.id === e.source);
-        return src && OUTGOING_TYPES.has(canonicalType(src.data.type));
-      }).map(e => ({
+      // that were drawable before those nodes lost their outgoing handle,
+      // and, on website flows, lines from options that were deleted.
+      edges: edges.filter(e => edgeIsLive(e, nodes, channel)).map(e => ({
         from_node_id: e.source, trigger: e.sourceHandle || "next", to_node_id: e.target,
       })),
     };
@@ -367,24 +420,24 @@ export default function FlowsTab({ projectId }) {
     loadFailedRef.current = false;
     revisionRef.current = data.revision ?? null;
     setErrorMsg("");
-    buildGraph(data.nodes || [], data.edges || []);
+    buildGraph(data.nodes || [], data.edges || [], flow.channel || "whatsapp");
     setSaveStatus("saved");
     setTimeout(() => { isLoadingFlow.current = false; }, 500);
   };
 
-  const buildGraph = (nodes, edges) => {
+  const buildGraph = (nodes, edges, channel = "whatsapp") => {
     setRfNodes([]);
     setRfEdges([]);
     const rfN = nodes.map((n, i) => ({
       id: n.id, type: "flowNode",
       position: n.position || { x: 120 + (i % 4) * 320, y: Math.floor(i / 4) * 180 + 60 },
       dragHandle: ".drag-handle",
-      data: buildNodeData(n),
+      data: buildNodeData(n, channel),
     }));
     // Hide leftover lines out of end nodes — they lead nowhere (see
     // OUTGOING_TYPES) and are dropped on the next save.
-    const typeById = Object.fromEntries(nodes.map(n => [n.id, canonicalType(n.type)]));
-    const rfE = edges.filter(e => OUTGOING_TYPES.has(typeById[e.from_node_id])).map(e => ({
+    const asRf = rfN.map(n => ({ id: n.id, data: n.data }));
+    const rfE = edges.filter(e => edgeIsLive({ source: e.from_node_id, sourceHandle: e.trigger }, asRf, channel)).map(e => ({
       id: e.id, source: e.from_node_id, target: e.to_node_id,
       sourceHandle: e.trigger, type: "smoothstep", label: e.trigger,
       markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
@@ -396,8 +449,8 @@ export default function FlowsTab({ projectId }) {
     setRfEdges(rfE);
   };
 
-  const buildNodeData = (n) => ({
-    type: n.type, content: n.content, isStart: n.is_start,
+  const buildNodeData = (n, channel = "whatsapp") => ({
+    type: n.type, content: n.content, isStart: n.is_start, channel,
     onOpen: (nodeId) => setConfigNodeId(nodeId),
     onChange: (nodeId, patch) => {
       setRfNodes(nds => {
@@ -405,7 +458,9 @@ export default function FlowsTab({ projectId }) {
         const oldButtons = oldNode?.data?.content?.buttons || [];
         const newButtons = patch?.content?.buttons || oldButtons;
 
-        if (patch?.content?.buttons && oldButtons.length === newButtons.length) {
+        // WhatsApp connections are keyed by the button LABEL, so a rename
+        // must move them. Website options carry their own ids instead.
+        if (channel !== "web" && patch?.content?.buttons && oldButtons.length === newButtons.length) {
           const toIdFn = optionId;
           const handleMap = {};
           oldButtons.forEach((oldBtn, idx) => {
@@ -452,17 +507,56 @@ export default function FlowsTab({ projectId }) {
     setEditKeywords((flow.trigger_keywords || []).join(", "));
     setEditFreeQ(flow.free_questions || false);
     setShowFlowList(false);
+    setPreviewOpen(false);
+    setPreviewNodeId(null);
+    setStats(null);
     await loadFlow(flow);
+  };
+
+  // "Reached / left here" counts per node, last 30 days (website flows).
+  const toggleStats = async () => {
+    if (stats) { setStats(null); return; }
+    try {
+      const res = await fetch(`/api/flows/${selectedFlow.id}/stats`);
+      const d = res.ok ? await res.json() : { stats: {} };
+      setStats(d.stats || {});
+    } catch {
+      setStats({});
+    }
+  };
+
+  const saveWebSettings = async (settings) => {
+    if (!selectedFlow) return;
+    setSavingSettings(true);
+    try {
+      const res = await fetch(`/api/flows/${selectedFlow.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ web_settings: settings }),
+      });
+      if (!res.ok) {
+        setErrorMsg(await readError(res, "Could not save these settings."));
+      } else {
+        const saved = await res.json();
+        setErrorMsg("");
+        setSelectedFlow(f => ({ ...f, web_settings: saved?.web_settings ?? settings }));
+        await fetchFlows();
+        setSettingsOpen(false);
+      }
+    } catch {
+      setErrorMsg("Could not reach the server. Try again.");
+    }
+    setSavingSettings(false);
   };
 
   // Seeds a small, connected, fully-editable example flow instead of a
   // blank canvas — research on flow-builder onboarding consistently flags
   // the blank canvas as where first-time users disengage.
-  const seedStarterTemplate = () => {
-    const { nodes, edges } = starterGraph();
+  const seedStarterTemplate = (channel = "whatsapp") => {
+    const { nodes, edges } = channel === "web" ? webStarterGraph() : starterGraph();
     const rfN = nodes.map(n => ({
-      id: n.id, type: "flowNode", position: n.position, dragHandle: n.dragHandle,
-      data: buildNodeData({ id: n.id, ...n.raw }),
+      id: n.id, type: "flowNode", position: n.position, dragHandle: ".drag-handle",
+      data: buildNodeData({ id: n.id, ...n.raw }, channel),
     }));
     const rfE = edges.map(e => ({
       ...e, type: "smoothstep", label: e.sourceHandle,
@@ -483,7 +577,7 @@ export default function FlowsTab({ projectId }) {
       const res = await fetch("/api/flows", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project_id: projectId, name: newFlowName.trim() }),
+        body: JSON.stringify({ project_id: projectId, name: newFlowName.trim(), channel: newFlowChannel }),
       });
       if (!res.ok) {
         setErrorMsg(await readError(res, "Could not create the flow."));
@@ -492,9 +586,10 @@ export default function FlowsTab({ projectId }) {
         setErrorMsg("");
         setNewFlowName("");
         setShowCreateModal(false);
+        setListChannel(flow.channel || "whatsapp");
         await fetchFlows();
         await selectFlow(flow);
-        seedStarterTemplate();
+        seedStarterTemplate(flow.channel || "whatsapp");
       }
     } catch {
       setErrorMsg("Could not reach the server. Try again.");
@@ -585,9 +680,10 @@ export default function FlowsTab({ projectId }) {
     const newId = `local_${Date.now()}`;
     const isFirst = rfNodes.length === 0;
 
+    const channel = selectedFlowRef.current?.channel || "whatsapp";
     setRfNodes(nds => [...nds, {
       id: newId, type: "flowNode", position: pos, dragHandle: ".drag-handle",
-      data: buildNodeData({ id: newId, type, content: emptyContentFor(type), is_start: isFirst }),
+      data: buildNodeData({ id: newId, type, content: emptyContentFor(type, channel), is_start: isFirst }, channel),
     }]);
     markDirty();
   };
@@ -679,6 +775,16 @@ export default function FlowsTab({ projectId }) {
   }, [doSave]);
 
   const configNode = rfNodes.find(n => n.id === configNodeId) || null;
+  const flowChannel = selectedFlow?.channel || "whatsapp";
+  const isWeb = flowChannel === "web";
+  const variables = isWeb ? flowVariables(rfNodes) : [];
+  const warnings = isWeb ? flowWarnings(rfNodes, rfEdges, "web") : [];
+  // Preview highlight and stats are display-only; they're layered onto the
+  // nodes here rather than stored in them, so they never get saved.
+  const displayNodes = (previewNodeId || stats)
+    ? rfNodes.map(n => ({ ...n, data: { ...n.data, highlight: n.id === previewNodeId, stats: stats ? stats[n.id] : null } }))
+    : rfNodes;
+  const visibleFlows = flows.filter(f => (f.channel || "whatsapp") === listChannel);
 
   const SaveIndicator = () => {
     if (saveStatus === "saving") return (
@@ -710,25 +816,40 @@ export default function FlowsTab({ projectId }) {
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Flows</h2>
-              <Button onClick={() => setShowCreateModal(true)}>
+              <Button onClick={() => { setNewFlowChannel(listChannel); setShowCreateModal(true); }}>
                 <Plus size={14} className="mr-1" /> New Flow
               </Button>
             </div>
+            <div className="flex gap-1 border-b">
+              {[["whatsapp", "WhatsApp", MessageCircle], ["web", "Website", Globe]].map(([ch, label, Ico]) => (
+                <button key={ch} onClick={() => setListChannel(ch)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 -mb-px ${listChannel === ch ? "border-gray-900 font-semibold" : "border-transparent text-muted-foreground"}`}>
+                  <Ico size={14} /> {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {listChannel === "web"
+                ? "Website flows run inside your chat widget. They can use quick replies, carousels, forms, conditions, webhooks and auto-open triggers. One website flow can be active at a time."
+                : "WhatsApp flows run on your WhatsApp number. One WhatsApp flow can be active at a time."}
+            </p>
             {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
             {/* Only claim there are no flows when we actually know that —
                 an error above means we couldn't tell. */}
-            {!loading && !errorMsg && flows.length === 0 && (
-              <p className="text-sm text-muted-foreground">No flows yet.</p>
+            {!loading && !errorMsg && visibleFlows.length === 0 && (
+              <p className="text-sm text-muted-foreground">No {listChannel === "web" ? "website" : "WhatsApp"} flows yet.</p>
             )}
             <div className="space-y-2">
-              {flows.map(flow => (
+              {visibleFlows.map(flow => (
                 <div key={flow.id}
                   className="flex items-center justify-between border rounded px-3 py-2 cursor-pointer hover:border-blue-300 transition-colors"
                   onClick={() => selectFlow(flow)}>
                   <div>
                     <p className="text-sm font-medium">{flow.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      Keywords: {(flow.trigger_keywords||[]).join(", ")}
+                      {flow.channel === "web"
+                        ? `${(flow.web_settings?.triggers || []).length} auto-open trigger(s)`
+                        : `Keywords: ${(flow.trigger_keywords || []).join(", ")}`}
                       {flow.free_questions && " · AI answers typed messages: ON"}
                     </p>
                   </div>
@@ -755,12 +876,41 @@ export default function FlowsTab({ projectId }) {
               <button onClick={handleGoBack} className="text-sm text-muted-foreground hover:text-gray-800">← Flows</button>
               <span className="text-gray-300">/</span>
               <span className="text-sm font-semibold">{selectedFlow?.name}</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border">{isWeb ? "Website" : "WhatsApp"}</span>
               {selectedFlow?.is_active && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">Active</span>
               )}
               <SaveIndicator />
             </div>
             <div className="flex items-center gap-2">
+              {isWeb && warnings.length > 0 && (
+                <div className="relative">
+                  <button onClick={() => setShowWarnings(s => !s)}
+                    className="text-xs px-2 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-800 flex items-center gap-1">
+                    <AlertCircle size={12} /> {warnings.length} to check
+                  </button>
+                  {showWarnings && (
+                    <div className="absolute right-0 top-8 z-30 w-80 max-h-72 overflow-auto bg-white border rounded-lg shadow-lg p-2 space-y-1">
+                      {warnings.map((w, i) => (
+                        <button key={i} className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-gray-50"
+                          onClick={() => { if (w.nodeId) setConfigNodeId(w.nodeId); setShowWarnings(false); }}>
+                          {w.message}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {isWeb && (
+                <>
+                  <Button variant="outline" size="sm" onClick={toggleStats} title="Visitors who reached each node, and where they stopped (last 30 days)">
+                    <BarChart3 size={13} className="mr-1" /> {stats ? "Hide stats" : "Stats"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setPreviewOpen(o => !o)}>
+                    <Play size={13} className="mr-1" /> Test
+                  </Button>
+                </>
+              )}
               <label className="flex items-center gap-2 text-xs font-medium mr-1 cursor-pointer"
                 title="ON: if a customer types instead of tapping a button, or after the flow ends, AI answers from your documents. OFF: customers must tap buttons; typing just shows the menu again.">
                 <Switch checked={editFreeQ} onCheckedChange={toggleFreeQuestions} />
@@ -782,7 +932,7 @@ export default function FlowsTab({ projectId }) {
           <div style={{ height: "calc(85vh - 45px)", display: "flex" }}>
             <div ref={reactFlowWrapper} style={{ flex: 1, minWidth: 0, background: "#f1f5f9" }}>
               <ReactFlow
-                nodes={rfNodes} edges={rfEdges}
+                nodes={displayNodes} edges={rfEdges}
                 onNodesChange={changes => {
                   onNodesChange(changes);
                   if (changes.some(c => (c.type === "position" && !c.dragging) || c.type === "remove")) markDirty();
@@ -811,10 +961,29 @@ export default function FlowsTab({ projectId }) {
                 )}
               </ReactFlow>
             </div>
-            <AddNodePanel onSelect={handleAddNode} />
+            {previewOpen && isWeb ? (
+              <FlowPreview flowId={selectedFlow.id} onClose={() => { setPreviewOpen(false); setPreviewNodeId(null); }}
+                onNode={setPreviewNodeId}
+                saveFirst={async () => { if (saveStatusRef.current !== "saved") await doSave(); }} />
+            ) : (
+              <AddNodePanel onSelect={handleAddNode} channel={flowChannel} />
+            )}
           </div>
 
-          {settingsOpen && (
+          {settingsOpen && isWeb && (
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-20">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 m-4 max-h-[85vh] overflow-y-auto">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Website flow settings</h3>
+                  <button onClick={() => setSettingsOpen(false)}><X size={16} /></button>
+                </div>
+                <WebTriggerSettings initial={selectedFlow?.web_settings} saving={savingSettings}
+                  onSave={saveWebSettings} onClose={() => setSettingsOpen(false)} />
+              </div>
+            </div>
+          )}
+
+          {settingsOpen && !isWeb && (
             <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-20">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 m-4">
                 <div className="flex items-center justify-between">
@@ -849,6 +1018,17 @@ export default function FlowsTab({ projectId }) {
                 onChange={e => setNewFlowName(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleCreateFlow()} />
             </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">Runs on</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[["whatsapp", "WhatsApp", MessageCircle], ["web", "Website widget", Globe]].map(([ch, label, Ico]) => (
+                  <button key={ch} type="button" onClick={() => setNewFlowChannel(ch)}
+                    className={`flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm ${newFlowChannel === ch ? "border-gray-900 bg-gray-900 text-white" : "bg-white"}`}>
+                    <Ico size={14} /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" className="flex-1" onClick={() => { setShowCreateModal(false); setNewFlowName(""); }}>
                 Cancel
@@ -869,6 +1049,9 @@ export default function FlowsTab({ projectId }) {
         onSetStart={(nodeId, val) => configNode?.data.onSetStart(nodeId, val)}
         catalogs={catalogs}
         events={events}
+        channel={flowChannel}
+        variables={variables}
+        flowId={selectedFlow?.id}
       />
 
       <AppAlertDialog open={deleteFlowOpen} title="Delete flow?"

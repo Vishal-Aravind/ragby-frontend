@@ -43,6 +43,12 @@ const FOLDER_RULES = {
   message_document: { limit: 16 * 1024 * 1024,  types: DOC_TYPES },
   products:         { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
   "event-pages":    { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
+  // Website flow media is played by the visitor's browser, not WhatsApp,
+  // so it takes browser formats (WEBP/GIF, WEBM, WAV).
+  "web-image":      { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
+  "web-video":      { limit: 16 * 1024 * 1024,  types: { mp4: "video/mp4", webm: "video/webm" } },
+  "web-audio":      { limit: 16 * 1024 * 1024,  types: { ...AUDIO_TYPES, wav: "audio/wav" } },
+  "web-document":   { limit: 16 * 1024 * 1024,  types: DOC_TYPES },
 };
 
 export async function POST(req) {

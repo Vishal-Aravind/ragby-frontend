@@ -19,8 +19,21 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { X, Plus, Info, TriangleAlert } from "lucide-react";
-import { nodeInfo } from "./nodeRegistry";
+import { nodeInfo, newOptionId } from "./nodeRegistry";
 import { uploadMedia } from "@/lib/uploadMedia";
+import WebNodeFields, { VariableChips } from "./WebNodeFields";
+
+// Website flows show media in the browser, not through WhatsApp, so they
+// take the formats browsers play (WEBP/GIF images, WEBM video, WAV audio).
+// Uploaded into separate folders with their own size/type rules.
+const WEB_MEDIA_CONFIG = {
+  message_media:    { kind: "image",    folder: "web-image",    accept: "image/jpeg,image/png,image/webp,image/gif", label: "Image",    maxMB: 5,  exts: "JPG, PNG, WEBP, GIF" },
+  message_video:    { kind: "video",    folder: "web-video",    accept: "video/mp4,video/webm",                      label: "Video",    maxMB: 16, exts: "MP4, WEBM" },
+  message_document: { kind: "document", folder: "web-document", accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 16, exts: "PDF, Word, Excel, PPT, CSV" },
+  message_audio:    { kind: "audio",    folder: "web-audio",    accept: "audio/mpeg,audio/ogg,audio/wav,audio/mp4,.m4a", label: "Audio", maxMB: 16, exts: "MP3, OGG, WAV, M4A" },
+};
+const WEB_ONLY_TYPES = new Set(["quick_replies", "carousel", "ask_input", "form", "rating", "set_variable",
+  "condition", "webhook", "random_split", "open_url"]);
 
 const MEDIA_CONFIG = {
   // Only formats WhatsApp itself accepts — anything else uploads fine and
@@ -35,12 +48,13 @@ const MEDIA_CONFIG = {
 const isStoredFile = (v) => !!v && v.includes("/storage/v1/object/public/");
 
 
-function MediaUpload({ nodeType, urlKey, value, onChange }) {
+function MediaUpload({ nodeType, urlKey, value, onChange, channel = "whatsapp" }) {
   const [mode, setMode] = useState(value && !isStoredFile(value) ? "url" : "upload");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef(null);
-  const cfg = MEDIA_CONFIG[nodeType] || MEDIA_CONFIG.message_media;
+  const web = channel === "web";
+  const cfg = (web ? WEB_MEDIA_CONFIG[nodeType] : MEDIA_CONFIG[nodeType]) || MEDIA_CONFIG.message_media;
 
   // A pasted link is opened by the backend to confirm it's really a file
   // WhatsApp can send — a web page or WEBP is accepted by Meta and then
@@ -49,6 +63,12 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
   useEffect(() => {
     const url = (value || "").trim();
     if (mode !== "url" || !/^https?:\/\/\S+\.\S+/.test(url)) { setLinkCheck(null); return; }
+    // Website media is shown by the visitor's browser; only https matters.
+    if (web) {
+      setLinkCheck(url.toLowerCase().startsWith("https://") ? null
+        : { state: "bad", reason: "Use an https:// link - browsers block insecure media on most sites." });
+      return;
+    }
     let cancelled = false;
     setLinkCheck({ state: "checking" });
     const t = setTimeout(async () => {
@@ -67,7 +87,7 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
       }
     }, 700);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [value, mode, cfg.kind]);
+  }, [value, mode, cfg.kind, web]);
 
   const handleFile = async (e) => {
     const file = e.target.files?.[0];
@@ -75,7 +95,7 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
     setError("");
     if (file.size > cfg.maxMB * 1024 * 1024) { setError(`Max ${cfg.maxMB}MB allowed.`); return; }
     setUploading(true);
-    const { url, error: uploadError } = await uploadMedia(file, nodeType);
+    const { url, error: uploadError } = await uploadMedia(file, cfg.folder || nodeType);
     setUploading(false);
     if (uploadError) { setError(uploadError); return; }
     onChange(urlKey, url);
@@ -109,14 +129,15 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
       {mode === "url" && linkCheck?.state === "bad" && (
         <p className="text-xs text-red-600 flex items-start gap-1">
           <TriangleAlert size={12} className="mt-0.5 shrink-0" />
-          <span>{linkCheck.reason} Use a link that opens the file itself ({cfg.exts}), or upload it instead. Customers will get the link as text.</span>
+          <span>{web ? linkCheck.reason
+            : `${linkCheck.reason} Use a link that opens the file itself (${cfg.exts}), or upload it instead. Customers will get the link as text.`}</span>
         </p>
       )}
       {mode === "upload" && (
         <>
           {isUploaded ? (
             <div className="space-y-1.5">
-              {nodeType === "message_media" ? (
+              {nodeType === "message_media" || urlKey === "image" ? (
                 <div className="relative rounded-md overflow-hidden border">
                   <img src={value} alt="preview" className="w-full max-h-72 object-contain bg-gray-50 block" />
                   <button type="button" onClick={handleClear}
@@ -153,7 +174,8 @@ function MediaUpload({ nodeType, urlKey, value, onChange }) {
 const toIdFn = (label) =>
   (label || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "next";
 
-export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetStart, catalogs, events }) {
+export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetStart, catalogs, events,
+  channel = "whatsapp", variables = [], flowId }) {
   if (!node) return null;
   const { id, data } = node;
   const type = data.type || "message";
@@ -161,9 +183,15 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
   const isStart = data.isStart || false;
   const info = nodeInfo(type);
   const Icon = info.icon;
+  const web = channel === "web";
 
   const update = (patch) => onChange(id, patch);
   const updateContent = (key, val) => update({ content: { ...content, [key]: val } });
+
+  // WhatsApp allows 3 buttons / 10 list rows; the website just renders them.
+  const maxButtons = web ? 50 : 3;
+  const maxRows = web ? 50 : 10;
+  const labelMax = web ? 40 : 20;
 
   const updateButtonLabel = (idx, val) => {
     const btns = [...(content.buttons || [])];
@@ -171,8 +199,10 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
     updateContent("buttons", btns);
   };
   const addButton = () => {
-    if ((content.buttons || []).length >= 3) return;
-    updateContent("buttons", [...(content.buttons || []), { label: `Option ${(content.buttons || []).length + 1}` }]);
+    if ((content.buttons || []).length >= maxButtons) return;
+    const btn = { label: `Option ${(content.buttons || []).length + 1}` };
+    if (web) btn.id = newOptionId("o");
+    updateContent("buttons", [...(content.buttons || []), btn]);
   };
   const removeButton = (idx) => { const b = [...(content.buttons || [])]; b.splice(idx, 1); updateContent("buttons", b); };
   const updateRowLabel = (sIdx, rIdx, val) => {
@@ -183,16 +213,23 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
   // 10 rows in total across all sections.
   const totalRows = (content.sections || []).reduce((n, sec) => n + (sec.rows || []).length, 0);
   const addRow = (sIdx) => {
-    if (totalRows >= 10) return;
+    if (totalRows >= maxRows) return;
     const s = JSON.parse(JSON.stringify(content.sections || []));
-    s[sIdx].rows.push({ label: `Option ${s[sIdx].rows.length + 1}` }); updateContent("sections", s);
+    const row = { label: `Option ${s[sIdx].rows.length + 1}` };
+    if (web) row.id = newOptionId("o");
+    s[sIdx].rows.push(row); updateContent("sections", s);
   };
   const removeRow = (sIdx, rIdx) => {
     const s = JSON.parse(JSON.stringify(content.sections || []));
     s[sIdx].rows.splice(rIdx, 1); updateContent("sections", s);
   };
 
-  const needsBody = !["back_to_menu", "time_delay", "message_shop", "message_booking", "message_event"].includes(type);
+  const needsBody = !["back_to_menu", "time_delay", "message_shop", "message_booking", "message_event",
+    "condition", "set_variable", "random_split", "webhook"].includes(type);
+  const insertVar = (token) => updateContent("body", `${content.body || ""}${token}`);
+  const ImageField = ({ value, onChange: set }) => (
+    <MediaUpload nodeType="message_media" channel="web" urlKey="image" value={value} onChange={(_, v) => set(v)} />
+  );
 
   return (
     <Dialog open={!!node} onOpenChange={onOpenChange}>
@@ -205,7 +242,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
             </span>
             {info.label}
           </DialogTitle>
-          <DialogDescription>{info.description}</DialogDescription>
+          <DialogDescription>{(web && info.webDescription) || info.description}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -216,27 +253,35 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
 
           {needsBody && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Message</Label>
+              <Label className="text-xs text-muted-foreground">
+                {type === "ask_input" || type === "rating" ? "Question" : type === "end" ? "Closing message (optional)" : "Message"}
+              </Label>
               <Textarea rows={3} value={content.body || ""}
                 onChange={e => updateContent("body", e.target.value)}
                 placeholder="Type your message..." />
-              {(type === "message_buttons" || type === "message_list") && !(content.body || "").trim() && (
+              {web && <VariableChips variables={variables} onInsert={insertVar} />}
+              {!web && (type === "message_buttons" || type === "message_list") && !(content.body || "").trim() && (
                 <p className="text-xs text-amber-700">WhatsApp needs a message above the options — until you add one, customers see &quot;Please choose an option:&quot;.</p>
               )}
             </div>
           )}
 
+          {web && WEB_ONLY_TYPES.has(type) && (
+            <WebNodeFields type={type} content={content} updateContent={updateContent}
+              variables={variables} flowId={flowId} ImageField={ImageField} />
+          )}
+
           {type === "message_buttons" && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Buttons (max 3)</Label>
+              <Label className="text-xs text-muted-foreground">Buttons{web ? "" : " (max 3)"}</Label>
               {(content.buttons || []).map((btn, idx) => (
-                <div key={idx} className="flex gap-1.5 items-center">
-                  <Input placeholder={`Button ${idx + 1}`} value={btn.label || ""} maxLength={20}
+                <div key={btn.id || idx} className="flex gap-1.5 items-center">
+                  <Input placeholder={`Button ${idx + 1}`} value={btn.label || ""} maxLength={labelMax}
                     onChange={e => updateButtonLabel(idx, e.target.value)} />
                   <button onClick={() => removeButton(idx)} className="text-red-400 shrink-0"><X size={15} /></button>
                 </div>
               ))}
-              {(content.buttons || []).length < 3 && (
+              {(content.buttons || []).length < maxButtons && (
                 <Button variant="outline" size="sm" className="w-full" onClick={addButton}>
                   <Plus size={13} className="mr-1" /> Add button
                 </Button>
@@ -251,7 +296,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
             <div className="space-y-2">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Button text</Label>
-                <Input placeholder="View Options" value={content.button_text || ""} maxLength={20}
+                <Input placeholder="View Options" value={content.button_text || ""} maxLength={labelMax}
                   onChange={e => updateContent("button_text", e.target.value)} />
               </div>
               {(content.sections || []).map((section, sIdx) => (
@@ -259,13 +304,13 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
                   <Input placeholder="Section title (optional)" value={section.title || ""} maxLength={24}
                     onChange={e => { const s = JSON.parse(JSON.stringify(content.sections)); s[sIdx].title = e.target.value; updateContent("sections", s); }} />
                   {(section.rows || []).map((row, rIdx) => (
-                    <div key={rIdx} className="flex gap-1.5 items-center">
-                      <Input placeholder={`Row ${rIdx + 1}`} value={row.label || ""} maxLength={24}
+                    <div key={row.id || rIdx} className="flex gap-1.5 items-center">
+                      <Input placeholder={`Row ${rIdx + 1}`} value={row.label || ""} maxLength={web ? 40 : 24}
                         onChange={e => updateRowLabel(sIdx, rIdx, e.target.value)} />
                       <button onClick={() => removeRow(sIdx, rIdx)} className="text-red-400 shrink-0"><X size={15} /></button>
                     </div>
                   ))}
-                  {totalRows < 10 && (
+                  {totalRows < maxRows && (
                     <Button variant="outline" size="sm" className="w-full" onClick={() => addRow(sIdx)}>
                       <Plus size={13} className="mr-1" /> Add row
                     </Button>
@@ -273,7 +318,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
                 </div>
               ))}
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Info size={11} /> Max 10 rows in total (WhatsApp limit). Drag from each row's own handle on the canvas to connect it.
+                <Info size={11} /> {web ? "Long lists get a search box on the website." : "Max 10 rows in total (WhatsApp limit)."} Drag from each row&apos;s own handle on the canvas to connect it.
               </p>
             </div>
           )}
@@ -281,14 +326,14 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
           {type === "message_media" && (
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Image</Label>
-              <MediaUpload nodeType="message_media" urlKey="media_url" value={content.media_url || ""} onChange={updateContent} />
+              <MediaUpload channel={channel} nodeType="message_media" urlKey="media_url" value={content.media_url || ""} onChange={updateContent} />
             </div>
           )}
 
           {type === "message_video" && (
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Video</Label>
-              <MediaUpload nodeType="message_video" urlKey="video_url" value={content.video_url || ""} onChange={updateContent} />
+              <MediaUpload channel={channel} nodeType="message_video" urlKey="video_url" value={content.video_url || ""} onChange={updateContent} />
             </div>
           )}
 
@@ -296,7 +341,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Document</Label>
-                <MediaUpload nodeType="message_document" urlKey="document_url" value={content.document_url || ""} onChange={updateContent} />
+                <MediaUpload channel={channel} nodeType="message_document" urlKey="document_url" value={content.document_url || ""} onChange={updateContent} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Filename (shown to user)</Label>
@@ -309,7 +354,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
           {type === "message_audio" && (
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Audio</Label>
-              <MediaUpload nodeType="message_audio" urlKey="audio_url" value={content.audio_url || ""} onChange={updateContent} />
+              <MediaUpload channel={channel} nodeType="message_audio" urlKey="audio_url" value={content.audio_url || ""} onChange={updateContent} />
             </div>
           )}
 
@@ -341,7 +386,28 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
             </div>
           )}
 
-          {type === "time_delay" && (
+          {type === "time_delay" && web && (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Wait duration</Label>
+              <div className="flex gap-2">
+                <Input type="number" min="1" className="flex-1 font-semibold"
+                  max={content.delay_unit === "minutes" ? 10 : 600}
+                  value={content.delay_seconds || 3}
+                  onChange={e => { const max = content.delay_unit === "minutes" ? 10 : 600; updateContent("delay_seconds", Math.max(1, Math.min(parseInt(e.target.value) || 1, max))); }} />
+                <Select value={content.delay_unit === "minutes" ? "minutes" : "seconds"}
+                  onValueChange={v => { updateContent("delay_unit", v); if (v === "minutes" && (content.delay_seconds || 3) > 10) updateContent("delay_seconds", 10); }}>
+                  <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="seconds">Seconds</SelectItem>
+                    <SelectItem value="minutes">Minutes (max 10)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs text-muted-foreground">Up to 10 seconds shows a typing indicator. Longer waits continue while the visitor stays on the page (and after a reload).</p>
+            </div>
+          )}
+
+          {type === "time_delay" && !web && (
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Wait duration</Label>
               <div className="flex gap-2">
@@ -372,6 +438,10 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
               <Input className="font-mono" placeholder="+91 98765 43210" value={content.phone || ""}
                 onChange={e => updateContent("phone", e.target.value)} />
               <p className="text-xs text-muted-foreground">Tapping the button opens the phone dialer with this number pre-filled.</p>
+              {web && (
+                <Input placeholder="Button text (default: Call us)" maxLength={40} value={content.button_text || ""}
+                  onChange={e => updateContent("button_text", e.target.value)} />
+              )}
             </div>
           )}
 
@@ -394,7 +464,13 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
                 </Select>
                 {!content.catalog_id && <p className="text-xs text-amber-600">Select a catalog to link this node to a menu.</p>}
               </div>
-              <p className="text-xs text-muted-foreground">Connect a node after this one — it runs once payment is confirmed.</p>
+              {web ? (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                  On the website, visitors can browse this catalog; placing and paying for an order happens on WhatsApp. The next node runs straight away.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Connect a node after this one — it runs once payment is confirmed.</p>
+              )}
             </div>
           )}
 

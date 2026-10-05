@@ -12,21 +12,25 @@
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
-import { NODE_REGISTRY, CATEGORIES } from "./nodeRegistry";
+import { nodesForChannel, CATEGORIES } from "./nodeRegistry";
 
-export default function AddNodePanel({ onSelect }) {
+export default function AddNodePanel({ onSelect, channel = "whatsapp" }) {
   const [query, setQuery] = useState("");
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // WhatsApp and Website flows have different palettes (the website can do
+    // carousels, forms, branching...; WhatsApp has contact cards).
+    const available = nodesForChannel(channel).map(n =>
+      channel === "web" && n.webDescription ? { ...n, description: n.webDescription } : n);
     const filtered = q
-      ? NODE_REGISTRY.filter(n =>
+      ? available.filter(n =>
           n.label.toLowerCase().includes(q) || n.description.toLowerCase().includes(q))
-      : NODE_REGISTRY;
+      : available;
     return CATEGORIES
       .map(cat => ({ category: cat, nodes: filtered.filter(n => n.category === cat) }))
       .filter(g => g.nodes.length > 0);
-  }, [query]);
+  }, [query, channel]);
 
   return (
     <div

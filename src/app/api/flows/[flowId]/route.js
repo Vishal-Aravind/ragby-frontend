@@ -1,12 +1,14 @@
 // src/app/api/flows/[flowId]/route.js
 import { NextResponse } from "next/server";
 import { getSupabase, requireProjectTab } from "@/lib/supabase-api";
-import { normalizeTriggerKeywords, validateFlowName } from "@/lib/flow-validation";
+import { normalizeTriggerKeywords, validateFlowName, validateWebSettings } from "@/lib/flow-validation";
+
+const FLOW_COLUMNS = "id, name, channel, is_active, trigger_keywords, free_questions, web_settings, revision, created_at";
 
 async function gateForFlow(supabase, userId, flowId, opts) {
   const { data: flow } = await supabase
     .from("flows")
-    .select("project_id")
+    .select("project_id, channel")
     .eq("id", flowId)
     .maybeSingle();
 
@@ -14,7 +16,7 @@ async function gateForFlow(supabase, userId, flowId, opts) {
     return { ok: false, response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
   }
   const gate = await requireProjectTab(userId, flow.project_id, opts);
-  return gate.ok ? { ...gate, projectId: flow.project_id } : gate;
+  return gate.ok ? { ...gate, projectId: flow.project_id, channel: flow.channel } : gate;
 }
 
 export async function PUT(req, { params }) {
@@ -30,9 +32,10 @@ export async function PUT(req, { params }) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  // Activating a flow swaps out the live WhatsApp bot for every customer,
-  // so it needs admin, not merely "some role on the project".
-  const needsAdmin = "is_active" in body;
+  // Activating a flow swaps out the live bot for every customer, and the
+  // website settings decide when it pops open on the merchant's site — both
+  // need admin, not merely "some role on the project".
+  const needsAdmin = "is_active" in body || "web_settings" in body;
   const gate = await gateForFlow(supabase, user.id, flowId, {
     tab: "flows",
     minRole: needsAdmin ? "admin" : undefined,
@@ -50,6 +53,14 @@ export async function PUT(req, { params }) {
     const keywords = normalizeTriggerKeywords(body.trigger_keywords);
     if (keywords.error) return NextResponse.json({ error: keywords.error }, { status: 400 });
     update.trigger_keywords = keywords.value;
+  }
+  if ("web_settings" in body) {
+    if (gate.channel !== "web") {
+      return NextResponse.json({ error: "Only website flows have these settings." }, { status: 400 });
+    }
+    const settings = validateWebSettings(body.web_settings);
+    if (settings.error) return NextResponse.json({ error: settings.error }, { status: 400 });
+    update.web_settings = settings.value;
   }
 
   // Activation goes through a database function so "deactivate the others"
@@ -74,7 +85,7 @@ export async function PUT(req, { params }) {
   if (Object.keys(update).length === 0) {
     const { data: current } = await supabase
       .from("flows")
-      .select("id, name, is_active, trigger_keywords, free_questions, revision, created_at")
+      .select(FLOW_COLUMNS)
       .eq("id", flowId)
       .maybeSingle();
     return NextResponse.json(current || { status: "ok" });
@@ -84,7 +95,7 @@ export async function PUT(req, { params }) {
     .from("flows")
     .update(update)
     .eq("id", flowId)
-    .select("id, name, is_active, trigger_keywords, free_questions, revision, created_at")
+    .select(FLOW_COLUMNS)
     .maybeSingle();
 
   if (error) {
