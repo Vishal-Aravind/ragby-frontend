@@ -34,7 +34,7 @@ const WA_NEXT = new Set(["time_delay", "message_shop"]);
 const WEB_NEXT = new Set([
   "message", "message_media", "message_video", "message_audio", "message_document",
   "message_location", "call_us", "open_url", "message_shop", "message_booking",
-  "message_event", "ask_input", "form", "rating", "set_variable", "time_delay",
+  "message_event", "ask_input", "form", "rating", "time_delay",
 ]);
 
 const LEGACY = { text: "message", buttons: "message_buttons", list: "message_list", handoff: "talk_to_human" };
@@ -73,16 +73,6 @@ export function getSourceHandles(type, content, channel = "whatsapp") {
       (card.buttons || []).filter((b) => !b.url && String(b?.label || "").trim()).map((b) => ({
         id: b.id || optionId(b.label), label: card.title ? `${card.title}: ${b.label}` : b.label,
       }))), true);
-  }
-  if (t === "condition") {
-    const rules = (c.rules || []).filter((r) => r?.id).map((r, i) => ({ id: String(r.id), label: r.name || `Rule ${i + 1}` }));
-    return [...rules, { id: "else", label: "Else" }];
-  }
-  if (t === "webhook") return [{ id: "success", label: "Success" }, { id: "failure", label: "Failure" }];
-  if (t === "random_split") {
-    return (c.branches || []).filter((b) => b?.id).map((b, i) => ({
-      id: String(b.id), label: `${b.label || `Branch ${i + 1}`} (${Number(b.weight) || 0}%)`,
-    }));
   }
   return WEB_NEXT.has(t) ? [{ id: "next", label: "" }] : [];
 }

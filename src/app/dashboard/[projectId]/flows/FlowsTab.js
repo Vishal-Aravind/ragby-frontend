@@ -24,7 +24,7 @@ import AddNodePanel from "./AddNodePanel";
 import NodeConfigDialog from "./NodeConfigDialog";
 import FlowPreview from "./FlowPreview";
 import WebTriggerSettings from "./WebTriggerSettings";
-import { nodeInfo, emptyContentFor, canonicalType, optionId, newOptionId } from "./nodeRegistry";
+import { nodeInfo, emptyContentFor, canonicalType, optionId, newOptionId, REMOVED_NODE_TYPES } from "./nodeRegistry";
 import { getSourceHandles, hasSingleNext } from "@/lib/flow-handles";
 import { flowWarnings, flowVariables } from "./flowChecks";
 
@@ -64,18 +64,13 @@ function FlowNode({ id, data, selected }) {
   const info = nodeInfo(type);
   const Icon = info.icon;
 
-  // Only a text body is a preview. The Webhook node's `body` is its list of
-  // JSON fields ({key, value} rows) — rendering that crashed the page.
+  // Only a text body is a preview (never render a non-string as text).
   const bodyText = typeof content.body === "string" ? content.body : "";
   const preview = bodyText || (
     type === "time_delay" ? `Wait ${content.delay_seconds || 60} ${content.delay_unit || "seconds"}`
     : type === "message_shop" ? (content.catalog_id ? "Catalog linked" : "No catalog selected")
     : type === "message_booking" ? "Opens booking calendar"
     : type === "message_event" ? (content.event_id ? "Event linked" : "No event selected")
-    : type === "condition" ? `${(content.rules || []).length} rule(s), then Else`
-    : type === "set_variable" ? (content.assignments || []).filter(a => a.var).map(a => a.var).join(", ") || "No variables set"
-    : type === "webhook" ? (content.url ? `${content.method || "POST"} ${content.url}` : "No URL yet")
-    : type === "random_split" ? "Random path"
     : type === "form" ? (content.title || `${(content.fields || []).length} field(s)`)
     : type === "carousel" ? `${(content.cards || []).length} card(s)`
     : info.description
@@ -433,9 +428,16 @@ export default function FlowsTab({ projectId }) {
     setTimeout(() => { isLoadingFlow.current = false; }, 500);
   };
 
-  const buildGraph = (nodes, edges, channel = "whatsapp") => {
+  const buildGraph = (allNodes, allEdges, channel = "whatsapp") => {
     setRfNodes([]);
     setRfEdges([]);
+    // Condition / set variable / random split / webhook were removed from
+    // the product. Drop any left in an old test flow (and their lines) so
+    // the flow saves cleanly; the next save removes them for good.
+    const removed = new Set(allNodes.filter(n => REMOVED_NODE_TYPES.has(n.type)).map(n => n.id));
+    const nodes = allNodes.filter(n => !removed.has(n.id));
+    const edges = allEdges.filter(e => !removed.has(e.from_node_id) && !removed.has(e.to_node_id));
+    if (removed.size) setTimeout(() => markDirty(), 600);
     const rfN = nodes.map((n, i) => ({
       id: n.id, type: "flowNode",
       position: n.position || { x: 120 + (i % 4) * 320, y: Math.floor(i / 4) * 180 + 60 },
@@ -838,7 +840,7 @@ export default function FlowsTab({ projectId }) {
             </div>
             <p className="text-xs text-muted-foreground">
               {listChannel === "web"
-                ? "Website flows run inside your chat widget. They can use quick replies, carousels, forms, conditions, webhooks and auto-open triggers. One website flow can be active at a time."
+                ? "Website flows run inside your chat widget. They can use quick replies, carousels, forms, ratings and auto-open triggers. One website flow can be active at a time."
                 : "WhatsApp flows run on your WhatsApp number. One WhatsApp flow can be active at a time."}
             </p>
             {loading && <p className="text-sm text-muted-foreground">Loading...</p>}

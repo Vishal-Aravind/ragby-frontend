@@ -40,8 +40,7 @@ export const WEB_NODE_TYPES = new Set([
   "message_video", "message_document", "message_audio", "message_location",
   "call_us", "ask_a_question", "back_to_menu", "talk_to_human", "time_delay",
   "message_shop", "message_booking", "message_event",
-  "quick_replies", "carousel", "ask_input", "form", "rating", "set_variable",
-  "condition", "webhook", "random_split", "open_url", "end",
+  "quick_replies", "carousel", "ask_input", "form", "rating", "open_url", "end",
 ]);
 
 // Union, for the single-node routes that don't know the channel; the
@@ -87,7 +86,7 @@ export function normalizeTriggerKeywords(input) {
  * Returns an error string, or null.
  */
 const VAR_RE = /^[a-z][a-z0-9_]{0,31}$/;
-const SYSTEM_VARS = new Set(["page_url", "page_path", "page_title", "webhook_status"]);
+const SYSTEM_VARS = new Set(["page_url", "page_path", "page_title"]);
 const len = (v) => (Array.isArray(v) ? v.length : 0);
 
 // Per-node limits for website flows. Returns an error string or null.
@@ -116,28 +115,6 @@ function validateWebNode(type, c) {
       if (names.has(f.name)) return `Two form fields both save to "${f.name}".`;
       names.add(f.name);
     }
-  }
-  if (type === "set_variable") {
-    if (len(c.assignments) > 20) return "At most 20 assignments per node.";
-    if ((c.assignments || []).some((a) => !varOk(a?.var))) return "Set variable: each row needs a valid variable name.";
-  }
-  if (type === "condition") {
-    if (len(c.rules) > 20) return "A condition can have at most 20 rules.";
-    if ((c.rules || []).some((r) => len(r?.rows) > 10)) return "A rule can have at most 10 checks.";
-  }
-  if (type === "random_split") {
-    if (len(c.branches) < 2 || len(c.branches) > 5) return "A random split needs 2 to 5 branches.";
-    const total = (c.branches || []).reduce((n, b) => n + (Number(b?.weight) || 0), 0);
-    if (total !== 100) return "Random split percentages must add up to 100.";
-  }
-  if (type === "webhook") {
-    const url = String(c.url || "").trim();
-    if (url && !url.toLowerCase().startsWith("https://")) return "The webhook URL must start with https://";
-    const host = url.slice(8).split("/")[0];
-    if (host.includes("{{")) return "Variables can only be used in the path or query of the webhook URL.";
-    if (len(c.headers) > 10) return "A webhook can have at most 10 headers.";
-    if (len(c.mappings) > 20) return "A webhook can map at most 20 values.";
-    if ((c.mappings || []).some((m) => m?.var && !varOk(m.var))) return "Webhook mapping: invalid variable name.";
   }
   return null;
 }

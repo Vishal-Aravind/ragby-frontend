@@ -4,18 +4,17 @@
 // it does, which category it sits under in the Add Node panel, its default
 // content, its color, and which channels (WhatsApp / Website) it exists on.
 // WhatsApp and Website flows are separate flows with separate palettes:
-// the website can do more (unlimited options, carousels, forms, branching,
-// webhooks) because it isn't bound by WhatsApp's message limits.
+// the website can do more (unlimited options, carousels, forms, ratings)
+// because it isn't bound by WhatsApp's message limits.
 import {
   MessageSquare, SquareMousePointer, ListChecks, Image, Video, FileText,
   Music, MapPin, User, PhoneCall, ShoppingCart, CalendarDays, CalendarPlus,
   Clock, CornerUpLeft, Sparkles, Headset, MousePointerClick, GalleryHorizontal,
-  TextCursorInput, ClipboardList, Star, Variable, GitBranch, Webhook, Shuffle,
-  ExternalLink, CircleStop,
+  TextCursorInput, ClipboardList, Star, ExternalLink, CircleStop,
 } from "lucide-react";
 import { optionId as sharedOptionId, newOptionId as sharedNewOptionId } from "@/lib/flow-handles";
 
-export const CATEGORIES = ["Messages", "Interactive", "Collect", "Actions", "Logic", "Integrations", "AI & Handoff"];
+export const CATEGORIES = ["Messages", "Interactive", "Collect", "Actions", "Logic", "AI & Handoff"];
 
 // type -> canonical type. Safe because backend/flows.py's send_node()
 // dispatches these pairs identically (`t in ("text","message")`, etc.) —
@@ -179,24 +178,6 @@ export const NODE_REGISTRY = [
     webEmptyContent: { delay_seconds: 3, delay_unit: "seconds" },
   },
   {
-    type: "condition", advanced: true, category: "Logic", label: "Condition", icon: GitBranch, channels: WEB,
-    description: "Branch on an answer: e.g. budget greater than 50, city is Chennai. Anything else goes to Else.",
-    bg: "#f5f3ff", border: "#a78bfa", text: "#4c1d95", badge: "#ede9fe",
-    emptyContent: { rules: [{ name: "", match: "all", rows: [{ var: "", op: "equals", value: "" }] }] },
-  },
-  {
-    type: "set_variable", advanced: true, category: "Logic", label: "Set variable", icon: Variable, channels: WEB,
-    description: "Store a value (text or {{other variables}}) to use later in the flow.",
-    bg: "#f8fafc", border: "#cbd5e1", text: "#1e293b", badge: "#f1f5f9",
-    emptyContent: { assignments: [{ var: "", value: "" }] },
-  },
-  {
-    type: "random_split", advanced: true, category: "Logic", label: "Random split", icon: Shuffle, channels: WEB,
-    description: "Send visitors down different paths at random (A/B test two welcome messages).",
-    bg: "#fff7ed", border: "#fb923c", text: "#7c2d12", badge: "#ffedd5",
-    emptyContent: { branches: [{ label: "A", weight: 50 }, { label: "B", weight: 50 }] },
-  },
-  {
     type: "back_to_menu", category: "Logic", label: "Back to Menu", icon: CornerUpLeft, channels: BOTH,
     description: "Restart this flow from its start node.",
     bg: "#f0fdf4", border: "#86efac", text: "#166534", badge: "#dcfce7",
@@ -207,12 +188,6 @@ export const NODE_REGISTRY = [
     description: "Finish the flow, optionally with a closing message.",
     bg: "#f8fafc", border: "#94a3b8", text: "#334155", badge: "#f1f5f9",
     emptyContent: { body: "" },
-  },
-  {
-    type: "webhook", advanced: true, category: "Integrations", label: "Webhook", icon: Webhook, channels: WEB,
-    description: "Send answers to your own system (CRM, sheet, API) and use its reply. Has Success and Failure paths.",
-    bg: "#f0fdfa", border: "#5eead4", text: "#134e4a", badge: "#ccfbf1",
-    emptyContent: { method: "POST", url: "", headers: [], body: [], include_all_vars: false, mappings: [], waiting_text: "" },
   },
   {
     type: "ask_a_question", category: "AI & Handoff", label: "Ask AI", icon: Sparkles, channels: BOTH,
@@ -243,16 +218,14 @@ export function nodeInfo(type) {
   return NODE_BY_TYPE[canonicalType(type)] || RENDER_ONLY_TYPES[type] || NODE_BY_TYPE.message;
 }
 
-// Advanced nodes (condition, set variable, random split, webhook) are kept
-// out of the Add Node panel for now: most merchants found them confusing.
-// The engine still runs them, so a flow that already has one keeps working
-// and still shows and edits it; set SHOW_ADVANCED_NODES to offer them again.
-export const SHOW_ADVANCED_NODES = false;
-
 export function nodesForChannel(channel) {
-  return NODE_REGISTRY.filter(n =>
-    n.channels.includes(channel || "whatsapp") && (SHOW_ADVANCED_NODES || !n.advanced));
+  return NODE_REGISTRY.filter(n => n.channels.includes(channel || "whatsapp"));
 }
+
+// Removed from the product (condition, set variable, random split,
+// webhook). An old test flow may still contain one; the editor drops them
+// on load so the flow can be saved again.
+export const REMOVED_NODE_TYPES = new Set(["condition", "set_variable", "random_split", "webhook"]);
 
 // Website options get stable ids so a renamed chip keeps its connection.
 // WhatsApp content is left exactly as before (its ids come from labels).
@@ -263,8 +236,6 @@ function withIds(type, content) {
   if (type === "quick_replies") tag(c.options, "o");
   if (type === "message_list") (c.sections || []).forEach(s => tag(s.rows, "o"));
   if (type === "carousel") (c.cards || []).forEach(card => tag(card.buttons, "c"));
-  if (type === "condition") tag(c.rules, "r");
-  if (type === "random_split") tag(c.branches, "b");
   return c;
 }
 

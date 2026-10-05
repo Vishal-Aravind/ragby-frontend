@@ -3,10 +3,8 @@
 // WebNodeFields.js
 //
 // Settings for the node types that exist only in Website flows (quick
-// replies, carousel, ask, form, rating, set variable, condition, webhook,
-// random split, open link). Kept out of NodeConfigDialog so that file stays
+// replies, carousel, ask, form, rating, open link). Kept out of NodeConfigDialog so that file stays
 // readable; the shared node types are still configured there.
-import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -15,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { X, Plus, Info, ArrowUp, ArrowDown, Loader2, Eye, EyeOff } from "lucide-react";
+import { X, Plus, Info, ArrowUp, ArrowDown } from "lucide-react";
 import { newOptionId } from "./nodeRegistry";
 
 const VAR_RE = /^[a-z][a-z0-9_]{0,31}$/;
@@ -77,13 +75,7 @@ function OptionList({ items, onChange, max, addLabel, prefix = "o", maxLength = 
   );
 }
 
-const OPS = [
-  ["equals", "is"], ["not_equals", "is not"], ["contains", "contains"], ["not_contains", "doesn't contain"],
-  ["starts_with", "starts with"], ["gt", ">"], ["gte", ">="], ["lt", "<"], ["lte", "<="],
-  ["is_empty", "is empty"], ["not_empty", "has a value"],
-];
-
-export default function WebNodeFields({ type, content, updateContent, variables, flowId, ImageField }) {
+export default function WebNodeFields({ type, content, updateContent, ImageField }) {
   const c = content || {};
 
   if (type === "quick_replies") {
@@ -246,111 +238,6 @@ export default function WebNodeFields({ type, content, updateContent, variables,
     );
   }
 
-  if (type === "set_variable") {
-    const rows = c.assignments || [];
-    const upd = (i, patch) => { const n = clone(rows); n[i] = { ...n[i], ...patch }; updateContent("assignments", n); };
-    return (
-      <div className="space-y-2">
-        {rows.map((a, i) => (
-          <div key={i} className="flex gap-1.5 items-start">
-            <VarInput value={a.var} onChange={v => upd(i, { var: v })} />
-            <span className="pt-2 text-sm">=</span>
-            <Input className="flex-1" placeholder="Value or {{other_variable}}" value={a.value || ""} onChange={e => upd(i, { value: e.target.value })} />
-            <button type="button" onClick={() => { const n = clone(rows); n.splice(i, 1); updateContent("assignments", n); }} className="text-red-400 pt-2"><X size={14} /></button>
-          </div>
-        ))}
-        {rows.length < 20 && (
-          <Button variant="outline" size="sm" className="w-full" onClick={() => updateContent("assignments", [...rows, { var: "", value: "" }])}>
-            <Plus size={13} className="mr-1" /> Add
-          </Button>
-        )}
-      </div>
-    );
-  }
-
-  if (type === "condition") {
-    const rules = c.rules || [];
-    const setRules = (n) => updateContent("rules", n);
-    const updRule = (i, patch) => { const n = clone(rules); n[i] = { ...n[i], ...patch }; setRules(n); };
-    const move = (i, dir) => { const n = clone(rules); const j = i + dir; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; setRules(n); };
-    return (
-      <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">Rules are checked top to bottom; the first one that matches decides the path. If none match, the <b>Else</b> path is used.</p>
-        {rules.map((r, i) => (
-          <div key={r.id || i} className="border rounded-lg p-2.5 space-y-2 bg-gray-50/50">
-            <div className="flex items-center gap-1.5">
-              <Input className="flex-1" placeholder={`Rule ${i + 1} name (optional)`} maxLength={40} value={r.name || ""} onChange={e => updRule(i, { name: e.target.value })} />
-              <Select value={r.match || "all"} onValueChange={v => updRule(i, { match: v })}>
-                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All match</SelectItem>
-                  <SelectItem value="any">Any match</SelectItem>
-                </SelectContent>
-              </Select>
-              <button type="button" onClick={() => move(i, -1)} className="text-gray-400"><ArrowUp size={14} /></button>
-              <button type="button" onClick={() => move(i, 1)} className="text-gray-400"><ArrowDown size={14} /></button>
-              <button type="button" onClick={() => { const n = clone(rules); n.splice(i, 1); setRules(n); }} className="text-red-400"><X size={14} /></button>
-            </div>
-            {(r.rows || []).map((row, ri) => {
-              const updRow = (patch) => { const rows = clone(r.rows); rows[ri] = { ...rows[ri], ...patch }; updRule(i, { rows }); };
-              const noValue = row.op === "is_empty" || row.op === "not_empty";
-              return (
-                <div key={ri} className="flex gap-1 items-center">
-                  <Select value={row.var || ""} onValueChange={v => updRow({ var: v })}>
-                    <SelectTrigger className="w-32 font-mono text-xs"><SelectValue placeholder="variable" /></SelectTrigger>
-                    <SelectContent>
-                      {(variables || []).map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={row.op || "equals"} onValueChange={v => updRow({ op: v })}>
-                    <SelectTrigger className="w-32 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{OPS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}</SelectContent>
-                  </Select>
-                  {!noValue && <Input className="flex-1 text-xs" placeholder="value" value={row.value || ""} onChange={e => updRow({ value: e.target.value })} />}
-                  <button type="button" onClick={() => { const rows = clone(r.rows); rows.splice(ri, 1); updRule(i, { rows }); }} className="text-red-400"><X size={13} /></button>
-                </div>
-              );
-            })}
-            {(r.rows || []).length < 10 && (
-              <button type="button" className="text-xs text-blue-600" onClick={() => updRule(i, { rows: [...(r.rows || []), { var: "", op: "equals", value: "" }] })}>+ Add check</button>
-            )}
-          </div>
-        ))}
-        {rules.length < 20 && (
-          <Button variant="outline" size="sm" className="w-full"
-            onClick={() => setRules([...rules, { id: newOptionId("r"), name: "", match: "all", rows: [{ var: "", op: "equals", value: "" }] }])}>
-            <Plus size={13} className="mr-1" /> Add rule
-          </Button>
-        )}
-        {!(variables || []).length && <p className="text-xs text-amber-700">No variables yet - add an Ask, Form, Rating or Set variable node first.</p>}
-      </div>
-    );
-  }
-
-  if (type === "random_split") {
-    const branches = c.branches || [];
-    const total = branches.reduce((n, b) => n + (Number(b.weight) || 0), 0);
-    const upd = (i, patch) => { const n = clone(branches); n[i] = { ...n[i], ...patch }; updateContent("branches", n); };
-    return (
-      <div className="space-y-2">
-        {branches.map((b, i) => (
-          <div key={b.id || i} className="flex gap-1.5 items-center">
-            <Input className="flex-1" placeholder={`Branch ${i + 1}`} maxLength={30} value={b.label || ""} onChange={e => upd(i, { label: e.target.value })} />
-            <Input className="w-20" type="number" min={0} max={100} value={b.weight ?? 0} onChange={e => upd(i, { weight: Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0)) })} />
-            <span className="text-sm">%</span>
-            {branches.length > 2 && <button type="button" onClick={() => { const n = clone(branches); n.splice(i, 1); updateContent("branches", n); }} className="text-red-400"><X size={14} /></button>}
-          </div>
-        ))}
-        {branches.length < 5 && (
-          <Button variant="outline" size="sm" className="w-full" onClick={() => updateContent("branches", [...branches, { id: newOptionId("b"), label: String.fromCharCode(65 + branches.length), weight: 0 }])}>
-            <Plus size={13} className="mr-1" /> Add branch
-          </Button>
-        )}
-        <p className={`text-xs ${total === 100 ? "text-muted-foreground" : "text-red-600"}`}>Total: {total}% {total !== 100 && "- must add up to 100%"}</p>
-      </div>
-    );
-  }
-
   if (type === "open_url") {
     return (
       <div className="space-y-2">
@@ -361,109 +248,6 @@ export default function WebNodeFields({ type, content, updateContent, variables,
     );
   }
 
-  if (type === "webhook") return <WebhookFields c={c} updateContent={updateContent} variables={variables} flowId={flowId} />;
   return null;
 }
 
-function KeyValueRows({ rows, onChange, keyPlaceholder, valuePlaceholder, secret, max }) {
-  const [shown, setShown] = useState({});
-  const upd = (i, patch) => { const n = clone(rows); n[i] = { ...n[i], ...patch }; onChange(n); };
-  return (
-    <div className="space-y-1.5">
-      {(rows || []).map((r, i) => (
-        <div key={i} className="flex gap-1 items-center">
-          <Input className="w-36 font-mono text-xs" placeholder={keyPlaceholder} value={r.key || ""} onChange={e => upd(i, { key: e.target.value })} />
-          <Input className="flex-1 font-mono text-xs" placeholder={valuePlaceholder} value={r.value || ""}
-            type={secret && !shown[i] ? "password" : "text"} autoComplete="off"
-            onChange={e => upd(i, { value: e.target.value })} />
-          {secret && (
-            <button type="button" className="text-gray-400" onClick={() => setShown(s => ({ ...s, [i]: !s[i] }))}>
-              {shown[i] ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
-          )}
-          <button type="button" onClick={() => { const n = clone(rows); n.splice(i, 1); onChange(n); }} className="text-red-400"><X size={14} /></button>
-        </div>
-      ))}
-      {(rows || []).length < max && (
-        <button type="button" className="text-xs text-blue-600" onClick={() => onChange([...(rows || []), { key: "", value: "" }])}>+ Add</button>
-      )}
-    </div>
-  );
-}
-
-function WebhookFields({ c, updateContent, variables, flowId }) {
-  const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState(null);
-
-  const runTest = async () => {
-    setTesting(true); setResult(null);
-    const sample = Object.fromEntries((variables || []).map(v => [v, `sample_${v}`]));
-    try {
-      const res = await fetch(`/api/flows/${flowId}/test-webhook`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: c, variables: sample }),
-      });
-      const d = await res.json().catch(() => ({}));
-      setResult(res.ok ? d : { ok: false, reason: d.detail || d.error || "Test failed." });
-    } catch {
-      setResult({ ok: false, reason: "Could not reach the server." });
-    }
-    setTesting(false);
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex gap-2">
-        <Select value={c.method || "POST"} onValueChange={v => updateContent("method", v)}>
-          <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
-          <SelectContent>{["GET", "POST", "PUT", "PATCH"].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-        </Select>
-        <Input className="flex-1 font-mono text-xs" placeholder="https://your-system.com/hook" value={c.url || ""} onChange={e => updateContent("url", e.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Headers (values are hidden; e.g. Authorization)</Label>
-        <KeyValueRows rows={c.headers} onChange={v => updateContent("headers", v)} keyPlaceholder="Header" valuePlaceholder="Value" secret max={10} />
-      </div>
-      {(c.method || "POST") !== "GET" && (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">JSON body - values can use {"{{variables}}"}</Label>
-          <KeyValueRows rows={c.body} onChange={v => updateContent("body", v)} keyPlaceholder="key" valuePlaceholder="{{email}}" max={30} />
-          <label className="flex items-center gap-2 text-xs">
-            <Switch checked={!!c.include_all_vars} onCheckedChange={v => updateContent("include_all_vars", v)} /> Also send every variable collected so far
-          </label>
-        </div>
-      )}
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">Save from the response (JSON path → variable)</Label>
-        {(c.mappings || []).map((m, i) => (
-          <div key={i} className="flex gap-1 items-start">
-            <Input className="flex-1 font-mono text-xs" placeholder="data.customer.tier" value={m.path || ""}
-              onChange={e => { const n = clone(c.mappings); n[i] = { ...n[i], path: e.target.value }; updateContent("mappings", n); }} />
-            <span className="pt-2 text-xs">→</span>
-            <VarInput value={m.var} onChange={v => { const n = clone(c.mappings); n[i] = { ...n[i], var: v }; updateContent("mappings", n); }} />
-            <button type="button" className="text-red-400 pt-2" onClick={() => { const n = clone(c.mappings); n.splice(i, 1); updateContent("mappings", n); }}><X size={14} /></button>
-          </div>
-        ))}
-        {(c.mappings || []).length < 20 && (
-          <button type="button" className="text-xs text-blue-600" onClick={() => updateContent("mappings", [...(c.mappings || []), { path: "", var: "" }])}>+ Add</button>
-        )}
-      </div>
-      <Input placeholder={'Message while waiting (optional), e.g. "One moment..."'} maxLength={200} value={c.waiting_text || ""} onChange={e => updateContent("waiting_text", e.target.value)} />
-      <div className="space-y-1.5">
-        <Button type="button" variant="outline" size="sm" onClick={runTest} disabled={testing || !c.url}>
-          {testing ? <Loader2 size={13} className="animate-spin mr-1" /> : null} Test request
-        </Button>
-        {result && (
-          <div className={`text-xs rounded-md border px-2 py-1.5 ${result.ok ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-700"}`}>
-            <div>{result.ok ? `Success (${result.status})` : result.reason || `Failed (${result.status ?? "no response"})`}</div>
-            {result.assign && Object.keys(result.assign).length > 0 && (
-              <div className="mt-1 font-mono">{Object.entries(result.assign).map(([k, v]) => `${k} = ${String(v)}`).join(", ")}</div>
-            )}
-            {result.preview && <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[10px]">{result.preview}</pre>}
-          </div>
-        )}
-        <p className="text-xs text-muted-foreground flex items-start gap-1"><Info size={11} className="mt-0.5 shrink-0" /> Connect both paths on the canvas: <b>Success</b> (2xx reply) and <b>Failure</b> (error, timeout). Test sends sample values.</p>
-      </div>
-    </div>
-  );
-}

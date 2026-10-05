@@ -2,7 +2,7 @@
 //
 // The editor's "Test" panel: runs the website flow through the real engine
 // (backend /web-flows/preview) without saving anything — no chats, leads or
-// analytics, AI answers stubbed, webhooks simulated unless asked for real.
+// analytics, AI answers stubbed.
 import { NextResponse } from "next/server";
 import { getSupabase, getToken, requireProjectTab } from "@/lib/supabase-api";
 import { proxyToBackend } from "@/lib/backend-proxy";
@@ -32,7 +32,6 @@ export async function POST(req, { params }) {
       token: typeof body.token === "string" ? body.token : null,
       action: body.action && typeof body.action === "object" ? body.action : null,
       nodeId: typeof body.nodeId === "string" ? body.nodeId : null,
-      realWebhooks: body.realWebhooks === true,
     },
   });
 }

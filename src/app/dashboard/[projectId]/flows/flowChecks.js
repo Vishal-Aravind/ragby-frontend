@@ -6,7 +6,7 @@
 import { getSourceHandles } from "@/lib/flow-handles";
 import { canonicalType, nodeInfo } from "./nodeRegistry";
 
-const SYSTEM_VARS = ["page_url", "page_path", "page_title", "webhook_status"];
+const SYSTEM_VARS = ["page_url", "page_path", "page_title"];
 const INPUT_TYPES = new Set(["message_buttons", "quick_replies", "message_list", "carousel", "ask_input", "form", "rating"]);
 const TEMPLATE_RE = /\{\{\s*([a-z][a-z0-9_]{0,31})\s*(?:\|[^{}]*)?\}\}/g;
 
@@ -18,17 +18,13 @@ export function flowVariables(nodes) {
     const c = n.data?.content || {};
     if (["ask_input", "rating", "quick_replies", "message_buttons", "message_list"].includes(t) && c.var) found.add(c.var);
     if (t === "form") (c.fields || []).forEach(f => f?.name && found.add(f.name));
-    if (t === "set_variable") (c.assignments || []).forEach(a => a?.var && found.add(a.var));
-    if (t === "webhook") (c.mappings || []).forEach(m => m?.var && found.add(m.var));
   }
   return [...[...found].sort(), ...SYSTEM_VARS];
 }
 
 function textsOf(c) {
-  const out = [c.body, c.title, c.waiting_text, c.url];
-  (c.assignments || []).forEach(a => out.push(a?.value));
+  const out = [c.body, c.title, c.url];
   (c.cards || []).forEach(card => out.push(card?.title, card?.text));
-  (c.body && Array.isArray(c.body) ? c.body : []).forEach(f => out.push(f?.value));
   return out.filter(v => typeof v === "string");
 }
 
@@ -65,18 +61,10 @@ export function flowWarnings(nodes, edges, channel) {
     if (start && !reach.has(n.id) && t !== "back_to_menu") {
       warnings.push({ nodeId: n.id, message: `${label}: can't be reached from the start node.` });
     }
-    if (t === "condition" && !used.has("else")) warnings.push({ nodeId: n.id, message: "Condition: connect the Else path, or visitors who match no rule are stuck." });
-    if (t === "webhook" && !used.has("failure")) warnings.push({ nodeId: n.id, message: "Webhook: connect the Failure path - otherwise a timeout ends the chat with an apology." });
-    if (t === "webhook" && !used.has("success")) warnings.push({ nodeId: n.id, message: "Webhook: connect the Success path." });
-    if (t === "webhook" && !c.url) warnings.push({ nodeId: n.id, message: "Webhook: no URL set." });
     if (INPUT_TYPES.has(t) && ["message_buttons", "quick_replies", "message_list", "carousel"].includes(t)) {
       const handles = getSourceHandles(t, c, "web");
       const loose = handles.filter(h => !used.has(h.id));
       if (handles.length && loose.length === handles.length) warnings.push({ nodeId: n.id, message: `${label}: none of its options is connected yet.` });
-    }
-    if (t === "random_split") {
-      const total = (c.branches || []).reduce((s, b) => s + (Number(b.weight) || 0), 0);
-      if (total !== 100) warnings.push({ nodeId: n.id, message: "Random split: percentages must add up to 100." });
     }
     if (t === "form" && c.save_lead && !(c.fields || []).some(f => ["email", "phone"].includes(f?.name))) {
       warnings.push({ nodeId: n.id, message: "Form: \"Save to Leads\" needs a field saved as email or phone." });

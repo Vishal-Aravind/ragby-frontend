@@ -32,8 +32,7 @@ const WEB_MEDIA_CONFIG = {
   message_document: { kind: "document", folder: "web-document", accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt", label: "Document", maxMB: 16, exts: "PDF, Word, Excel, PPT, CSV" },
   message_audio:    { kind: "audio",    folder: "web-audio",    accept: "audio/mpeg,audio/ogg,audio/wav,audio/mp4,.m4a", label: "Audio", maxMB: 16, exts: "MP3, OGG, WAV, M4A" },
 };
-const WEB_ONLY_TYPES = new Set(["quick_replies", "carousel", "ask_input", "form", "rating", "set_variable",
-  "condition", "webhook", "random_split", "open_url"]);
+const WEB_ONLY_TYPES = new Set(["quick_replies", "carousel", "ask_input", "form", "rating", "open_url"]);
 
 const MEDIA_CONFIG = {
   // Only formats WhatsApp itself accepts — anything else uploads fine and
@@ -224,8 +223,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
     s[sIdx].rows.splice(rIdx, 1); updateContent("sections", s);
   };
 
-  const needsBody = !["back_to_menu", "time_delay", "message_shop", "message_booking", "message_event",
-    "condition", "set_variable", "random_split", "webhook"].includes(type);
+  const needsBody = !["back_to_menu", "time_delay", "message_shop", "message_booking", "message_event"].includes(type);
   const insertVar = (token) => updateContent("body", `${content.body || ""}${token}`);
   const ImageField = ({ value, onChange: set }) => (
     <MediaUpload nodeType="message_media" channel="web" urlKey="image" value={value} onChange={(_, v) => set(v)} />

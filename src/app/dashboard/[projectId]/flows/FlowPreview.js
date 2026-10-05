@@ -4,13 +4,11 @@
 //
 // "Test" panel for website flows: runs the flow through the real engine
 // (backend web_flows, via /api/flows/[id]/preview) with nothing saved — no
-// chats, no leads, no analytics. AI answers are stubbed and webhooks are
-// simulated unless "Run webhooks for real" is ticked. The canvas highlights
-// the node the test conversation is on.
+// chats, no leads, no analytics. AI answers are stubbed. The canvas
+// highlights the node the test conversation is on.
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { X, RotateCcw, Loader2, Send } from "lucide-react";
 
 const isSafe = (url, schemes = ["http", "https"]) =>
@@ -22,7 +20,6 @@ export default function FlowPreview({ flowId, onClose, onNode, saveFirst }) {
   const [token, setToken] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [realWebhooks, setRealWebhooks] = useState(false);
   const [text, setText] = useState("");
   const [formValues, setFormValues] = useState({});
   const endRef = useRef(null);
@@ -32,7 +29,7 @@ export default function FlowPreview({ flowId, onClose, onNode, saveFirst }) {
     try {
       const res = await fetch(`/api/flows/${flowId}/preview`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: action ? token : null, action, nodeId, realWebhooks }),
+        body: JSON.stringify({ token: action ? token : null, action, nodeId }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) { setError(d.detail || d.error || "Preview failed."); setBusy(false); return; }
@@ -83,9 +80,6 @@ export default function FlowPreview({ flowId, onClose, onNode, saveFirst }) {
           <Button variant="ghost" size="sm" onClick={onClose} title="Close"><X size={14} /></Button>
         </div>
       </div>
-      <label className="flex items-center gap-2 text-xs px-3 py-1.5 border-b text-muted-foreground">
-        <Switch checked={realWebhooks} onCheckedChange={setRealWebhooks} /> Run webhooks for real
-      </label>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50">
         {items.map((it, i) => <Bubble key={i} who={it.who} m={it.m} />)}
