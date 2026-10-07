@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2, ArrowRightLeft, Globe } from "lucide-react";
+import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2, ArrowRightLeft, Globe, IdCard } from "lucide-react";
+import ContactDetails from "./ContactDetails";
 
 export default function ConversationsTab({ projectId }) {
   const [chats, setChats]           = useState([]);
@@ -27,6 +28,8 @@ export default function ConversationsTab({ projectId }) {
   const [assigning, setAssigning] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  // Right-hand panel: the contact and the answers the flow collected.
+  const [showDetails, setShowDetails] = useState(false);
   const [notes, setNotes]         = useState([]);
   const [history, setHistory]     = useState([]);
   const [notesLoading, setNotesLoading] = useState(false);
@@ -386,6 +389,7 @@ export default function ConversationsTab({ projectId }) {
 
       {/* ── Right: thread ── */}
       {selected ? (
+        <>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
 
           {/* Chat header */}
@@ -430,6 +434,16 @@ export default function ConversationsTab({ projectId }) {
                 border: showNotes ? "1px solid #c7d2fe" : "1px solid #e2e8f0",
               }}>
               <StickyNote size={12} /> {showNotes ? "Back to chat" : "Notes"}
+            </button>
+            <button onClick={() => setShowDetails(v => !v)}
+              style={{
+                fontSize: 12, padding: "5px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 600,
+                display: "flex", alignItems: "center", gap: 4,
+                background: showDetails ? "#eef2ff" : "white",
+                color: showDetails ? "#4338ca" : "#64748b",
+                border: showDetails ? "1px solid #c7d2fe" : "1px solid #e2e8f0",
+              }}>
+              <IdCard size={12} /> Details
             </button>
             {isHandoff ? (
               <button onClick={handBackToBot}
@@ -622,6 +636,8 @@ export default function ConversationsTab({ projectId }) {
           </>
           )}
         </div>
+        {showDetails && <ContactDetails key={selected.id} chatId={selected.id} onClose={() => setShowDetails(false)} />}
+        </>
       ) : (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
           <div style={{ textAlign: "center" }}>
