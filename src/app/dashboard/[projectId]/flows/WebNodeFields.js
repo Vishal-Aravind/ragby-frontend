@@ -75,7 +75,7 @@ function OptionList({ items, onChange, max, addLabel, prefix = "o", maxLength = 
   );
 }
 
-export default function WebNodeFields({ type, content, updateContent, ImageField }) {
+export default function WebNodeFields({ type, content, updateContent, ImageField, channel = "web" }) {
   const c = content || {};
 
   if (type === "quick_replies") {
@@ -148,7 +148,9 @@ export default function WebNodeFields({ type, content, updateContent, ImageField
             <Select value={t} onValueChange={v => updateContent("input_type", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {["text", "email", "phone", "number", "date"].map(x => <SelectItem key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</SelectItem>)}
+                {/* No date on WhatsApp: people type dates every which way in a chat. */}
+                {(channel === "whatsapp" ? ["text", "email", "phone", "number"] : ["text", "email", "phone", "number", "date"])
+                  .map(x => <SelectItem key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -157,16 +159,22 @@ export default function WebNodeFields({ type, content, updateContent, ImageField
             <VarInput value={c.var} onChange={v => updateContent("var", v)} placeholder="e.g. name" />
           </div>
         </div>
-        <Input placeholder="Placeholder (optional)" value={c.placeholder || ""} maxLength={80} onChange={e => updateContent("placeholder", e.target.value)} />
+        {channel !== "whatsapp" && (
+          <Input placeholder="Placeholder (optional)" value={c.placeholder || ""} maxLength={80} onChange={e => updateContent("placeholder", e.target.value)} />
+        )}
         {(t === "number" || t === "date") && (
           <div className="grid grid-cols-2 gap-2">
             <Input placeholder={t === "date" ? "Earliest (today, today+1, 2026-12-31)" : "Minimum"} value={c.min ?? ""} onChange={e => updateContent("min", e.target.value)} />
             <Input placeholder={t === "date" ? "Latest (optional)" : "Maximum"} value={c.max ?? ""} onChange={e => updateContent("max", e.target.value)} />
           </div>
         )}
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={c.required !== false} onCheckedChange={v => updateContent("required", v)} /> Required
-        </label>
+        {channel === "whatsapp" ? (
+          <p className="text-xs text-muted-foreground">The customer types the answer. If it doesn&apos;t fit (e.g. not an email), the bot asks again. Saved as <code>name</code> or <code>email</code> it also updates the contact in Leads.</p>
+        ) : (
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={c.required !== false} onCheckedChange={v => updateContent("required", v)} /> Required
+          </label>
+        )}
       </div>
     );
   }

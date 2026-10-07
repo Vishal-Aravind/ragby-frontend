@@ -115,8 +115,8 @@ export const NODE_REGISTRY = [
     ] },
   },
   {
-    type: "ask_input", category: "Collect", label: "Ask a question", icon: TextCursorInput, channels: WEB,
-    description: "Ask for one answer (text, email, phone, number or date) and save it as a variable.",
+    type: "ask_input", category: "Collect", label: "Ask a question", icon: TextCursorInput, channels: BOTH,
+    description: "Ask for one typed answer (name, email, phone, number...) and save it to use later as {{name}}.",
     bg: "#ecfeff", border: "#67e8f9", text: "#155e75", badge: "#cffafe",
     emptyContent: { body: "What's your name?", input_type: "text", var: "name", placeholder: "", required: true },
   },

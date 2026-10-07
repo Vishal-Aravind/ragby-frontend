@@ -257,16 +257,16 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
               <Textarea rows={3} value={content.body || ""}
                 onChange={e => updateContent("body", e.target.value)}
                 placeholder="Type your message..." />
-              {web && <VariableChips variables={variables} onInsert={insertVar} />}
+              <VariableChips variables={variables} onInsert={insertVar} />
               {!web && (type === "message_buttons" || type === "message_list") && !(content.body || "").trim() && (
                 <p className="text-xs text-amber-700">WhatsApp needs a message above the options — until you add one, customers see &quot;Please choose an option:&quot;.</p>
               )}
             </div>
           )}
 
-          {web && WEB_ONLY_TYPES.has(type) && (
+          {(type === "ask_input" || (web && WEB_ONLY_TYPES.has(type))) && (
             <WebNodeFields type={type} content={content} updateContent={updateContent}
-              variables={variables} flowId={flowId} ImageField={ImageField} />
+              channel={channel} ImageField={ImageField} />
           )}
 
           {type === "message_buttons" && (

@@ -27,7 +27,7 @@ export const WHATSAPP_NODE_TYPES = new Set([
   "message_video", "message_document", "message_audio", "message_location",
   "message_contact", "call_us", "ask_a_question", "back_to_menu",
   "talk_to_human", "time_delay", "message_shop", "message_booking",
-  "message_event", "cta_url",
+  "message_event", "cta_url", "ask_input",
   // Legacy types still present in existing flows — accepted so an old flow
   // can still be re-saved, not offered in the editor's type dropdown.
   "text", "buttons", "list", "rag", "handoff",
@@ -179,7 +179,7 @@ export function validateGraph(nodes, edges, channel = "whatsapp") {
     if (JSON.stringify(content).length > MAX_NODE_CONTENT_BYTES) {
       return "One of your nodes is too large. Shorten its message.";
     }
-    if (channel === "web") {
+    if (channel === "web" || type === "ask_input") {
       const nodeError = validateWebNode(type, content);
       if (nodeError) return nodeError;
     }

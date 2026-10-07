@@ -6,12 +6,14 @@
 import { getSourceHandles } from "@/lib/flow-handles";
 import { canonicalType, nodeInfo } from "./nodeRegistry";
 
-const SYSTEM_VARS = ["page_url", "page_path", "page_title"];
+// Filled in automatically: page details on the website; the customer's
+// WhatsApp profile name and number on WhatsApp.
+const SYSTEM_VARS = { web: ["page_url", "page_path", "page_title"], whatsapp: ["name", "phone"] };
 const INPUT_TYPES = new Set(["message_buttons", "quick_replies", "message_list", "carousel", "ask_input", "form", "rating"]);
 const TEMPLATE_RE = /\{\{\s*([a-z][a-z0-9_]{0,31})\s*(?:\|[^{}]*)?\}\}/g;
 
 /** Variable names the flow collects (plus the built-in page ones). */
-export function flowVariables(nodes) {
+export function flowVariables(nodes, channel = "web") {
   const found = new Set();
   for (const n of nodes || []) {
     const t = canonicalType(n.data?.type);
@@ -19,7 +21,8 @@ export function flowVariables(nodes) {
     if (["ask_input", "rating", "quick_replies", "message_buttons", "message_list"].includes(t) && c.var) found.add(c.var);
     if (t === "form") (c.fields || []).forEach(f => f?.name && found.add(f.name));
   }
-  return [...[...found].sort(), ...SYSTEM_VARS];
+  const system = SYSTEM_VARS[channel] || [];
+  return [...new Set([...[...found].sort(), ...system])];
 }
 
 function textsOf(c) {
@@ -39,7 +42,7 @@ export function flowWarnings(nodes, edges, channel) {
 
   const out = {};
   for (const e of edges || []) (out[e.source] ||= new Set()).add(e.sourceHandle || "next");
-  const known = new Set(flowVariables(list));
+  const known = new Set(flowVariables(list, "web"));
 
   // Reachability from the start node.
   const reach = new Set();

@@ -28,7 +28,7 @@ export function newOptionId(prefix = "o") {
 }
 
 // WhatsApp: exactly today's rules (see backend/flows.py _CONTINUING_TYPES).
-const WA_NEXT = new Set(["time_delay", "message_shop"]);
+const WA_NEXT = new Set(["time_delay", "message_shop", "ask_input"]);
 
 // Website: everything that just shows something continues on "next".
 const WEB_NEXT = new Set([

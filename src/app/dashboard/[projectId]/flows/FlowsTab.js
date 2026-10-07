@@ -41,7 +41,7 @@ const toId = optionId;
 // from (time delay on its timer, shop once paid). Buttons/List get one
 // handle per option instead. Every other node ends the flow, so it gets no
 // outgoing handle at all (a line drawn from it used to be silently ignored).
-const NEXT_HANDLE_TYPES = new Set(["time_delay", "message_shop"]);
+const NEXT_HANDLE_TYPES = new Set(["time_delay", "message_shop", "ask_input"]);
 const OUTGOING_TYPES = new Set([...NEXT_HANDLE_TYPES, "message_buttons", "message_list"]);
 
 const WAITING_TYPES = new Set(["message_buttons", "quick_replies", "message_list", "carousel", "ask_input", "form", "rating"]);
@@ -787,7 +787,7 @@ export default function FlowsTab({ projectId }) {
   const configNode = rfNodes.find(n => n.id === configNodeId) || null;
   const flowChannel = selectedFlow?.channel || "whatsapp";
   const isWeb = flowChannel === "web";
-  const variables = isWeb ? flowVariables(rfNodes) : [];
+  const variables = flowVariables(rfNodes, flowChannel);
   const warnings = isWeb ? flowWarnings(rfNodes, rfEdges, "web") : [];
   // Preview highlight and stats are display-only; they're layered onto the
   // nodes here rather than stored in them, so they never get saved.
