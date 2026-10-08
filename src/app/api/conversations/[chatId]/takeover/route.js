@@ -76,8 +76,12 @@ export async function POST(req, { params }) {
       mode: "human",
     }, { onConflict: "project_id,phone_number" });
   }
-  // Website chat in a website flow: pause the flow bot the same way.
+  // Website chat (any — plain AI or website flow): the AI stays quiet and
+  // the visitor's widget starts polling for the team's replies.
   if (chat.channel === "public") {
+    await supabaseAdmin.from("chats")
+      .update({ human_mode: true, human_since: new Date().toISOString() })
+      .eq("id", chatId);
     await supabaseAdmin.from("web_flow_sessions")
       .update({ mode: "human", awaiting: null })
       .eq("chat_id", chatId)

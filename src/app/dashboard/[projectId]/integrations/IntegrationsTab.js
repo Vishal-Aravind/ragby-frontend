@@ -419,6 +419,9 @@ function WhatsAppItem({ projectId }) {
 function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   const [leadConfig, setLeadConfig] = useState({
     enabled: false,
+    // New setups ask only when the visitor wants a person - the least
+    // pushy option; existing setups keep whatever they had.
+    mode: "on_handoff",
     triggerAfterMessages: 2,
     formTitle: "Before we continue...",
     formSubtitle: "Please share your details to keep chatting.",
@@ -501,6 +504,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         if (data.enabled !== undefined) {
           setLeadConfig({
             enabled: data.enabled,
+            mode: data.mode || (data.enabled ? "after_n" : "on_handoff"),
             triggerAfterMessages: data.trigger_after_messages ?? 2,
             formTitle: data.form_title ?? "Before we continue...",
             formSubtitle: data.form_subtitle ?? "Please share your details to keep chatting.",
@@ -522,6 +526,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         body: JSON.stringify({
           projectId,
           enabled: leadConfig.enabled,
+          mode: leadConfig.mode,
           triggerAfterMessages: leadConfig.triggerAfterMessages,
           formTitle: leadConfig.formTitle,
           formSubtitle: leadConfig.formSubtitle,
@@ -663,7 +668,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Lead Capture</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Collect visitor name, email & phone after a few messages</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Ask website visitors for their name, email & phone. They're saved in Leads.</p>
           </div>
           <Switch
             checked={leadConfig.enabled}
@@ -674,6 +679,25 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         {leadConfig.enabled && (
           <div className="space-y-3 pl-1">
             <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">When to ask</label>
+              <select
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
+                value={leadConfig.mode}
+                onChange={e => setLeadConfig(p => ({ ...p, mode: e.target.value }))}
+              >
+                <option value="on_handoff">Only when they ask to talk to a person (recommended)</option>
+                <option value="after_n">After a few messages</option>
+                <option value="before">Before the chat starts</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {leadConfig.mode === "on_handoff"
+                  ? "Visitors chat freely; when they ask for a person, they share their details so your team can reply in Conversations."
+                  : leadConfig.mode === "before"
+                    ? "Visitors must share their details before the first answer."
+                    : "Visitors get a few free answers, then share their details to continue."}
+              </p>
+            </div>
+            {leadConfig.mode === "after_n" && <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Show form after how many messages</label>
               <select
                 className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
@@ -685,7 +709,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
                 <option value={3}>3 messages</option>
                 <option value={5}>5 messages</option>
               </select>
-            </div>
+            </div>}
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Form title</label>
               {/* Matches the server-side cap, so an over-long title is

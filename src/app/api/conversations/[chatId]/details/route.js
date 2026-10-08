@@ -40,7 +40,7 @@ export async function GET(req, { params }) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data: chat } = await supabaseAdmin
-    .from("chats").select("project_id, channel, external_id").eq("id", chatId).maybeSingle();
+    .from("chats").select("project_id, channel, external_id, visitor_id").eq("id", chatId).maybeSingle();
   if (!chat) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const role = await getProjectRole(user.id, chat.project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -62,9 +62,12 @@ export async function GET(req, { params }) {
       .select("variables, lead_id, visitor_id").eq("chat_id", chatId).eq("project_id", chat.project_id).limit(1);
     const s = sessions?.[0];
     sessionVars = s?.variables || {};
-    if (s?.lead_id || s?.visitor_id) {
+    // Flow chats know their lead directly; plain AI chats via the visitor id
+    // the widget sends (the same key lead capture saves the lead under).
+    const visitor = s?.visitor_id || chat.visitor_id;
+    if (s?.lead_id || visitor) {
       const q = supabaseAdmin.from("leads").select(LEAD_COLUMNS).eq("project_id", chat.project_id).limit(1);
-      const { data: leads } = s.lead_id ? await q.eq("id", s.lead_id) : await q.eq("session_id", s.visitor_id);
+      const { data: leads } = s?.lead_id ? await q.eq("id", s.lead_id) : await q.eq("session_id", visitor);
       lead = leads?.[0] || null;
     }
   }

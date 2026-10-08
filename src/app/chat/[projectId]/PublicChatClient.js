@@ -65,6 +65,31 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
   const [pendingQuestion, setPendingQuestion] = useState(null);
 
   const scrollRef = useRef(null);
+
+  // While a person from the team is handling the chat, check for their
+  // replies every 5 seconds (for up to 30 minutes).
+  const [humanMode, setHumanMode] = useState(false);
+  const pollCursor = useRef(null);
+  useEffect(() => {
+    if (!humanMode || !sessionId) return;
+    const started = Date.now();
+    pollCursor.current = pollCursor.current || new Date().toISOString();
+    const timer = setInterval(async () => {
+      if (Date.now() - started > 30 * 60 * 1000) { clearInterval(timer); return; }
+      try {
+        const res = await fetch("/api/chat/public/poll", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: project.id, sessionId, after: pollCursor.current }),
+        });
+        const d = await res.json();
+        if (d.messages?.length) setMessages(prev => [...prev, ...d.messages.map(m => ({ role: "assistant", content: m.text }))]);
+        if (d.cursor) pollCursor.current = d.cursor;
+        if (d.status === "bot") setHumanMode(false);
+      } catch {}
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [humanMode, sessionId, project.id]);
   const brandColor = project.brand_color || "#000000";
 
   // Also when the lead form appears: it is added without a new message, so on
@@ -88,7 +113,13 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages || []);
+        const msgs = data.messages || [];
+        // Team replies are stored with a "[Human] " marker; show them clean,
+        // and keep listening if a person is handling this chat.
+        setMessages(msgs.map(m => (m.content || "").startsWith("[Human] ") ? { ...m, content: m.content.slice(8) } : m));
+        if (msgs.some(m => (m.content || "").startsWith("[Human] ") || (m.content || "").startsWith("Connecting you to our team"))) {
+          setHumanMode(true);
+        }
       }
     }
 
@@ -161,6 +192,14 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
         if (data.leadRequired) {
           setLeadForm(data.leadForm || {});
           setPendingQuestion(userMessage);
+          return;
+        }
+
+        // A person from the team is handling this chat: show their reply as
+        // it arrives (see the polling effect), not an empty bot bubble.
+        if (data.status === "human") {
+          if (data.answer) setMessages(prev => [...prev, { role: "assistant", content: data.answer }]);
+          setHumanMode(true);
           return;
         }
 

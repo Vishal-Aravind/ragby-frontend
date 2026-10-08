@@ -71,6 +71,7 @@ export async function POST(req, { params }) {
   // ("ended" = AI answers if the flow allows typed messages, otherwise the
   // flow starts over — same as reaching the end of the flow).
   if (chat.channel === "public") {
+    await supabaseAdmin.from("chats").update({ human_mode: false }).eq("id", chatId);
     await supabaseAdmin.from("web_flow_sessions")
       .update({ mode: "ended", awaiting: null })
       .eq("chat_id", chatId)

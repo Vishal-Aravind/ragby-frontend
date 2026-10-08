@@ -6,8 +6,8 @@ import ContactDetails from "./ContactDetails";
 
 export default function ConversationsTab({ projectId }) {
   const [chats, setChats]           = useState([]);
-  // WhatsApp chats, or website chats that went through a website flow.
-  const [channel, setChannel]       = useState("whatsapp");
+  // One inbox: all · whatsapp · web · needs (a person needs to reply).
+  const [channel, setChannel]       = useState("all");
   const [loading, setLoading]       = useState(true);
   const [selected, setSelected]     = useState(null);
   const [messages, setMessages]     = useState([]);
@@ -60,7 +60,7 @@ export default function ConversationsTab({ projectId }) {
 
   // ── Fetch all chats ─────────────────────────────────────
   const fetchChats = useCallback(async () => {
-    const res = await fetch(`/api/conversations?project_id=${projectId}&channel=${channel}`);
+    const res = await fetch(`/api/conversations?project_id=${projectId}`);
     if (res.ok) {
       const data = await res.json();
       setChats(data || []);
@@ -71,19 +71,15 @@ export default function ConversationsTab({ projectId }) {
       }
     }
     setLoading(false);
-  }, [projectId, selected?.id, channel]);
+  }, [projectId, selected?.id]);
 
   useEffect(() => {
     setLoading(true);
-    setChats([]);
-    setSelected(null);
-    setMessages([]);
-    if (pollRef.current) clearInterval(pollRef.current);
     fetchChats();
     // Poll chats every 10s to update handoff badges
     chatsPollRef.current = setInterval(fetchChats, 10000);
     return () => clearInterval(chatsPollRef.current);
-  }, [projectId, channel]);
+  }, [projectId]);
 
   // ── Fetch messages for selected chat ────────────────────
   const fetchMessages = useCallback(async (chatId) => {
@@ -237,11 +233,16 @@ export default function ConversationsTab({ projectId }) {
 
   const isHandoff = selected?.session_mode === "human";
 
+  const q = search.toLowerCase();
   const filtered = chats.filter(c => {
     const matchSearch =
-      (c.external_id || "").includes(search) ||
-      (c.title || "").toLowerCase().includes(search.toLowerCase());
+      (c.display_name || c.external_id || "").toLowerCase().includes(q) ||
+      (c.contact_phone || "").includes(search) ||
+      (c.title || "").toLowerCase().includes(q);
     if (!matchSearch) return false;
+    if (channel === "whatsapp" && c.channel !== "whatsapp") return false;
+    if (channel === "web" && c.channel !== "public") return false;
+    if (channel === "needs" && c.session_mode !== "human") return false;
     if (filterMode === "mine") return me && c.assigned_to === me.id;
     if (filterMode === "unassigned") return !c.assigned_to;
     return true;
@@ -274,7 +275,7 @@ export default function ConversationsTab({ projectId }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 4, marginBottom: 10, background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
-            {[["whatsapp", "WhatsApp"], ["web", "Website"]].map(([key, label]) => (
+            {[["all", "All"], ["whatsapp", "WhatsApp"], ["web", "Website"], ["needs", `Needs reply${handoffCount ? ` (${handoffCount})` : ""}`]].map(([key, label]) => (
               <button key={key} onClick={() => setChannel(key)}
                 style={{
                   flex: 1, fontSize: 12, fontWeight: 600, padding: "5px 0", borderRadius: 6, border: "none", cursor: "pointer",
@@ -289,7 +290,7 @@ export default function ConversationsTab({ projectId }) {
             <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
             <input
               style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "7px 10px 7px 32px", fontSize: 13, outline: "none", boxSizing: "border-box", background: "#f8fafc" }}
-              placeholder={channel === "web" ? "Search visitors..." : "Search by number..."}
+              placeholder="Search by name or number..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -320,9 +321,9 @@ export default function ConversationsTab({ projectId }) {
             <div style={{ padding: 32, textAlign: "center" }}>
               <MessageSquare size={32} style={{ color: "#cbd5e1", marginBottom: 8 }} />
               <p style={{ color: "#94a3b8", fontSize: 13, margin: 0 }}>No conversations yet</p>
-              <p style={{ color: "#cbd5e1", fontSize: 12, margin: "4px 0 0" }}>{channel === "web"
-                ? "Website chats appear here once a visitor uses your website flow"
-                : "Messages appear here when users contact you on WhatsApp"}</p>
+              <p style={{ color: "#cbd5e1", fontSize: 12, margin: "4px 0 0" }}>{channel === "needs"
+                ? "No one is waiting for a reply right now"
+                : "WhatsApp messages and website chats appear here"}</p>
             </div>
           )}
           {filtered.map(chat => {
@@ -347,7 +348,7 @@ export default function ConversationsTab({ projectId }) {
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 14, fontWeight: 700, color: "white", flexShrink: 0,
                     }}>
-                      {(chat.external_id || "?").slice(-2)}
+                      {chat.channel === "public" ? <Globe size={16} /> : (chat.external_id || "?").slice(-2)}
                     </div>
                     {isHuman && (
                       <div style={{ position: "absolute", bottom: -1, right: -1, width: 14, height: 14, borderRadius: "50%", background: "#dc2626", border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -358,7 +359,7 @@ export default function ConversationsTab({ projectId }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: "#0f172a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {chat.external_id}
+                        {chat.display_name || chat.external_id}
                       </p>
                       <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0, marginLeft: 8 }}>
                         {formatTime(chat.last_message_at)}
@@ -404,12 +405,12 @@ export default function ConversationsTab({ projectId }) {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 12, fontWeight: 700, color: "white", flexShrink: 0,
             }}>
-              {(selected.external_id || "?").slice(-2)}
+              {selected.channel === "public" ? <Globe size={15} /> : (selected.external_id || "?").slice(-2)}
             </div>
             <div style={{ flex: 1 }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", margin: 0 }}>{selected.external_id}</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", margin: 0 }}>{selected.display_name || selected.external_id}</p>
               <p style={{ fontSize: 11, color: "#94a3b8", margin: 0, display: "flex", alignItems: "center", gap: 3 }}>
-                {channel === "web" ? <><Globe size={10} /> Website</> : <><Phone size={10} /> WhatsApp</>}
+                {selected.channel === "public" ? <><Globe size={10} /> Website{selected.contact_phone ? ` · ${selected.contact_phone}` : ""}</> : <><Phone size={10} /> WhatsApp</>}
                 {isHandoff && <span style={{ marginLeft: 6, color: "#dc2626", fontWeight: 600 }}>· Waiting for human reply</span>}
               </p>
             </div>
@@ -625,6 +626,14 @@ export default function ConversationsTab({ projectId }) {
                 </button>
               </div>
               <p style={{ fontSize: 11, color: "#94a3b8", margin: "6px 0 0" }}>Press Enter to send · Shift+Enter for new line</p>
+              {selected.channel === "public" && (
+                <p style={{ fontSize: 11, color: "#64748b", margin: "4px 0 0" }}>
+                  The visitor sees your reply while their page is open.
+                  {selected.contact_phone ? (
+                    <> If they&apos;ve left, <a href={`https://wa.me/${selected.contact_phone.replace(/[^0-9]/g, "")}`} target="_blank" rel="noreferrer" style={{ color: "#16a34a", fontWeight: 600 }}>continue on WhatsApp</a>.</>
+                  ) : " Ask for their phone or email in case they leave."}
+                </p>
+              )}
             </div>
           ) : (
             <div style={{ padding: "10px 16px", borderTop: "1px solid #e2e8f0", background: "white" }}>
