@@ -21,7 +21,7 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const storageKey = `ragby_session_${project.id}`;
-  const SESSION_TTL = 1000 * 60 * 60 * 3; // 3 hours
+  const SESSION_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days (same as the widget)
 
   const [sessionId, setSessionId] = useState(() => {
     if (typeof window !== "undefined") {
@@ -35,8 +35,8 @@ export default function PublicChatClient({ project, isPasswordProtected }) {
     return null;
   });
 
-  // Durable per-browser id. Distinct from sessionId, which expires after 3
-  // hours — the server keys lead capture on this so someone who already gave
+  // Durable per-browser id. Distinct from sessionId, which expires after 7
+  // days — the server keys lead capture on this so someone who already gave
   // their details isn't asked again every time their session rolls over.
   const [visitorId] = useState(() => {
     if (typeof window === "undefined") return null;
