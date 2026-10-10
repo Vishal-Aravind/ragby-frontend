@@ -53,36 +53,49 @@ export async function GET(req) {
   const waChats = chats.filter(c => c.channel === "whatsapp");
   const webChats = chats.filter(c => c.channel === "public");
   const phones = waChats.map(c => c.external_id).filter(Boolean);
-  const visitors = webChats.map(c => c.visitor_id).filter(Boolean);
 
-  const [msgsRes, waSessRes, webSessRes, leadsByPhone, leadsByVisitor] = await Promise.all([
+  const [msgsRes, waSessRes, webSessRes, leadsByPhone] = await Promise.all([
     supabase.from("chat_messages").select("chat_id, content, created_at")
       .in("chat_id", chatIds).order("created_at", { ascending: false }).limit(3000),
     phones.length
       ? supabase.from("whatsapp_sessions").select("phone_number, mode").eq("project_id", project_id).in("phone_number", phones)
       : { data: [] },
     webChats.length
-      ? supabase.from("web_flow_sessions").select("chat_id, mode, visitor_id").eq("project_id", project_id).in("chat_id", webChats.map(c => c.id))
+      ? supabase.from("web_flow_sessions").select("chat_id, mode, visitor_id, lead_id").eq("project_id", project_id).in("chat_id", webChats.map(c => c.id))
       : { data: [] },
     phones.length
       ? supabase.from("leads").select("phone, name").eq("project_id", project_id).in("phone", phones)
       : { data: [] },
+  ]);
+  const webSess = Object.fromEntries((webSessRes.data || []).map(s => [s.chat_id, s]));
+
+  // Website contacts, found the same way as the Details panel: the lead the
+  // flow's form saved, else the browser's visitor id (on the chat, or on its
+  // flow session - flow-started chats don't carry one on the chat row).
+  const visitors = [...new Set(webChats.flatMap(c => [c.visitor_id, webSess[c.id]?.visitor_id]).filter(Boolean))];
+  const leadIds = [...new Set(webChats.map(c => webSess[c.id]?.lead_id).filter(Boolean))];
+  const [leadsByVisitor, leadsById] = await Promise.all([
     visitors.length
-      ? supabase.from("leads").select("session_id, name, phone").eq("project_id", project_id).in("session_id", visitors)
+      ? supabase.from("leads").select("id, session_id, name, phone").eq("project_id", project_id).in("session_id", visitors)
+      : { data: [] },
+    leadIds.length
+      ? supabase.from("leads").select("id, session_id, name, phone").eq("project_id", project_id).in("id", leadIds)
       : { data: [] },
   ]);
 
   const lastMsg = {};
   for (const m of msgsRes.data || []) if (!lastMsg[m.chat_id]) lastMsg[m.chat_id] = m;
   const waMode = Object.fromEntries((waSessRes.data || []).map(s => [s.phone_number, s.mode]));
-  const webSess = Object.fromEntries((webSessRes.data || []).map(s => [s.chat_id, s]));
   const nameByPhone = Object.fromEntries((leadsByPhone.data || []).map(l => [l.phone, l.name]));
   const leadByVisitor = Object.fromEntries((leadsByVisitor.data || []).map(l => [l.session_id, l]));
+  const leadById = Object.fromEntries((leadsById.data || []).map(l => [l.id, l]));
 
   const result = chats.map(c => {
     const web = c.channel === "public";
     const flow = webSess[c.id];
-    const lead = web ? leadByVisitor[c.visitor_id || flow?.visitor_id] : null;
+    const lead = web
+      ? (leadById[flow?.lead_id] || leadByVisitor[flow?.visitor_id] || leadByVisitor[c.visitor_id] || null)
+      : null;
     const mode = web ? (c.human_mode || flow?.mode === "human" ? "human" : flow?.mode || null) : (waMode[c.external_id] || null);
     const last = lastMsg[c.id]?.content || null;
     return {
