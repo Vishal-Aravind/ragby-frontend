@@ -418,6 +418,15 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   });
   const [leadSaving, setLeadSaving] = useState(false);
   const [leadSaved, setLeadSaved] = useState(false);
+  // While a website flow is active it collects details itself, and lead
+  // capture is skipped (backend/chat.py _lead_capture_blocks).
+  const [webFlowActive, setWebFlowActive] = useState(false);
+  useEffect(() => {
+    fetch(`${BACKEND}/public/flow-config/${projectId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setWebFlowActive(!!d?.active))
+      .catch(() => {});
+  }, [projectId]);
 
   // Domain allowlist. The projectId in the embed snippet is visible in the
   // page source of every site the widget runs on, so without this anyone
@@ -669,6 +678,13 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
           <div>
             <p className="text-sm font-medium">Lead Capture</p>
             <p className="text-xs text-muted-foreground mt-0.5">Ask website visitors for their name, email & phone. They're saved in Leads.</p>
+            {webFlowActive && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mt-2">
+                A website flow is active, so lead capture is paused. The flow decides when to collect
+                details - add a Form block to it (with Save to Leads on). Lead capture works again when
+                the flow is turned off.
+              </p>
+            )}
           </div>
           <Switch
             checked={leadConfig.enabled}
