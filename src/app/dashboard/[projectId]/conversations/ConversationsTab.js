@@ -219,9 +219,14 @@ export default function ConversationsTab({ projectId }) {
   };
 
   // ── Helpers ─────────────────────────────────────────────
+  // The database keeps times in UTC. A value without a timezone suffix would
+  // otherwise be read as local time (5h30 early in India), so mark it UTC.
+  const toDate = (ts) =>
+    new Date(typeof ts === "string" && !/(Z|[+-]\d\d:?\d\d)$/i.test(ts) ? ts + "Z" : ts);
+
   const formatTime = (ts) => {
     if (!ts) return "";
-    const d = new Date(ts), now = new Date(), diff = now - d;
+    const d = toDate(ts), now = new Date(), diff = now - d;
     if (diff < 60000) return "just now";
     if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
@@ -229,7 +234,7 @@ export default function ConversationsTab({ projectId }) {
     return d.toLocaleDateString([], { month: "short", day: "numeric" });
   };
 
-  const formatMsgTime = (ts) => ts ? new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  const formatMsgTime = (ts) => ts ? toDate(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 
   const isHandoff = selected?.session_mode === "human";
 
@@ -539,7 +544,7 @@ export default function ConversationsTab({ projectId }) {
             {messages.map((msg, idx) => {
               const isUser = msg.role === "user";
               const isHumanReply = msg.content?.startsWith("[Human]");
-              const showDate = idx === 0 || new Date(msg.created_at).toDateString() !== new Date(messages[idx-1]?.created_at).toDateString();
+              const showDate = idx === 0 || toDate(msg.created_at).toDateString() !== toDate(messages[idx-1]?.created_at).toDateString();
               const displayContent = isHumanReply ? msg.content.replace("[Human] ", "") : msg.content;
 
               return (
@@ -547,7 +552,7 @@ export default function ConversationsTab({ projectId }) {
                   {showDate && (
                     <div style={{ textAlign: "center", margin: "8px 0" }}>
                       <span style={{ fontSize: 11, color: "#94a3b8", background: "#e2e8f0", padding: "2px 10px", borderRadius: 20 }}>
-                        {new Date(msg.created_at).toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}
+                        {toDate(msg.created_at).toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}
                       </span>
                     </div>
                   )}
