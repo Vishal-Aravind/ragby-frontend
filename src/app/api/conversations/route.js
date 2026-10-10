@@ -6,9 +6,18 @@
 // reply (session_mode === "human").
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { getProjectRole } from "@/lib/supabase-api";
 
 const MAX_CHATS = 300;
+
+// leads has RLS with no policies (only the service role reads it), so the
+// session client got no rows and the list never showed a contact's name.
+// Used only after the project-role check below, scoped to this project.
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -64,7 +73,7 @@ export async function GET(req) {
       ? supabase.from("web_flow_sessions").select("chat_id, mode, visitor_id, lead_id").eq("project_id", project_id).in("chat_id", webChats.map(c => c.id))
       : { data: [] },
     phones.length
-      ? supabase.from("leads").select("phone, name").eq("project_id", project_id).in("phone", phones)
+      ? supabaseAdmin.from("leads").select("phone, name").eq("project_id", project_id).in("phone", phones)
       : { data: [] },
   ]);
   const webSess = Object.fromEntries((webSessRes.data || []).map(s => [s.chat_id, s]));
@@ -76,10 +85,10 @@ export async function GET(req) {
   const leadIds = [...new Set(webChats.map(c => webSess[c.id]?.lead_id).filter(Boolean))];
   const [leadsByVisitor, leadsById] = await Promise.all([
     visitors.length
-      ? supabase.from("leads").select("id, session_id, name, phone").eq("project_id", project_id).in("session_id", visitors)
+      ? supabaseAdmin.from("leads").select("id, session_id, name, phone").eq("project_id", project_id).in("session_id", visitors)
       : { data: [] },
     leadIds.length
-      ? supabase.from("leads").select("id, session_id, name, phone").eq("project_id", project_id).in("id", leadIds)
+      ? supabaseAdmin.from("leads").select("id, session_id, name, phone").eq("project_id", project_id).in("id", leadIds)
       : { data: [] },
   ]);
 
