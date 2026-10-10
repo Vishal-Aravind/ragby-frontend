@@ -50,7 +50,7 @@ export async function GET(req) {
 
   const { data: chats } = await supabase
     .from("chats")
-    .select("id, external_id, channel, title, created_at, assigned_to, human_mode, visitor_id")
+    .select("id, external_id, channel, title, created_at, assigned_to, human_mode, visitor_id, lead_id")
     .eq("project_id", project_id)
     .in("channel", ["whatsapp", "public"])
     .order("created_at", { ascending: false })
@@ -78,11 +78,12 @@ export async function GET(req) {
   ]);
   const webSess = Object.fromEntries((webSessRes.data || []).map(s => [s.chat_id, s]));
 
-  // Website contacts, found the same way as the Details panel: the lead the
-  // flow's form saved, else the browser's visitor id (on the chat, or on its
-  // flow session - flow-started chats don't carry one on the chat row).
+  // Website contacts, found the same way as the Details panel: the contact
+  // saved on the chat (kept even after they move to another browser), the
+  // lead the flow's form saved, else the browser's visitor id (on the chat,
+  // or on its flow session - flow-started chats don't carry one).
   const visitors = [...new Set(webChats.flatMap(c => [c.visitor_id, webSess[c.id]?.visitor_id]).filter(Boolean))];
-  const leadIds = [...new Set(webChats.map(c => webSess[c.id]?.lead_id).filter(Boolean))];
+  const leadIds = [...new Set(webChats.flatMap(c => [c.lead_id, webSess[c.id]?.lead_id]).filter(Boolean))];
   const [leadsByVisitor, leadsById] = await Promise.all([
     visitors.length
       ? supabaseAdmin.from("leads").select("id, session_id, name, phone").eq("project_id", project_id).in("session_id", visitors)
@@ -103,7 +104,7 @@ export async function GET(req) {
     const web = c.channel === "public";
     const flow = webSess[c.id];
     const lead = web
-      ? (leadById[flow?.lead_id] || leadByVisitor[flow?.visitor_id] || leadByVisitor[c.visitor_id] || null)
+      ? (leadById[c.lead_id] || leadById[flow?.lead_id] || leadByVisitor[flow?.visitor_id] || leadByVisitor[c.visitor_id] || null)
       : null;
     const mode = web ? (c.human_mode || flow?.mode === "human" ? "human" : flow?.mode || null) : (waMode[c.external_id] || null);
     const last = lastMsg[c.id]?.content || null;
