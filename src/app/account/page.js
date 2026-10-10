@@ -22,7 +22,7 @@ const PLAN_COLORS = {
 const PLAN_FEATURES = {
   free: [
     "300 messages / month",
-    "Website widget & shareable link",
+    "Website widget",
     "Telegram",
   ],
   pro: [

@@ -22,7 +22,6 @@ const PLANS = [
       { text: "300 messages / month", included: true },
       { text: "3 knowledge sources (docs, sheets, websites…)", included: true },
       { text: "Website widget", included: true },
-      { text: "Shareable chat link", included: true },
       { text: "Telegram", included: true },
       { text: "WhatsApp", included: false },
       { text: "Remove Askzavo branding", included: false },

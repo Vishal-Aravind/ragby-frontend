@@ -1,7 +1,7 @@
 // src/app/api/conversations/route.js
 //
-// One inbox: WhatsApp chats and website chats (the widget and the hosted
-// chat link, with or without a website flow) in a single list, each with
+// One inbox: WhatsApp chats and website chats (the embedded widget, with
+// or without a website flow) in a single list, each with
 // its channel, the contact's name once known, and whether a person needs to
 // reply (session_mode === "human").
 import { NextResponse } from "next/server";

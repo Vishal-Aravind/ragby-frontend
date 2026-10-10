@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Copy, Check, Link, Lock, Eye, EyeOff, Loader2, ChevronDown, RefreshCw, X } from "lucide-react";
+import { Copy, Check, Eye, EyeOff, Loader2, ChevronDown, RefreshCw, X } from "lucide-react";
 import RazorpayConnectCard from "@/components/RazorpayConnectCard";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -66,14 +66,6 @@ export default function IntegrationsTab({ projectId }) {
   return (
     <div className="space-y-3 max-w-2xl">
       <p className="text-xs text-muted-foreground pb-1">Click any integration to expand and configure.</p>
-
-      {/* Shareable Link */}
-      <IntegrationItem
-        icon={<Link size={16} className="text-blue-500" />}
-        title="Shareable Chat Link"
-      >
-        <ShareableLinkContent projectId={projectId} />
-      </IntegrationItem>
 
       {/* Embed Widget */}
       <IntegrationItem
@@ -514,7 +506,10 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
       .catch(() => {});
   }, [projectId]);
 
-  const saveLeadConfig = async () => {
+  // Saved as soon as it changes (switch / dropdowns immediately, text fields
+  // when you click away) - there used to be a separate Save button that was
+  // easy to forget.
+  const saveLeadConfig = async (next = leadConfig) => {
     setLeadSaving(true);
     try {
       // The response was never inspected, so a rejected save still showed
@@ -525,11 +520,11 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
-          enabled: leadConfig.enabled,
-          mode: leadConfig.mode,
-          triggerAfterMessages: leadConfig.triggerAfterMessages,
-          formTitle: leadConfig.formTitle,
-          formSubtitle: leadConfig.formSubtitle,
+          enabled: next.enabled,
+          mode: next.mode,
+          triggerAfterMessages: next.triggerAfterMessages,
+          formTitle: next.formTitle,
+          formSubtitle: next.formSubtitle,
         }),
       });
       if (!res.ok) {
@@ -538,13 +533,18 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         return;
       }
       setLeadSaved(true);
-      toast.success("Lead capture settings saved");
       setTimeout(() => setLeadSaved(false), 2000);
     } catch {
       toast.error("Failed to save");
     } finally {
       setLeadSaving(false);
     }
+  };
+
+  const updateLead = (patch, save = true) => {
+    const next = { ...leadConfig, ...patch };
+    setLeadConfig(next);
+    if (save) saveLeadConfig(next);
   };
 
   if (!domainsLoaded) {
@@ -672,7 +672,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
           </div>
           <Switch
             checked={leadConfig.enabled}
-            onCheckedChange={(val) => setLeadConfig(p => ({ ...p, enabled: val }))}
+            onCheckedChange={(val) => updateLead({ enabled: val })}
           />
         </div>
 
@@ -683,7 +683,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
               <select
                 className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
                 value={leadConfig.mode}
-                onChange={e => setLeadConfig(p => ({ ...p, mode: e.target.value }))}
+                onChange={e => updateLead({ mode: e.target.value })}
               >
                 <option value="on_handoff">Only when they ask to talk to a person (recommended)</option>
                 <option value="after_n">After a few messages</option>
@@ -702,7 +702,7 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
               <select
                 className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
                 value={leadConfig.triggerAfterMessages}
-                onChange={e => setLeadConfig(p => ({ ...p, triggerAfterMessages: parseInt(e.target.value) }))}
+                onChange={e => updateLead({ triggerAfterMessages: parseInt(e.target.value) })}
               >
                 <option value={1}>1 message</option>
                 <option value={2}>2 messages</option>
@@ -714,171 +714,19 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
               <label className="text-xs text-muted-foreground">Form title</label>
               {/* Matches the server-side cap, so an over-long title is
                   stopped here rather than coming back as a 422. */}
-              <Input maxLength={120} value={leadConfig.formTitle} onChange={e => setLeadConfig(p => ({ ...p, formTitle: e.target.value }))} className="bg-white text-sm" />
+              <Input maxLength={120} value={leadConfig.formTitle} onChange={e => updateLead({ formTitle: e.target.value }, false)} onBlur={() => saveLeadConfig()} className="bg-white text-sm" />
             </div>
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground">Form subtitle</label>
-              <Input maxLength={240} value={leadConfig.formSubtitle} onChange={e => setLeadConfig(p => ({ ...p, formSubtitle: e.target.value }))} className="bg-white text-sm" />
+              <Input maxLength={240} value={leadConfig.formSubtitle} onChange={e => updateLead({ formSubtitle: e.target.value }, false)} onBlur={() => saveLeadConfig()} className="bg-white text-sm" />
             </div>
           </div>
         )}
 
-        <Button onClick={saveLeadConfig} disabled={leadSaving} size="sm" className="w-full">
-          {leadSaving ? "Saving..." : leadSaved ? "✓ Saved" : "Save Widget Settings"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ── Shareable Link Content ─────────────────────────────────
-function ShareableLinkContent({ projectId }) {
-  const [copied, setCopied] = useState(false);
-  const [enabled, setEnabled] = useState(true);
-  // The stored password is hashed and never leaves the server, so this
-  // holds only a NEW password being typed. `hasPassword` is what the
-  // server reports; `editing` and `clearing` are what the user is doing
-  // about it. Leaving all three alone saves the other settings without
-  // touching the password, so a Save can't silently unlock the chat.
-  const [hasPassword, setHasPassword] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-  const [chatUrl, setChatUrl] = useState("");
-
-  useEffect(() => {
-    setChatUrl(`${window.location.origin}/chat/${projectId}`);
-    async function load() {
-      const res = await fetch(`/api/projects/${projectId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setEnabled(data.chat_enabled ?? true);
-        setHasPassword(!!data.has_chat_password);
-      }
-    }
-    load();
-  }, [projectId]);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(chatUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    setError("");
-
-    const body = { chat_enabled: enabled };
-    if (clearing) body.chat_password = null;
-    else if (editing && password.trim()) body.chat_password = password.trim();
-
-    const res = await fetch(`/api/projects/${projectId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    setSaving(false);
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || "Could not save these settings.");
-      return;
-    }
-
-    if ("chat_password" in body) setHasPassword(body.chat_password !== null);
-    setEditing(false);
-    setClearing(false);
-    setPassword("");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Public chat URL</label>
-        <div className="flex gap-2">
-          <Input value={chatUrl} readOnly className="font-mono text-xs bg-white" />
-          <Button variant="outline" size="sm" onClick={handleCopy} className="shrink-0">
-            {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
-            {copied ? "Copied" : "Copy"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between bg-white border rounded-xl px-4 py-3">
-        <div>
-          <p className="text-sm font-medium">Link active</p>
-          <p className="text-xs text-muted-foreground">{enabled ? "Anyone with the link can chat" : "Link is disabled"}</p>
-        </div>
-        <button
-          onClick={() => setEnabled(p => !p)}
-          className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${enabled ? "bg-black" : "bg-gray-200"}`}
-        >
-          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-5" : "translate-x-1"}`} />
-        </button>
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide flex items-center gap-1">
-          <Lock size={11} /> Password protection
-        </label>
-        {hasPassword && !editing && !clearing ? (
-          <div className="flex items-center justify-between bg-white border rounded-xl px-4 py-3">
-            <p className="text-sm">Password set</p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>Change</Button>
-              <Button variant="outline" size="sm" onClick={() => setClearing(true)}>Remove</Button>
-            </div>
-          </div>
-        ) : clearing ? (
-          <div className="flex items-center justify-between bg-white border rounded-xl px-4 py-3">
-            <p className="text-sm text-muted-foreground">Password will be removed on save.</p>
-            <Button variant="outline" size="sm" onClick={() => setClearing(false)}>Undo</Button>
-          </div>
-        ) : (
-          <>
-            <div className="relative">
-              <Input
-                type={showPassword ? "text" : "password"}
-                placeholder={hasPassword ? "New password" : "Leave empty for no password"}
-                value={password}
-                onChange={e => { setPassword(e.target.value); setEditing(true); }}
-                className="pr-10 bg-white text-sm"
-              />
-              <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-3 top-2.5 text-muted-foreground">
-                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            </div>
-            {hasPassword && (
-              <button
-                type="button"
-                onClick={() => { setEditing(false); setPassword(""); }}
-                className="text-xs text-muted-foreground underline"
-              >
-                Keep the current password
-              </button>
-            )}
-          </>
+        {(leadSaving || leadSaved) && (
+          <p className="text-xs text-muted-foreground">{leadSaving ? "Saving..." : "✓ Saved"}</p>
         )}
-        <p className="text-xs text-muted-foreground">
-          {clearing
-            ? "Anyone with the link will be able to chat."
-            : hasPassword || password.trim()
-              ? "Visitors need this password to open the chat link."
-              : "No password — anyone with the link can chat."}
-        </p>
-        {error && <p className="text-xs text-red-600">{error}</p>}
       </div>
-
-      <Button onClick={handleSave} disabled={saving} size="sm" className="w-full">
-        {saving ? "Saving..." : saved ? "✓ Saved" : "Save settings"}
-      </Button>
     </div>
   );
 }
