@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2, ArrowRightLeft, Globe, IdCard } from "lucide-react";
+import { Search, Phone, MessageSquare, ArrowLeft, Send, Bot, User, AlertCircle, CheckCircle, StickyNote, UserCircle2, ArrowRightLeft, Globe, IdCard, RefreshCw } from "lucide-react";
 import ContactDetails from "./ContactDetails";
 
 export default function ConversationsTab({ projectId }) {
@@ -86,6 +86,19 @@ export default function ConversationsTab({ projectId }) {
     const res = await fetch(`/api/conversations/${chatId}/messages`);
     if (res.ok) setMessages((await res.json()) || []);
   }, []);
+
+  // Manual refresh: the list and the open chat, without waiting for the
+  // 10s / 5s auto-refresh.
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshAll = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await Promise.all([fetchChats(), selected ? fetchMessages(selected.id) : null]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const selectChat = async (chat) => {
     setSelected(chat);
@@ -277,6 +290,10 @@ export default function ConversationsTab({ projectId }) {
               <span style={{ fontSize: 11, background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: 20, fontWeight: 600 }}>
                 {chats.length}
               </span>
+              <button onClick={refreshAll} disabled={refreshing} title="Refresh" aria-label="Refresh conversations"
+                style={{ background: "none", border: "none", padding: 2, cursor: refreshing ? "default" : "pointer", color: "#64748b", display: "flex", alignItems: "center" }}>
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />
+              </button>
             </div>
           </div>
           <div style={{ display: "flex", gap: 4, marginBottom: 10, background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
