@@ -224,7 +224,6 @@ export default function FlowsTab({ projectId }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFlowList, setShowFlowList] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editKeywords, setEditKeywords] = useState("");
   const [editFreeQ, setEditFreeQ]       = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [deleteFlowOpen, setDeleteFlowOpen] = useState(false);
@@ -514,7 +513,6 @@ export default function FlowsTab({ projectId }) {
     setRfNodes([]); setRfEdges([]);
     setSelectedFlow(flow);
     selectedFlowRef.current = flow;
-    setEditKeywords((flow.trigger_keywords || []).join(", "));
     setEditFreeQ(flow.free_questions || false);
     setShowFlowList(false);
     setPreviewOpen(false);
@@ -605,36 +603,6 @@ export default function FlowsTab({ projectId }) {
       setErrorMsg("Could not reach the server. Try again.");
     }
     setCreatingFlow(false);
-  };
-
-  const handleSaveSettings = async () => {
-    if (!selectedFlow) return;
-    setSavingSettings(true);
-    const keywords = editKeywords.split(",").map(k => k.trim()).filter(Boolean);
-    try {
-      const res = await fetch(`/api/flows/${selectedFlow.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trigger_keywords: keywords }),
-      });
-      if (!res.ok) {
-        // Was applied to local state unconditionally, so a rejected save
-        // still looked like it had worked until the next reload.
-        setErrorMsg(await readError(res, "Could not save these settings."));
-      } else {
-        const saved = await res.json();
-        setErrorMsg("");
-        setSelectedFlow(f => ({
-          ...f,
-          trigger_keywords: saved?.trigger_keywords ?? keywords,
-        }));
-        await fetchFlows();
-        setSettingsOpen(false);
-      }
-    } catch {
-      setErrorMsg("Could not reach the server. Try again.");
-    }
-    setSavingSettings(false);
   };
 
   // On the toolbar (it used to be buried in Settings) and saved instantly.
@@ -859,7 +827,7 @@ export default function FlowsTab({ projectId }) {
                     <p className="text-xs text-muted-foreground">
                       {flow.channel === "web"
                         ? `${(flow.web_settings?.triggers || []).length} auto-open trigger(s)`
-                        : `Keywords: ${(flow.trigger_keywords || []).join(", ")}`}
+                        : "Starts on the customer's first message"}
                       {flow.free_questions && " · AI answers typed messages: ON"}
                     </p>
                   </div>
@@ -933,9 +901,11 @@ export default function FlowsTab({ projectId }) {
               <Button variant="outline" size="sm" onClick={() => toggleActive(selectedFlow)}>
                 {selectedFlow?.is_active ? "Deactivate" : "Activate"}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(s => !s)}>
-                <Settings size={13} className="mr-1" /> Settings
-              </Button>
+              {isWeb && (
+                <Button variant="outline" size="sm" onClick={() => setSettingsOpen(s => !s)}>
+                  <Settings size={13} className="mr-1" /> Settings
+                </Button>
+              )}
             </div>
           </div>
 
@@ -993,25 +963,6 @@ export default function FlowsTab({ projectId }) {
             </div>
           )}
 
-          {settingsOpen && !isWeb && (
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center z-20">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 m-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">Flow settings</h3>
-                  <button onClick={() => setSettingsOpen(false)}><X size={16} /></button>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Trigger keywords (comma separated)</p>
-                  <Input value={editKeywords} onChange={e => setEditKeywords(e.target.value)} placeholder="hi, hello, hey, start, menu" />
-                  <p className="text-xs text-muted-foreground">User sends any of these → flow starts</p>
-                </div>
-                <Button onClick={handleSaveSettings} disabled={savingSettings} className="w-full">
-                  {savingSettings ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
-                  Save settings
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
