@@ -411,9 +411,7 @@ function WhatsAppItem({ projectId }) {
 function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
   const [leadConfig, setLeadConfig] = useState({
     enabled: false,
-    // New setups ask only when the visitor wants a person - the least
-    // pushy option; existing setups keep whatever they had.
-    mode: "on_handoff",
+    mode: "after_n",
     triggerAfterMessages: 2,
     formTitle: "Before we continue...",
     formSubtitle: "Please share your details to keep chatting.",
@@ -496,7 +494,9 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
         if (data.enabled !== undefined) {
           setLeadConfig({
             enabled: data.enabled,
-            mode: data.mode || (data.enabled ? "after_n" : "on_handoff"),
+            // "on_handoff" (ask when they type "talk to a human") was retired
+            // with typed handoff phrases; it behaves like after_n.
+            mode: data.mode === "before" ? "before" : "after_n",
             triggerAfterMessages: data.trigger_after_messages ?? 2,
             formTitle: data.form_title ?? "Before we continue...",
             formSubtitle: data.form_subtitle ?? "Please share your details to keep chatting.",
@@ -685,16 +685,13 @@ function EmbedWidgetContent({ projectId, embedCode, copied, onCopy }) {
                 value={leadConfig.mode}
                 onChange={e => updateLead({ mode: e.target.value })}
               >
-                <option value="on_handoff">Only when they ask to talk to a person (recommended)</option>
                 <option value="after_n">After a few messages</option>
                 <option value="before">Before the chat starts</option>
               </select>
               <p className="text-xs text-muted-foreground">
-                {leadConfig.mode === "on_handoff"
-                  ? "Visitors chat freely; when they ask for a person, they share their details so your team can reply in Conversations."
-                  : leadConfig.mode === "before"
-                    ? "Visitors must share their details before the first answer."
-                    : "Visitors get a few free answers, then share their details to continue."}
+                {leadConfig.mode === "before"
+                  ? "Visitors must share their details before the first answer."
+                  : "Visitors get a few free answers, then share their details to continue."}
               </p>
             </div>
             {leadConfig.mode === "after_n" && <div className="space-y-1">
