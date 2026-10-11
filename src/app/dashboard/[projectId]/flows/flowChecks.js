@@ -69,6 +69,14 @@ export function flowWarnings(nodes, edges, channel) {
       const loose = handles.filter(h => !used.has(h.id));
       if (handles.length && loose.length === handles.length) warnings.push({ nodeId: n.id, message: `${label}: none of its options is connected yet.` });
     }
+    // Limits for a clean chat (older flows may have more).
+    const optionCount = t === "message_buttons" ? (c.buttons || []).length
+      : t === "quick_replies" ? (c.options || []).length
+      : t === "message_list" ? (c.sections || []).reduce((n, s) => n + (s?.rows || []).length, 0) : 0;
+    const optionMax = { message_buttons: 4, quick_replies: 3, message_list: 10 }[t];
+    if (optionMax && optionCount > optionMax) {
+      warnings.push({ nodeId: n.id, message: `${label}: has ${optionCount} options - keep it to ${optionMax} for a clean chat.` });
+    }
     if (t === "form" && c.save_lead && !(c.fields || []).some(f => ["email", "phone"].includes(f?.name))) {
       warnings.push({ nodeId: n.id, message: "Form: \"Save to Leads\" needs a field saved as email or phone." });
     }

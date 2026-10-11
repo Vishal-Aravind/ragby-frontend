@@ -82,8 +82,8 @@ export default function WebNodeFields({ type, content, updateContent, ImageField
     return (
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Options</Label>
-          <OptionList items={c.options} onChange={v => updateContent("options", v)} max={50} addLabel="Add option" />
+          <Label className="text-xs text-muted-foreground">Options (max 3 - use Buttons or a List for more)</Label>
+          <OptionList items={c.options} onChange={v => updateContent("options", v)} max={3} addLabel="Add option" />
           <p className="text-xs text-muted-foreground flex items-center gap-1"><Info size={11} /> Drag from each option&apos;s dot on the canvas to connect it.</p>
         </div>
         <div className="space-y-1.5">

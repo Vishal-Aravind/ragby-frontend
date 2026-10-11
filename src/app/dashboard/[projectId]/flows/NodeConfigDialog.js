@@ -187,9 +187,10 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
   const update = (patch) => onChange(id, patch);
   const updateContent = (key, val) => update({ content: { ...content, [key]: val } });
 
-  // WhatsApp allows 3 buttons / 10 list rows; the website just renders them.
-  const maxButtons = web ? 50 : 3;
-  const maxRows = web ? 50 : 10;
+  // WhatsApp allows 3 buttons / 10 list rows. The website: 4 buttons (more
+  // looks cluttered - use a list), 10 list rows (they open in a list panel).
+  const maxButtons = web ? 4 : 3;
+  const maxRows = 10;
   const labelMax = web ? 40 : 20;
 
   const updateButtonLabel = (idx, val) => {
@@ -271,7 +272,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
 
           {type === "message_buttons" && (
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Buttons{web ? "" : " (max 3)"}</Label>
+              <Label className="text-xs text-muted-foreground">Buttons (max {maxButtons}{web ? " - use a List for more" : ""})</Label>
               {(content.buttons || []).map((btn, idx) => (
                 <div key={btn.id || idx} className="flex gap-1.5 items-center">
                   <Input placeholder={`Button ${idx + 1}`} value={btn.label || ""} maxLength={labelMax}
@@ -316,7 +317,7 @@ export default function NodeConfigDialog({ node, onOpenChange, onChange, onSetSt
                 </div>
               ))}
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Info size={11} /> {web ? "Long lists get a search box on the website." : "Max 10 rows in total (WhatsApp limit)."} Drag from each row&apos;s own handle on the canvas to connect it.
+                <Info size={11} /> {web ? "Max 10 rows. On the website they open in a list when the button is tapped." : "Max 10 rows in total (WhatsApp limit)."} Drag from each row&apos;s own handle on the canvas to connect it.
               </p>
             </div>
           )}
