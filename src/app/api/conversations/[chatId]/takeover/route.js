@@ -79,11 +79,13 @@ export async function POST(req, { params }) {
   // Website chat (any — plain AI or website flow): the AI stays quiet and
   // the visitor's widget starts polling for the team's replies.
   if (chat.channel === "public") {
+    const now = new Date().toISOString();
     await supabaseAdmin.from("chats")
-      .update({ human_mode: true, human_since: new Date().toISOString() })
+      .update({ human_mode: true, human_since: now })
       .eq("id", chatId);
+    // "since": if nobody replies for 30 minutes the bot answers again.
     await supabaseAdmin.from("web_flow_sessions")
-      .update({ mode: "human", awaiting: null })
+      .update({ mode: "human", awaiting: { kind: "human", since: now } })
       .eq("chat_id", chatId)
       .eq("project_id", project_id);
   }

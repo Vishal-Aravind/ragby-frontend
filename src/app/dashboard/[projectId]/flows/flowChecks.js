@@ -71,6 +71,9 @@ export function flowWarnings(nodes, edges, channel) {
       const loose = handles.filter(h => !used.has(h.id));
       if (handles.length && loose.length === handles.length) warnings.push({ nodeId: n.id, message: `${label}: none of its options is connected yet.` });
     }
+    if (t === "carousel" && (c.cards || []).length && !(c.cards || []).some(card => (card?.buttons || []).some(b => b?.label && !b.url))) {
+      warnings.push({ nodeId: n.id, message: "Carousel: every button is a link, so the flow can't continue from it - add a choice button to a card (visitors only get a Back to menu chip)." });
+    }
     // Limits for a clean chat (older flows may have more).
     const optionCount = t === "message_buttons" ? (c.buttons || []).length
       : t === "quick_replies" ? (c.options || []).length
