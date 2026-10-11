@@ -6,9 +6,11 @@
 import { getSourceHandles } from "@/lib/flow-handles";
 import { canonicalType, nodeInfo } from "./nodeRegistry";
 
-// Filled in automatically: page details on the website; the customer's
-// WhatsApp profile name and number on WhatsApp.
-const SYSTEM_VARS = { web: ["page_url", "page_path", "page_title"], whatsapp: ["name", "phone"] };
+// Filled in automatically when known: the contact's details (a website
+// visitor who is already a contact; the WhatsApp profile name and number).
+const SYSTEM_VARS = { web: ["name", "email", "phone"], whatsapp: ["name", "phone"] };
+// Still filled on the website (older flows may use them), just not offered.
+const HIDDEN_VARS = { web: ["page_url", "page_path", "page_title"], whatsapp: [] };
 const INPUT_TYPES = new Set(["message_buttons", "quick_replies", "message_list", "carousel", "ask_input", "form", "rating"]);
 const TEMPLATE_RE = /\{\{\s*([a-z][a-z0-9_]{0,31})\s*(?:\|[^{}]*)?\}\}/g;
 
@@ -22,7 +24,7 @@ export function flowVariables(nodes, channel = "web") {
     if (t === "form") (c.fields || []).forEach(f => f?.name && found.add(f.name));
   }
   const system = SYSTEM_VARS[channel] || [];
-  return [...new Set([...[...found].sort(), ...system])];
+  return [...new Set([...system, ...[...found].sort()])];
 }
 
 function textsOf(c) {
@@ -42,7 +44,7 @@ export function flowWarnings(nodes, edges, channel) {
 
   const out = {};
   for (const e of edges || []) (out[e.source] ||= new Set()).add(e.sourceHandle || "next");
-  const known = new Set(flowVariables(list, "web"));
+  const known = new Set([...flowVariables(list, "web"), ...HIDDEN_VARS.web]);
 
   // Reachability from the start node.
   const reach = new Set();

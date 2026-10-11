@@ -26,7 +26,8 @@ export function VariableChips({ variables, onInsert }) {
     <div className="flex flex-wrap gap-1 items-center">
       <span className="text-[11px] text-muted-foreground mr-1">Insert:</span>
       {variables.map(v => (
-        <button key={v} type="button" onClick={() => onInsert(`{{${v}}}`)}
+        <button key={v} type="button" onClick={() => onInsert(v === "name" ? "{{name|there}}" : `{{${v}}}`)}
+          title={v === "name" ? "Their name, or \"there\" when it isn't known yet" : undefined}
           className="text-[11px] px-1.5 py-0.5 rounded border bg-gray-50 hover:bg-gray-100 font-mono">
           {`{{${v}}}`}
         </button>
