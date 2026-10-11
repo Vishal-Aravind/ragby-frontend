@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getProjectForRequest } from "@/lib/get-project-for-request";
 import { hasProjectTabAccess } from "@/lib/project-access";
@@ -9,10 +10,20 @@ export default async function TemplatesPage({ params }) {
   if (!project) redirect("/dashboard");
   if (!hasProjectTabAccess(project, "templates")) redirect(`/dashboard/${projectId}`);
 
-  const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/template-library`, {
-    cache: "no-store",
-  });
-  const initialTemplates = res.ok ? await res.json() : [];
+  // The API route needs the signed-in user's cookie to reach the backend.
+  const headerList = await headers();
+  let initialTemplates = [];
+  let initialError = null;
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/template-library`, {
+      cache: "no-store",
+      headers: { cookie: headerList.get("cookie") || "" },
+    });
+    if (res.ok) initialTemplates = await res.json();
+    else initialError = "Could not load the template library. Please refresh.";
+  } catch {
+    initialError = "Could not reach the server. Please refresh.";
+  }
 
-  return <TemplateLibraryClient projectId={projectId} initialTemplates={initialTemplates} />;
+  return <TemplateLibraryClient projectId={projectId} initialTemplates={initialTemplates} initialError={initialError} />;
 }
