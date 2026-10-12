@@ -221,7 +221,13 @@ function BlockEditPanel({ block, onChange, onUploadImage, onOpenFields }) {
               </div>
             ))}
           </div>
-          <UploadButton label="+ Add photo" onUploadImage={onUploadImage} onUploaded={url => update({ images: [...(p.images || []), url] })} />
+          {(p.images || []).length < MAX_GALLERY ? (
+            <UploadButton multiple label={`+ Add photos (${(p.images || []).length}/${MAX_GALLERY})`} onUploadImage={onUploadImage}
+              max={MAX_GALLERY - (p.images || []).length}
+              onUploadedMany={urls => update({ images: [...(p.images || []), ...urls].slice(0, MAX_GALLERY) })} />
+          ) : (
+            <p className="text-xs text-muted-foreground text-center">{MAX_GALLERY}/{MAX_GALLERY} photos - remove one to add another.</p>
+          )}
         </div>
       )
     case 'video':
@@ -307,9 +313,7 @@ function FormFieldsEditor({ fields, onChange }) {
               </select>
             </div>
             {field.type === 'dropdown' && (
-              <input className="w-full border rounded px-2 py-1.5 text-xs" placeholder="Options, comma separated"
-                value={(field.options || []).join(', ')}
-                onChange={e => updateField(i, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} />
+              <OptionsEditor options={field.options || []} onChange={options => updateField(i, { options })} />
             )}
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <input type="checkbox" checked={field.required} onChange={e => updateField(i, { required: e.target.checked })}
@@ -323,6 +327,34 @@ function FormFieldsEditor({ fields, onChange }) {
         + Add question
       </button>
       <p className="text-[11px] text-muted-foreground">Answers show next to each person in Registrations.</p>
+    </div>
+  )
+}
+
+// One box per dropdown option (a comma-separated box couldn't hold an
+// option that contains a comma, and was easy to get wrong).
+const MAX_OPTIONS = 20
+function OptionsEditor({ options, onChange }) {
+  const list = options.length ? options : ['']
+  const set = (idx, v) => onChange(list.map((o, j) => (j === idx ? v : o)))
+  const remove = (idx) => onChange(list.filter((_, j) => j !== idx))
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] text-muted-foreground">Options</p>
+      {list.map((o, idx) => (
+        <div key={idx} className="flex items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground w-4 text-right">{idx + 1}.</span>
+          <input className="flex-1 border rounded px-2 py-1.5 text-xs" placeholder={`Option ${idx + 1}`}
+            value={o} onChange={e => set(idx, e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && list.length < MAX_OPTIONS) { e.preventDefault(); onChange([...list, '']) } }} />
+          {list.length > 1 && (
+            <button onClick={() => remove(idx)} className="p-1 text-red-400 hover:text-red-600" title="Remove option"><X size={12} /></button>
+          )}
+        </div>
+      ))}
+      {list.length < MAX_OPTIONS && (
+        <button onClick={() => onChange([...list, ''])} className="text-xs text-indigo-600 hover:underline pl-5">+ Add option</button>
+      )}
     </div>
   )
 }
@@ -366,20 +398,26 @@ function CheckField({ label, checked, onChange }) {
     </label>
   )
 }
-function UploadButton({ label, onUploadImage, onUploaded, className = '' }) {
-  const [busy, setBusy] = useState(false)
+const MAX_GALLERY = 12
+// Picks one or several images (up to `max`), uploads them one by one.
+function UploadButton({ label, onUploadImage, onUploadedMany, multiple = false, max = 1, className = '' }) {
+  const [busy, setBusy] = useState('')
   return (
     <label className={`flex items-center justify-center gap-1.5 border-2 border-dashed rounded-lg p-3 text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 ${className}`}>
-      <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={async e => {
-        const file = e.target.files?.[0]
+      <input type="file" accept="image/*" multiple={multiple} className="hidden" disabled={!!busy} onChange={async e => {
+        const files = Array.from(e.target.files || []).slice(0, max)
         e.target.value = ''
-        if (!file) return
-        setBusy(true)
-        const url = await onUploadImage(file)
-        setBusy(false)
-        if (url) onUploaded(url)
+        if (!files.length) return
+        const urls = []
+        for (let k = 0; k < files.length; k++) {
+          setBusy(`Uploading ${k + 1}/${files.length}...`)
+          const url = await onUploadImage(files[k])
+          if (url) urls.push(url)
+        }
+        setBusy('')
+        if (urls.length) onUploadedMany(urls)
       }} />
-      {busy ? <><Loader2 size={12} className="animate-spin" /> Uploading...</> : label}
+      {busy ? <><Loader2 size={12} className="animate-spin" /> {busy}</> : label}
     </label>
   )
 }
@@ -608,7 +646,9 @@ export default function PageBuilder({ event, onSave, onClose }) {
     setSaving(true)
     const ok = await onSave({
       page_json: blocks,
-      form_schema: formFields,
+      form_schema: formFields.map(f => (f.type === 'dropdown'
+        ? { ...f, options: (f.options || []).map(o => String(o).trim()).filter(Boolean) }
+        : f)),
       title: details.title.trim(),
       description: details.description.trim() || null,
       banner_url: details.banner_url || null,

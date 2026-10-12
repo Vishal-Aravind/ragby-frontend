@@ -163,7 +163,7 @@ export function DynamicForm({ fields, accent, onSubmit, submitting, preview }) {
             <select value={values[f.id] ?? ""} onChange={e => setVal(f.id, e.target.value)}
               className="w-full border rounded-xl px-3 py-3 text-sm outline-none bg-white">
               <option value="">Select...</option>
-              {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+              {(f.options || []).filter(o => String(o).trim()).map((o, i) => <option key={`${i}-${o}`} value={o}>{o}</option>)}
             </select>
           ) : f.type === "checkbox" ? (
             <label className="flex items-center gap-2 text-sm text-gray-600">
