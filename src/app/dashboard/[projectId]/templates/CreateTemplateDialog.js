@@ -97,7 +97,10 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
           body: f.body,
           body_examples: bodyVars.map((_, i) => f.examples[i] || ''),
           footer: f.footer || null,
-          buttons: f.buttons.map(b => ({ type: b.type, text: b.text, url: b.type === 'url' ? b.url : null, phone: b.type === 'phone' ? b.phone : null })),
+          // A button card left completely empty is ignored, not an error.
+          buttons: f.buttons
+            .filter(b => (b.text || '').trim() || (b.url || '').trim() || (b.phone || '').trim())
+            .map(b => ({ type: b.type, text: b.text, url: b.type === 'url' ? b.url : null, phone: b.type === 'phone' ? b.phone : null })),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -235,6 +238,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
             {/* Buttons */}
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Buttons (optional)</Label>
+              <p className="text-[11px] text-muted-foreground">Up to 10: at most 2 website and 1 call. With more than 3, WhatsApp shows 2 and a &quot;See all options&quot; list.</p>
               {f.buttons.map((b, i) => (
                 <div key={i} className="border rounded-lg p-2.5 space-y-2">
                   <div className="flex items-center justify-between">

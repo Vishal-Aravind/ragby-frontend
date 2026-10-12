@@ -1,7 +1,7 @@
 'use client'
 // Shared by the Templates page, the Create template form and Campaigns:
 // language names, variable detection and a WhatsApp-style preview.
-import { Reply, ExternalLink, Phone, Image as ImageIcon } from 'lucide-react'
+import { Reply, ExternalLink, Phone, List, Image as ImageIcon } from 'lucide-react'
 
 // Same list as backend/wa_templates.py LANGUAGES.
 export const LANGUAGES = {
@@ -44,6 +44,10 @@ function Formatted({ text }) {
  */
 export function TemplatePreview({ header, body, footer, buttons = [], compact = false }) {
   const hasHeader = header && header.type && header.type !== 'none'
+  // Like WhatsApp: up to 3 buttons show under the message; with more, the
+  // first 2 show plus "See all options", which opens the full list.
+  const named = buttons.filter(b => b.text)
+  const shown = named.length > 3 ? named.slice(0, 2) : named
   return (
     <div className={`rounded-xl ${compact ? 'p-2' : 'p-4'}`} style={{ background: '#efeae2' }}>
       <div className="max-w-[300px]">
@@ -62,12 +66,18 @@ export function TemplatePreview({ header, body, footer, buttons = [], compact = 
             <p className="text-[10px] text-gray-400 text-right mt-0.5">12:00</p>
           </div>
         </div>
-        {buttons.filter(b => b.text).map((b, i) => (
+        {shown.map((b, i) => (
           <div key={i} className="bg-white rounded-lg shadow-sm mt-1 py-1.5 text-center text-[13px] font-medium flex items-center justify-center gap-1.5" style={{ color: '#027eb5' }}>
             {b.type === 'url' ? <ExternalLink size={13} /> : b.type === 'phone' ? <Phone size={13} /> : <Reply size={13} />}
             {b.text}
           </div>
         ))}
+        {named.length > 3 && (
+          <div className="bg-white rounded-lg shadow-sm mt-1 py-1.5 text-center text-[13px] font-medium flex items-center justify-center gap-1.5" style={{ color: '#027eb5' }}
+            title={named.slice(2).map(b => b.text).join(', ')}>
+            <List size={13} /> See all options
+          </div>
+        )}
       </div>
     </div>
   )
