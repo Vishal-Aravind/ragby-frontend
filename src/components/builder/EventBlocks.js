@@ -7,7 +7,6 @@
 // each block; `preview` makes the form inert.
 import { useEffect, useState } from "react";
 import { Clock, Calendar, MapPin, Users } from "lucide-react";
-import DOMPurify from "isomorphic-dompurify";
 
 // Origins allowed inside an <iframe> on a public registration page.
 // page_json is merchant-authored, but "merchant" includes any teammate
@@ -84,6 +83,21 @@ export function Countdown({ targetDate, label, accent, preview }) {
       </div>
     </div>
   );
+}
+
+// Custom HTML is cleaned in the browser only. isomorphic-dompurify pulled
+// jsdom into the server render, which crashes on Vercel's Node (and broke
+// every page that renders these blocks). Nothing is shown until it's clean.
+function HtmlBlock({ code }) {
+  const [html, setHtml] = useState("");
+  useEffect(() => {
+    let alive = true;
+    import("dompurify").then(m => {
+      if (alive) setHtml(m.default.sanitize(code || "", { USE_PROFILES: { html: true } }));
+    });
+    return () => { alive = false; };
+  }, [code]);
+  return <div className="px-5 py-2" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 export function FaqItem({ q, a }) {
@@ -414,10 +428,8 @@ function renderBlock(block, ctx) {
     case "divider":
       return p.style === "space" ? <div className="h-8" /> : <hr className="mx-5 border-gray-200" />;
 
-    case "html": {
-      const safeHtml = DOMPurify.sanitize(p.code || "", { USE_PROFILES: { html: true } });
-      return <div className="px-5 py-2" dangerouslySetInnerHTML={{ __html: safeHtml }} />;
-    }
+    case "html":
+      return <HtmlBlock code={p.code} />;
 
     default:
       return null;
