@@ -23,11 +23,77 @@ const BUTTON_TYPES = { quick_reply: 'Quick reply', url: 'Visit website', phone: 
 
 const toName = (v) => v.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+/, '').slice(0, 512)
 
+const VAR_ANY = /\{\{\s*\d+\s*\}\}/
+const PHONE_RE = /^\+[1-9]\d{6,14}$/
+const isEmptyButton = (b) => !(b.text || '').trim() && !(b.url || '').trim() && !(b.phone || '').trim()
+
+// Same rules as backend/wa_templates.py build_components, checked as you
+// type. `required` problems (empty fields) are kept apart so a fresh form
+// isn't covered in red before the first Submit.
+function validate(f, existingNames) {
+  const live = {}      // shown immediately
+  const required = {}  // shown after Submit is pressed
+  if (!f.name) required.name = 'Give the template a name.'
+  else if (existingNames.includes(`${f.name}|${f.language}`)) live.name = 'A template with this name already exists in this language.'
+
+  if (f.headerType === 'text') {
+    const t = f.headerText.trim()
+    const n = varNumbers(t)
+    if (!t) required.header = 'Type the header text, or choose None.'
+    else if (t.length > 60) live.header = 'At most 60 characters.'
+    else if (n.length > 1 || (n.length === 1 && n[0] !== 1) || (t.match(/\{\{/g) || []).length > 1) live.header = 'Only one variable, {{1}}, is allowed in the header.'
+    if (n.length && !f.headerExample.trim()) required.headerExample = 'Add an example value for {{1}}.'
+  } else if (f.headerType === 'image' && !f.headerImageUrl) {
+    required.header = 'Upload an image (JPG or PNG).'
+  }
+
+  const body = f.body.trim()
+  const nums = varNumbers(body)
+  if (!body) required.body = 'Type the message.'
+  else if (body.length > 1024) live.body = 'At most 1024 characters.'
+  else if (nums.length && nums.join(',') !== nums.map((_, i) => i + 1).join(',')) live.body = 'Number the variables {{1}}, {{2}}, ... in order, without gaps.'
+  else if (new RegExp('^' + VAR_ANY.source).test(body)) live.body = "Can't start with a variable - put a word before it."
+  else if (new RegExp(VAR_ANY.source + '$').test(body)) live.body = "Can't end with a variable - put a word or a full stop after it."
+  else if (/\}\}\s*\{\{/.test(body)) live.body = "Two variables can't be right next to each other - put a word between them."
+  const examples = {}
+  nums.forEach((n, i) => { if (!(f.examples[i] || '').trim()) examples[i] = 'Add an example value.' })
+  if (Object.keys(examples).length) required.examples = examples
+
+  if (f.footer.trim().length > 60) live.footer = 'At most 60 characters.'
+  else if (VAR_ANY.test(f.footer)) live.footer = "Variables aren't allowed in the footer."
+
+  const buttons = {}
+  const buttonsRequired = {}
+  f.buttons.forEach((b, i) => {
+    if (isEmptyButton(b)) return
+    const text = (b.text || '').trim()
+    if (!text) buttonsRequired[i] = 'Type the button text.'
+    else if (text.length > 25) buttons[i] = 'At most 25 characters.'
+    if (b.type === 'url') {
+      const u = (b.url || '').trim()
+      if (!u) buttonsRequired[i] = 'Enter the link.'
+      else if (!/^https?:\/\//i.test(u)) buttons[i] = 'Enter a full link starting with https://'
+      else if (u.includes('{{')) buttons[i] = "Links with variables aren't supported - use a fixed link."
+    }
+    if (b.type === 'phone') {
+      const ph = (b.phone || '').replace(/[\s-]/g, '')
+      if (!ph) buttonsRequired[i] = 'Enter the phone number.'
+      else if (!PHONE_RE.test(ph)) buttons[i] = 'Add the country code, e.g. +919876543210.'
+    }
+  })
+  if (Object.keys(buttons).length) live.buttons = buttons
+  if (Object.keys(buttonsRequired).length) required.buttons = buttonsRequired
+  return { live, required }
+}
+
+const FieldError = ({ msg }) => (msg ? <p className="text-[11px] text-red-600 mt-1">{msg}</p> : null)
+
 export default function CreateTemplateDialog({ open, onOpenChange, projectId, existingNames = [], onCreated }) {
   const [f, setF] = useState(EMPTY)
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [tried, setTried] = useState(false)   // Submit pressed: also show "missing" problems
   const bodyRef = useRef(null)
   const set = (patch) => setF(prev => ({ ...prev, ...patch }))
 
@@ -35,9 +101,14 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
   const headerHasVar = varNumbers(f.headerText).length > 0
   const urlCount = f.buttons.filter(b => b.type === 'url').length
   const phoneCount = f.buttons.filter(b => b.type === 'phone').length
-  const nameTaken = f.name && existingNames.includes(`${f.name}|${f.language}`)
+  const { live, required } = validate(f, existingNames)
+  // What each field shows: format problems always, missing parts after Submit.
+  const err = (key) => live[key] || (tried ? required[key] : undefined)
+  const buttonErr = (i) => (live.buttons || {})[i] || (tried ? (required.buttons || {})[i] : undefined)
+  const exampleErr = (i) => (tried ? (required.examples || {})[i] : undefined)
+  const hasProblems = Object.keys(live).length > 0 || Object.keys(required).length > 0
 
-  const reset = () => { setF(EMPTY); setError('') }
+  const reset = () => { setF(EMPTY); setError(''); setTried(false) }
   const close = (v) => { if (!v) reset(); onOpenChange(v) }
 
   const addBodyVar = () => {
@@ -78,8 +149,8 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
 
   const submit = async () => {
     setError('')
-    if (!f.name) { setError('Name: give the template a name.'); return }
-    if (nameTaken) { setError('Name: a template with this name already exists in this language.'); return }
+    setTried(true)
+    if (hasProblems) { setError('Fix the fields marked in red, then submit again.'); return }
     setSubmitting(true)
     try {
       const res = await fetch('/api/templates/create', {
@@ -135,7 +206,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
               <Input value={f.name} placeholder="e.g. diwali_offer" maxLength={512}
                 onChange={e => set({ name: toName(e.target.value) })} />
               <p className="text-[11px] text-muted-foreground">Only for you - customers don&apos;t see it. Lowercase letters, numbers and _.</p>
-              {nameTaken && <p className="text-[11px] text-red-600">A template with this name already exists in this language.</p>}
+              <FieldError msg={err('name')} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -180,9 +251,13 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
                     )}
                   </div>
                   <p className="text-[11px] text-muted-foreground">{f.headerText.length}/60 · at most one variable</p>
+                  <FieldError msg={err('header')} />
                   {headerHasVar && (
-                    <Input value={f.headerExample} placeholder="Example for {{1}}, e.g. Asha"
-                      onChange={e => set({ headerExample: e.target.value })} />
+                    <>
+                      <Input value={f.headerExample} placeholder="Example for {{1}}, e.g. Asha"
+                        onChange={e => set({ headerExample: e.target.value })} />
+                      <FieldError msg={err('headerExample')} />
+                    </>
                   )}
                 </div>
               )}
@@ -198,6 +273,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
                   <span className="text-[11px] text-muted-foreground">JPG or PNG, up to 5MB. A sample - each campaign can use its own image.</span>
                 </div>
               )}
+              {f.headerType === 'image' && <FieldError msg={err('header')} />}
             </div>
 
             {/* Body */}
@@ -214,14 +290,18 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
               <p className="text-[11px] text-muted-foreground">
                 {f.body.length}/1024 · Variables ({'{{1}}'}, {'{{2}}'}...) are filled in for each campaign. *bold* _italic_ ~strike~ work.
               </p>
+              <FieldError msg={err('body')} />
               {bodyVars.length > 0 && (
                 <div className="space-y-1.5 bg-muted/40 rounded-lg p-2.5">
                   <p className="text-[11px] text-muted-foreground">Example values - WhatsApp uses them to review the template.</p>
                   {bodyVars.map((n, i) => (
-                    <div key={n} className="flex items-center gap-2">
-                      <span className="text-xs font-mono w-10 shrink-0">{`{{${n}}}`}</span>
-                      <Input className="h-8 text-sm" value={f.examples[i] || ''} placeholder={n === 1 ? 'e.g. Asha' : 'Example value'}
-                        onChange={e => setExample(i, e.target.value)} />
+                    <div key={n}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono w-10 shrink-0">{`{{${n}}}`}</span>
+                        <Input className="h-8 text-sm" value={f.examples[i] || ''} placeholder={n === 1 ? 'e.g. Asha' : 'Example value'}
+                          onChange={e => setExample(i, e.target.value)} />
+                      </div>
+                      <div className="pl-12"><FieldError msg={exampleErr(i)} /></div>
                     </div>
                   ))}
                 </div>
@@ -233,6 +313,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
               <Label className="text-xs text-muted-foreground">Footer (optional)</Label>
               <Input value={f.footer} maxLength={60} placeholder="e.g. Reply STOP to unsubscribe"
                 onChange={e => set({ footer: e.target.value })} />
+              <FieldError msg={err('footer')} />
             </div>
 
             {/* Buttons */}
@@ -255,6 +336,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
                     <Input className="h-8 text-sm" value={b.phone} placeholder="+919876543210"
                       onChange={e => updButton(i, { phone: e.target.value })} />
                   )}
+                  <FieldError msg={buttonErr(i)} />
                 </div>
               ))}
               {f.buttons.length < 10 && (
