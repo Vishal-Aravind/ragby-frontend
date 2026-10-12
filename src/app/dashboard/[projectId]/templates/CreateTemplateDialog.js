@@ -116,7 +116,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
 
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl w-[calc(100%-2rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Create template</DialogTitle>
           <DialogDescription>
@@ -124,9 +124,9 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid md:grid-cols-[1fr_320px] gap-6">
+        <div className="grid md:grid-cols-[minmax(0,1fr)_320px] gap-6 min-w-0">
           {/* ---------------- form ---------------- */}
-          <div className="space-y-5">
+          <div className="space-y-5 min-w-0">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Name</Label>
               <Input value={f.name} placeholder="e.g. diwali_offer" maxLength={512}
@@ -139,7 +139,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Category</Label>
                 <Select value={f.category} onValueChange={v => set({ category: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="MARKETING">Marketing - offers, announcements</SelectItem>
                     <SelectItem value="UTILITY">Utility - orders, bookings, reminders</SelectItem>
@@ -149,7 +149,7 @@ export default function CreateTemplateDialog({ open, onOpenChange, projectId, ex
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Language</Label>
                 <Select value={f.language} onValueChange={v => set({ language: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(LANGUAGES).map(([code, label]) => <SelectItem key={code} value={code}>{label}</SelectItem>)}
                   </SelectContent>
