@@ -2,36 +2,42 @@
 import { useState, useRef } from 'react'
 import {
   Image as ImageIcon, Type, Clock, Users, HelpCircle, Grid, Minus,
-  Video, MapPin, Code2, Plus, Trash2, ChevronUp, ChevronDown,
-  Settings, X, Eye, Save, Loader2, GripVertical
+  Video, MapPin, Code2, Trash2, ChevronUp, ChevronDown,
+  X, Save, Loader2, ListOrdered, LayoutTemplate, ExternalLink, Check,
 } from 'lucide-react'
 import { uploadMedia } from '@/lib/uploadMedia'
+import EventBlocks, { eventInfo } from './EventBlocks'
+import { EVENT_TEMPLATES, buildTemplate } from './eventTemplates'
 
 // ─────────────────────────────────────────────────────────
 // BLOCK DEFINITIONS
 // ─────────────────────────────────────────────────────────
 const BLOCK_TYPES = [
-  { type: 'hero', label: 'Banner / Hero', icon: ImageIcon, desc: 'Image + title + subtitle' },
-  { type: 'text', label: 'Text Block', icon: Type, desc: 'Paragraph or heading' },
-  { type: 'countdown', label: 'Countdown Timer', icon: Clock, desc: 'Days left until event' },
-  { type: 'speakers', label: 'Speakers / Team', icon: Users, desc: 'Cards with photo + name + role' },
-  { type: 'faq', label: 'FAQ Accordion', icon: HelpCircle, desc: 'Expandable Q&A list' },
-  { type: 'gallery', label: 'Image Gallery', icon: Grid, desc: 'Grid of images' },
-  { type: 'video', label: 'Video Embed', icon: Video, desc: 'YouTube/Vimeo embed' },
-  { type: 'map', label: 'Location Map', icon: MapPin, desc: 'Embedded Google Map' },
-  { type: 'divider', label: 'Divider', icon: Minus, desc: 'Visual separator' },
-  { type: 'html', label: 'Custom HTML', icon: Code2, desc: 'Advanced — raw HTML' },
+  { type: 'hero', label: 'Banner', icon: ImageIcon, desc: 'Big image with the event title' },
+  { type: 'text', label: 'Text', icon: Type, desc: 'Heading and paragraph' },
+  { type: 'agenda', label: 'Schedule', icon: ListOrdered, desc: 'Times and sessions' },
+  { type: 'countdown', label: 'Countdown', icon: Clock, desc: 'Days left until the event' },
+  { type: 'speakers', label: 'Speakers / Team', icon: Users, desc: 'People with photo and role' },
+  { type: 'gallery', label: 'Photo gallery', icon: Grid, desc: 'Grid of photos' },
+  { type: 'faq', label: 'Questions (FAQ)', icon: HelpCircle, desc: 'Questions that open on tap' },
+  { type: 'video', label: 'Video', icon: Video, desc: 'YouTube or Vimeo' },
+  { type: 'map', label: 'Venue / Map', icon: MapPin, desc: 'Address with directions' },
+  { type: 'divider', label: 'Divider', icon: Minus, desc: 'Line or space' },
+  { type: 'html', label: 'Custom HTML', icon: Code2, desc: 'Advanced' },
 ]
+const blockLabel = (type) =>
+  type === 'registration_form' ? 'Registration form' : (BLOCK_TYPES.find(b => b.type === type)?.label || type)
 
 const DEFAULT_PROPS = {
-  hero: { image_url: '', title: 'Your Event Title', subtitle: 'Event subtitle goes here', overlay: true },
-  text: { heading: '', body: 'Add your text here...', align: 'left' },
+  hero: { image_url: '', tag: '', title: 'Your Event Title', subtitle: 'A short line about the event', overlay: true },
+  text: { heading: 'About the event', body: 'Describe what attendees can expect...', align: 'left' },
+  agenda: { heading: 'Schedule', items: [{ time: '10:00 AM', title: 'Welcome', desc: '' }, { time: '10:30 AM', title: 'Main session', desc: '' }] },
   countdown: { target_date: '', label: 'Event starts in' },
   speakers: { heading: 'Speakers', items: [{ name: 'Speaker Name', role: 'Role / Title', photo_url: '' }] },
-  faq: { heading: 'Frequently Asked Questions', items: [{ q: 'Question here?', a: 'Answer here.' }] },
-  gallery: { images: [] },
+  faq: { heading: 'Questions', items: [{ q: 'Question here?', a: 'Answer here.' }] },
+  gallery: { heading: '', images: [] },
   video: { url: '', caption: '' },
-  map: { embed_url: '', address: '' },
+  map: { heading: 'Venue', embed_url: '', address: '' },
   divider: { style: 'line' },
   html: { code: '<p>Custom HTML content</p>' },
 }
@@ -46,48 +52,11 @@ const FIELD_TYPES = [
   { value: 'checkbox', label: 'Checkbox' },
 ]
 
-const TEMPLATES = {
-  conference: {
-    label: 'Conference / Expo',
-    desc: 'Big multi-speaker event — banner, countdown, about section, speaker grid, FAQ',
-    blocks: [
-      { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Your Conference Name 2026', subtitle: 'Join industry leaders for a day of insights' } },
-      { id: 'b2', type: 'countdown', props: { ...DEFAULT_PROPS.countdown } },
-      { id: 'b3', type: 'text', props: { heading: 'About the Event', body: 'Describe what attendees can expect...', align: 'left' } },
-      { id: 'b4', type: 'speakers', props: { ...DEFAULT_PROPS.speakers } },
-      { id: 'b5', type: 'faq', props: { ...DEFAULT_PROPS.faq } },
-    ],
-  },
-  workshop: {
-    label: 'Workshop / Class',
-    desc: 'Hands-on session — banner, learning outcomes, photo gallery, FAQ',
-    blocks: [
-      { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Workshop Title', subtitle: 'Hands-on learning session' } },
-      { id: 'b2', type: 'text', props: { heading: 'What You\'ll Learn', body: 'List the key takeaways...', align: 'left' } },
-      { id: 'b3', type: 'gallery', props: { images: [] } },
-      { id: 'b4', type: 'faq', props: { ...DEFAULT_PROPS.faq } },
-    ],
-  },
-  launch: {
-    label: 'Product Launch',
-    desc: 'Hype-building page — banner, countdown, video teaser, story',
-    blocks: [
-      { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Introducing Something New', subtitle: 'Be the first to know' } },
-      { id: 'b2', type: 'countdown', props: { ...DEFAULT_PROPS.countdown, label: 'Launching in' } },
-      { id: 'b3', type: 'video', props: { url: '', caption: '' } },
-      { id: 'b4', type: 'text', props: { heading: '', body: 'Tell your story here...', align: 'center' } },
-    ],
-  },
-  webinar: {
-    label: 'Simple Webinar',
-    desc: 'Quick and minimal — banner + agenda',
-    blocks: [
-      { id: 'b1', type: 'hero', props: { ...DEFAULT_PROPS.hero, title: 'Webinar Title', subtitle: 'Live online session' } },
-      { id: 'b2', type: 'text', props: { heading: 'Agenda', body: '1. Topic one\n2. Topic two\n3. Q&A', align: 'left' } },
-    ],
-  },
-  blank: { label: 'Blank', desc: 'Start from scratch and add your own blocks', blocks: [] },
-}
+const DEFAULT_FIELDS = [
+  { id: 'name', type: 'text', label: 'Your name', required: true },
+  { id: 'phone', type: 'phone', label: 'WhatsApp number', required: true },
+]
+const DEFAULT_ACCENT = '#6366f1'
 
 const genId = () => `b_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
@@ -104,99 +73,9 @@ const ensureRegistrationFormBlock = (blocksArr) => {
 }
 
 // ─────────────────────────────────────────────────────────
-// BLOCK PREVIEW (mini render inside editor canvas)
-// ─────────────────────────────────────────────────────────
-function BlockPreview({ block, accent, formFields }) {
-  const p = block.props
-  switch (block.type) {
-    case 'registration_form':
-      return (
-        <div className="bg-gray-50 rounded-lg p-3">
-          <p className="text-xs font-semibold text-gray-600 mb-2">📋 Registration Form</p>
-          <div className="space-y-2">
-            {formFields.map(f => (
-              <div key={f.id} className="bg-white border rounded-lg px-3 py-2 text-xs text-gray-400">
-                {f.label}{f.required ? ' *' : ''}
-              </div>
-            ))}
-          </div>
-        </div>
-      )
-    case 'hero':
-      return (
-        <div className="relative rounded-lg overflow-hidden" style={{ minHeight: 140, background: p.image_url ? `url(${p.image_url}) center/cover` : '#e5e7eb' }}>
-          <div className="absolute inset-0 flex flex-col justify-end p-4" style={{ background: p.overlay ? 'linear-gradient(transparent, rgba(0,0,0,0.6))' : 'none' }}>
-            <p className={`font-bold text-lg ${p.image_url ? 'text-white' : 'text-gray-700'}`}>{p.title}</p>
-            <p className={`text-sm ${p.image_url ? 'text-white opacity-90' : 'text-gray-500'}`}>{p.subtitle}</p>
-          </div>
-        </div>
-      )
-    case 'text':
-      return (
-        <div style={{ textAlign: p.align }}>
-          {p.heading && <p className="font-semibold text-sm mb-1">{p.heading}</p>}
-          <p className="text-xs text-gray-500 whitespace-pre-line">{p.body}</p>
-        </div>
-      )
-    case 'countdown':
-      return (
-        <div className="text-center py-3 bg-gray-50 rounded-lg">
-          <p className="text-xs text-gray-400">{p.label}</p>
-          <p className="text-lg font-bold" style={{ color: accent }}>-- days --</p>
-        </div>
-      )
-    case 'speakers':
-      return (
-        <div>
-          <p className="font-semibold text-sm mb-2">{p.heading}</p>
-          <div className="flex gap-2 overflow-x-auto">
-            {p.items.map((s, i) => (
-              <div key={i} className="shrink-0 w-20 text-center">
-                <div className="w-16 h-16 rounded-full bg-gray-200 mx-auto mb-1" style={s.photo_url ? { backgroundImage: `url(${s.photo_url})`, backgroundSize: 'cover' } : {}} />
-                <p className="text-xs font-medium truncate">{s.name}</p>
-                <p className="text-xs text-gray-400 truncate">{s.role}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )
-    case 'faq':
-      return (
-        <div>
-          <p className="font-semibold text-sm mb-2">{p.heading}</p>
-          {p.items.map((f, i) => (
-            <div key={i} className="border-b py-1.5 text-xs">
-              <p className="font-medium">{f.q}</p>
-            </div>
-          ))}
-        </div>
-      )
-    case 'gallery':
-      return (
-        <div className="grid grid-cols-4 gap-1">
-          {p.images.length === 0
-            ? <div className="col-span-4 text-xs text-gray-400 text-center py-3 bg-gray-50 rounded">No images added</div>
-            : p.images.map((img, i) => <div key={i} className="aspect-square bg-gray-200 rounded" style={{ backgroundImage: `url(${img})`, backgroundSize: 'cover' }} />)
-          }
-        </div>
-      )
-    case 'video':
-      return <div className="bg-gray-100 rounded-lg p-6 text-center text-xs text-gray-400">{p.url ? '🎥 Video embedded' : 'No video URL set'}</div>
-    case 'map':
-      return <div className="bg-gray-100 rounded-lg p-6 text-center text-xs text-gray-400">📍 {p.address || 'No address set'}</div>
-    case 'divider':
-      return <hr className="border-gray-200" />
-    case 'html':
-      return <div className="bg-gray-50 rounded p-2 text-xs font-mono text-gray-400 truncate">{p.code}</div>
-    default:
-      return null
-  }
-}
-
-// ─────────────────────────────────────────────────────────
 // BLOCK EDITOR PANEL (right side, editing selected block)
 // ─────────────────────────────────────────────────────────
-function BlockEditPanel({ block, onChange, onUploadImage }) {
+function BlockEditPanel({ block, onChange, onUploadImage, onOpenFields }) {
   const p = block.props
   const update = (patch) => onChange({ ...p, ...patch })
 
@@ -205,7 +84,7 @@ function BlockEditPanel({ block, onChange, onUploadImage }) {
     items[idx] = { ...items[idx], ...patch }
     update({ [key]: items })
   }
-  const addListItem = (key, empty) => update({ [key]: [...p[key], empty] })
+  const addListItem = (key, empty) => update({ [key]: [...(p[key] || []), empty] })
   const removeListItem = (key, idx) => {
     const items = [...p[key]]
     items.splice(idx, 1)
@@ -214,22 +93,53 @@ function BlockEditPanel({ block, onChange, onUploadImage }) {
 
   switch (block.type) {
     case 'registration_form':
-      return <p className="text-xs text-muted-foreground">Edit this form's fields in the "Form Fields" tab.</p>
+      return (
+        <div className="space-y-3">
+          <TextField label="Heading" value={p.heading} onChange={v => update({ heading: v })} placeholder="Reserve your spot" />
+          <TextField label="Small line under it" value={p.subheading} onChange={v => update({ subheading: v })} placeholder="Takes 30 seconds. Confirmation comes on WhatsApp." />
+          <button onClick={onOpenFields} className="w-full text-xs border rounded-lg py-2 hover:bg-muted">Edit the questions →</button>
+        </div>
+      )
     case 'hero':
       return (
         <div className="space-y-3">
           <ImageUploadField label="Banner image" value={p.image_url} onChange={url => update({ image_url: url })} onUploadImage={onUploadImage} />
+          <TextField label="Small label (optional)" value={p.tag} onChange={v => update({ tag: v })} placeholder="e.g. Free entry" />
           <TextField label="Title" value={p.title} onChange={v => update({ title: v })} />
-          <TextField label="Subtitle" value={p.subtitle} onChange={v => update({ subtitle: v })} />
-          <CheckField label="Dark overlay (for text readability)" checked={p.overlay} onChange={v => update({ overlay: v })} />
+          <TextAreaField label="Line under the title" value={p.subtitle} onChange={v => update({ subtitle: v })} rows={2} />
+          <CheckField label="Darken the image so the text is readable" checked={p.overlay !== false} onChange={v => update({ overlay: v })} />
         </div>
       )
     case 'text':
       return (
         <div className="space-y-3">
           <TextField label="Heading (optional)" value={p.heading} onChange={v => update({ heading: v })} />
-          <TextAreaField label="Body text" value={p.body} onChange={v => update({ body: v })} rows={5} />
+          <TextAreaField label="Text" value={p.body} onChange={v => update({ body: v })} rows={7} />
+          <p className="text-[11px] text-muted-foreground">Tip: start lines with ✓ for a neat checklist.</p>
           <SelectField label="Alignment" value={p.align} options={[['left', 'Left'], ['center', 'Center'], ['right', 'Right']]} onChange={v => update({ align: v })} />
+        </div>
+      )
+    case 'agenda':
+      return (
+        <div className="space-y-3">
+          <TextField label="Section heading" value={p.heading} onChange={v => update({ heading: v })} />
+          <div className="space-y-2">
+            {(p.items || []).map((it, i) => (
+              <div key={i} className="border rounded-lg p-2 space-y-2">
+                <div className="flex gap-2">
+                  <input className="w-24 border rounded-lg px-2 py-1.5 text-sm" placeholder="10:00 AM"
+                    value={it.time || ''} onChange={e => updateListItem('items', i, { time: e.target.value })} />
+                  <input className="flex-1 border rounded-lg px-2 py-1.5 text-sm" placeholder="Session"
+                    value={it.title || ''} onChange={e => updateListItem('items', i, { title: e.target.value })} />
+                  <button onClick={() => removeListItem('items', i)} className="text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
+                </div>
+                <input className="w-full border rounded-lg px-2 py-1.5 text-xs" placeholder="Detail (optional)"
+                  value={it.desc || ''} onChange={e => updateListItem('items', i, { desc: e.target.value })} />
+              </div>
+            ))}
+          </div>
+          <button onClick={() => addListItem('items', { time: '', title: '', desc: '' })}
+            className="w-full text-xs border-dashed border rounded-lg py-2 text-muted-foreground hover:bg-muted">+ Add session</button>
         </div>
       )
     case 'countdown':
@@ -237,7 +147,7 @@ function BlockEditPanel({ block, onChange, onUploadImage }) {
         <div className="space-y-3">
           <TextField label="Label" value={p.label} onChange={v => update({ label: v })} />
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Target date</label>
+            <label className="text-xs text-muted-foreground">Counts down to</label>
             <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm"
               value={p.target_date} onChange={e => update({ target_date: e.target.value })} />
           </div>
@@ -250,17 +160,22 @@ function BlockEditPanel({ block, onChange, onUploadImage }) {
           <div className="space-y-2">
             {p.items.map((s, i) => (
               <div key={i} className="border rounded-lg p-2 space-y-2">
-                <div className="flex justify-end">
+                <div className="flex items-start gap-2">
+                  <ImageUploadField value={s.photo_url} onChange={url => updateListItem('items', i, { photo_url: url })} onUploadImage={onUploadImage} compact />
+                  <div className="flex-1 space-y-1.5">
+                    <input className="w-full border rounded-lg px-2 py-1.5 text-sm" placeholder="Name"
+                      value={s.name || ''} onChange={e => updateListItem('items', i, { name: e.target.value })} />
+                    <input className="w-full border rounded-lg px-2 py-1.5 text-xs" placeholder="Role"
+                      value={s.role || ''} onChange={e => updateListItem('items', i, { role: e.target.value })} />
+                  </div>
                   <button onClick={() => removeListItem('items', i)} className="text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
                 </div>
-                <ImageUploadField label="Photo" value={s.photo_url} onChange={url => updateListItem('items', i, { photo_url: url })} onUploadImage={onUploadImage} compact />
-                <TextField label="Name" value={s.name} onChange={v => updateListItem('items', i, { name: v })} />
-                <TextField label="Role" value={s.role} onChange={v => updateListItem('items', i, { role: v })} />
               </div>
             ))}
           </div>
           <button onClick={() => addListItem('items', { name: '', role: '', photo_url: '' })}
-            className="w-full text-xs border-dashed border rounded-lg py-2 text-muted-foreground hover:bg-muted">+ Add speaker</button>
+            className="w-full text-xs border-dashed border rounded-lg py-2 text-muted-foreground hover:bg-muted">+ Add person</button>
+          <p className="text-[11px] text-muted-foreground">No photo? Their initials are shown instead.</p>
         </div>
       )
     case 'faq':
@@ -285,38 +200,33 @@ function BlockEditPanel({ block, onChange, onUploadImage }) {
     case 'gallery':
       return (
         <div className="space-y-3">
+          <TextField label="Heading (optional)" value={p.heading} onChange={v => update({ heading: v })} />
           <div className="grid grid-cols-3 gap-2">
-            {p.images.map((img, i) => (
+            {(p.images || []).map((img, i) => (
               <div key={i} className="relative">
-                <img src={img} className="w-full aspect-square object-cover rounded" />
+                <img src={img} alt="" className="w-full aspect-square object-cover rounded" />
                 <button onClick={() => removeListItem('images', i)}
-                  className="absolute top-1 right-1 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">✕</button>
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">✕</button>
               </div>
             ))}
           </div>
-          <label className="block border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:bg-muted/30">
-            <input type="file" accept="image/*" className="hidden" onChange={async e => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              const url = await onUploadImage(file)
-              if (url) update({ images: [...p.images, url] })
-            }} />
-            <p className="text-xs text-muted-foreground">+ Add image</p>
-          </label>
+          <UploadButton label="+ Add photo" onUploadImage={onUploadImage} onUploaded={url => update({ images: [...(p.images || []), url] })} />
         </div>
       )
     case 'video':
       return (
         <div className="space-y-3">
-          <TextField label="YouTube/Vimeo URL" value={p.url} onChange={v => update({ url: v })} placeholder="https://youtube.com/watch?v=..." />
+          <TextField label="YouTube or Vimeo link" value={p.url} onChange={v => update({ url: v })} placeholder="https://youtube.com/watch?v=..." />
           <TextField label="Caption (optional)" value={p.caption} onChange={v => update({ caption: v })} />
         </div>
       )
     case 'map':
       return (
         <div className="space-y-3">
-          <TextField label="Address" value={p.address} onChange={v => update({ address: v })} />
-          <TextField label="Google Maps embed URL (optional)" value={p.embed_url} onChange={v => update({ embed_url: v })} />
+          <TextField label="Section heading" value={p.heading} onChange={v => update({ heading: v })} />
+          <TextAreaField label="Address" value={p.address} onChange={v => update({ address: v })} rows={2} />
+          <p className="text-[11px] text-muted-foreground">Visitors get a Directions button that opens Google Maps.</p>
+          <TextField label="Google Maps embed link (optional)" value={p.embed_url} onChange={v => update({ embed_url: v })} placeholder="https://www.google.com/maps/embed?..." />
         </div>
       )
     case 'divider':
@@ -346,7 +256,7 @@ function FormFieldsEditor({ fields, onChange }) {
     f[idx] = { ...f[idx], ...patch }
     onChange(f)
   }
-  const addField = () => onChange([...fields, { id: genId(), type: 'text', label: 'New field', required: false }])
+  const addField = () => onChange([...fields, { id: genId(), type: 'text', label: 'New question', required: false }])
   const removeField = (idx) => {
     const f = [...fields]
     f.splice(idx, 1)
@@ -362,41 +272,46 @@ function FormFieldsEditor({ fields, onChange }) {
 
   return (
     <div className="space-y-2">
-      {fields.map((field, i) => (
-        <div key={field.id} className="border rounded-lg p-3 space-y-2 bg-white">
-          <div className="flex items-center justify-end">
-            <div className="flex items-center gap-1">
-              <button onClick={() => moveField(i, -1)} disabled={i === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30"><ChevronUp size={12} /></button>
-              <button onClick={() => moveField(i, 1)} disabled={i === fields.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30"><ChevronDown size={12} /></button>
-              {!['name', 'phone'].includes(field.id) && (
-                <button onClick={() => removeField(i)} className="p-1 hover:bg-red-50 text-red-500 rounded"><Trash2 size={12} /></button>
-              )}
+      {fields.map((field, i) => {
+        const locked = ['name', 'phone'].includes(field.id)
+        return (
+          <div key={field.id} className="border rounded-lg p-3 space-y-2 bg-white">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">{locked ? 'Always asked' : `Question ${i + 1}`}</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => moveField(i, -1)} disabled={i === 0} className="p-1 hover:bg-muted rounded disabled:opacity-30"><ChevronUp size={12} /></button>
+                <button onClick={() => moveField(i, 1)} disabled={i === fields.length - 1} className="p-1 hover:bg-muted rounded disabled:opacity-30"><ChevronDown size={12} /></button>
+                {!locked && (
+                  <button onClick={() => removeField(i)} className="p-1 hover:bg-red-50 text-red-500 rounded"><Trash2 size={12} /></button>
+                )}
+              </div>
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input className="border rounded px-2 py-1.5 text-xs" placeholder="Question"
+                value={field.label} onChange={e => updateField(i, { label: e.target.value })} />
+              <select className="border rounded px-2 py-1.5 text-xs bg-white"
+                value={field.type} onChange={e => updateField(i, { type: e.target.value })}
+                disabled={locked}>
+                {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
+              </select>
+            </div>
+            {field.type === 'dropdown' && (
+              <input className="w-full border rounded px-2 py-1.5 text-xs" placeholder="Options, comma separated"
+                value={(field.options || []).join(', ')}
+                onChange={e => updateField(i, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} />
+            )}
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <input type="checkbox" checked={field.required} onChange={e => updateField(i, { required: e.target.checked })}
+                disabled={locked} />
+              Required
+            </label>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <input className="border rounded px-2 py-1.5 text-xs" placeholder="Field label"
-              value={field.label} onChange={e => updateField(i, { label: e.target.value })} />
-            <select className="border rounded px-2 py-1.5 text-xs bg-white"
-              value={field.type} onChange={e => updateField(i, { type: e.target.value })}
-              disabled={['name', 'phone'].includes(field.id)}>
-              {FIELD_TYPES.map(ft => <option key={ft.value} value={ft.value}>{ft.label}</option>)}
-            </select>
-          </div>
-          {field.type === 'dropdown' && (
-            <input className="w-full border rounded px-2 py-1.5 text-xs" placeholder="Options, comma separated"
-              value={(field.options || []).join(', ')}
-              onChange={e => updateField(i, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} />
-          )}
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <input type="checkbox" checked={field.required} onChange={e => updateField(i, { required: e.target.checked })}
-              disabled={['name', 'phone'].includes(field.id)} />
-            Required
-          </label>
-        </div>
-      ))}
+        )
+      })}
       <button onClick={addField} className="w-full text-xs border-dashed border rounded-lg py-2 text-muted-foreground hover:bg-muted">
-        + Add field
+        + Add question
       </button>
+      <p className="text-[11px] text-muted-foreground">Answers show next to each person in Registrations.</p>
     </div>
   )
 }
@@ -407,7 +322,7 @@ function FormFieldsEditor({ fields, onChange }) {
 function TextField({ label, value, onChange, placeholder }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-muted-foreground">{label}</label>
+      {label && <label className="text-xs text-muted-foreground">{label}</label>}
       <input className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
         value={value || ''} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
     </div>
@@ -435,31 +350,124 @@ function SelectField({ label, value, options, onChange }) {
 function CheckField({ label, checked, onChange }) {
   return (
     <label className="flex items-center gap-2 text-sm">
-      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <input type="checkbox" checked={!!checked} onChange={e => onChange(e.target.checked)} />
       {label}
     </label>
   )
 }
+function UploadButton({ label, onUploadImage, onUploaded, className = '' }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <label className={`flex items-center justify-center gap-1.5 border-2 border-dashed rounded-lg p-3 text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 ${className}`}>
+      <input type="file" accept="image/*" className="hidden" disabled={busy} onChange={async e => {
+        const file = e.target.files?.[0]
+        e.target.value = ''
+        if (!file) return
+        setBusy(true)
+        const url = await onUploadImage(file)
+        setBusy(false)
+        if (url) onUploaded(url)
+      }} />
+      {busy ? <><Loader2 size={12} className="animate-spin" /> Uploading...</> : label}
+    </label>
+  )
+}
+// Shows the current image with Change / Remove, so swapping a template's
+// sample photo for your own is one click.
 function ImageUploadField({ label, value, onChange, onUploadImage, compact }) {
+  const [busy, setBusy] = useState(false)
+  const pick = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    const url = await onUploadImage(file)
+    setBusy(false)
+    if (url) onChange(url)
+  }
+  if (compact) {
+    return (
+      <label className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-dashed shrink-0 cursor-pointer flex items-center justify-center bg-muted/30" title="Change photo">
+        <input type="file" accept="image/*" className="hidden" onChange={pick} disabled={busy} />
+        {busy ? <Loader2 size={14} className="animate-spin text-muted-foreground" />
+          : value ? <img src={value} alt="" className="w-full h-full object-cover" />
+          : <span className="text-[10px] text-muted-foreground text-center leading-tight">Add<br />photo</span>}
+      </label>
+    )
+  }
   return (
     <div className="space-y-1">
-      <label className="text-xs text-muted-foreground">{label}</label>
+      {label && <label className="text-xs text-muted-foreground">{label}</label>}
       {value ? (
-        <div className="relative">
-          <img src={value} className={compact ? "w-12 h-12 object-cover rounded" : "w-full h-24 object-cover rounded-lg border"} />
-          <button onClick={() => onChange('')} className="absolute top-1 right-1 bg-black/50 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">✕</button>
+        <div className="relative rounded-lg overflow-hidden border">
+          <img src={value} alt="" className="w-full h-28 object-cover" />
+          <div className="absolute bottom-1.5 right-1.5 flex gap-1.5">
+            <label className="bg-white/95 text-xs font-medium rounded-md px-2.5 py-1 shadow cursor-pointer hover:bg-white">
+              <input type="file" accept="image/*" className="hidden" onChange={pick} disabled={busy} />
+              {busy ? 'Uploading...' : 'Change'}
+            </label>
+            <button onClick={() => onChange('')} className="bg-white/95 text-xs text-red-600 rounded-md px-2.5 py-1 shadow hover:bg-white">Remove</button>
+          </div>
         </div>
       ) : (
-        <label className="block border-2 border-dashed rounded-lg p-3 text-center cursor-pointer hover:bg-muted/30">
-          <input type="file" accept="image/*" className="hidden" onChange={async e => {
-            const file = e.target.files?.[0]
-            if (!file) return
-            const url = await onUploadImage(file)
-            if (url) onChange(url)
-          }} />
-          <p className="text-xs text-muted-foreground">Click to upload</p>
+        <label className="flex items-center justify-center gap-1.5 border-2 border-dashed rounded-lg p-4 text-xs text-muted-foreground cursor-pointer hover:bg-muted/30">
+          <input type="file" accept="image/*" className="hidden" onChange={pick} disabled={busy} />
+          {busy ? <><Loader2 size={12} className="animate-spin" /> Uploading...</> : 'Click to upload'}
         </label>
       )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────
+// TEMPLATE PICKER
+// ─────────────────────────────────────────────────────────
+function TemplatePicker({ onPick, onBlank, onSkip, onClose, replacing }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div className="flex items-start justify-between p-6 pb-4">
+          <div>
+            <h3 className="font-semibold text-lg">{replacing ? 'Change template' : 'Choose a template'}</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Every template comes ready to use - photos, text, schedule and questions. Just change the names, dates and images.
+            </p>
+            {replacing && <p className="text-xs text-amber-700 mt-1">This replaces the current page design (your event details stay).</p>}
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded"><X size={18} /></button>
+        </div>
+        <div className="overflow-y-auto px-6 pb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {EVENT_TEMPLATES.map(t => (
+              <button key={t.key} onClick={() => onPick(t.key)}
+                className="group text-left border rounded-xl overflow-hidden hover:border-indigo-400 hover:shadow-md transition">
+                <div className="relative h-32 overflow-hidden">
+                  <img src={`/event-templates/${t.cover}.jpg`} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <span className="absolute bottom-2 left-3 text-white font-semibold text-sm drop-shadow">{t.label}</span>
+                  <span className="absolute top-2 right-2 w-3 h-3 rounded-full ring-2 ring-white" style={{ background: t.accent }} />
+                </div>
+                <div className="p-3">
+                  <p className="text-xs text-muted-foreground">{t.desc}</p>
+                  <p className="text-xs font-medium text-indigo-600 mt-2 opacity-0 group-hover:opacity-100 transition">Use this template →</p>
+                </div>
+              </button>
+            ))}
+            <button onClick={onBlank}
+              className="border-2 border-dashed rounded-xl p-4 text-left hover:border-indigo-400 transition flex flex-col justify-center min-h-[180px]">
+              <LayoutTemplate size={20} className="text-muted-foreground mb-2" />
+              <p className="font-medium text-sm">Start blank</p>
+              <p className="text-xs text-muted-foreground mt-1">Add your own blocks from scratch</p>
+            </button>
+          </div>
+          {onSkip && (
+            <button onClick={onSkip}
+              className="w-full mt-4 text-sm text-muted-foreground hover:text-gray-800 py-2">
+              Skip - use the simple default page
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -468,12 +476,9 @@ function ImageUploadField({ label, value, onChange, onUploadImage, compact }) {
 // MAIN BUILDER COMPONENT
 // ─────────────────────────────────────────────────────────
 export default function PageBuilder({ event, onSave, onClose }) {
-  const [showTemplatePicker, setShowTemplatePicker] = useState(!event?.page_json?.length)
+  const [picker, setPicker] = useState(!event?.page_json?.length ? 'new' : null) // 'new' | 'replace' | null
   const [blocks, setBlocks] = useState(() => ensureRegistrationFormBlock(event?.page_json || []))
-  const [formFields, setFormFields] = useState(event?.form_schema || [
-    { id: 'name', type: 'text', label: 'Your name', required: true },
-    { id: 'phone', type: 'phone', label: 'WhatsApp number', required: true },
-  ])
+  const [formFields, setFormFields] = useState(event?.form_schema?.length ? event.form_schema : DEFAULT_FIELDS)
   const [selectedBlockId, setSelectedBlockId] = useState(null)
   const [rightPanel, setRightPanel] = useState('details') // 'details' | 'blocks' | 'edit' | 'form'
   const [saving, setSaving] = useState(false)
@@ -490,41 +495,38 @@ export default function PageBuilder({ event, onSave, onClose }) {
     location: event?.location || '',
     capacity: event?.capacity ?? '',
     contact_phone: event?.contact_phone || '',
-    accent_color: event?.accent_color || '#6366f1',
+    accent_color: event?.accent_color || DEFAULT_ACCENT,
     bot_can_register: event?.bot_can_register ?? false,
   })
-  const [uploadingBanner, setUploadingBanner] = useState(false)
 
-  const accent = details.accent_color || '#6366f1'
+  const accent = details.accent_color || DEFAULT_ACCENT
 
   const applyTemplate = (key) => {
-    const tmpl = TEMPLATES[key]
-    const blocks = tmpl.blocks.map(b => {
-      const newBlock = { ...b, id: genId() }
-      // Prefill the hero with whatever's been entered on the Details tab —
-      // avoids asking the merchant to retype the title/description/banner.
-      if (b.type === 'hero') {
-        newBlock.props = {
-          ...b.props,
-          title: details.title || b.props.title,
-          subtitle: details.description || b.props.subtitle,
-          image_url: details.banner_url || b.props.image_url,
-        }
-      }
-      return newBlock
-    })
-    setBlocks(ensureRegistrationFormBlock(blocks))
-    setShowTemplatePicker(false)
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const t = buildTemplate(key, details, origin)
+    if (!t) return
+    setBlocks(ensureRegistrationFormBlock(t.blocks))
+    // The template's questions, unless the merchant already set their own.
+    const customised = formFields.some(f => !['name', 'phone'].includes(f.id))
+    if (!customised) setFormFields(t.fields)
+    // The template's colour and photo, unless already chosen.
+    setDetails(d => ({
+      ...d,
+      accent_color: d.accent_color && d.accent_color !== DEFAULT_ACCENT ? d.accent_color : t.accent,
+      banner_url: d.banner_url || t.cover,
+    }))
+    setSelectedBlockId(null)
+    setRightPanel('details')
+    setPicker(null)
   }
 
-  const skipCustomPage = () => {
-    // No blocks saved → public event page falls back to the simple
-    // default layout built from the event's own fields.
-    onClose()
+  const startBlank = () => {
+    setBlocks(ensureRegistrationFormBlock([{ id: genId(), type: 'hero', props: { ...DEFAULT_PROPS.hero, title: details.title || DEFAULT_PROPS.hero.title } }]))
+    setPicker(null)
   }
 
   const addBlock = (type) => {
-    const newBlock = { id: genId(), type, props: { ...DEFAULT_PROPS[type] } }
+    const newBlock = { id: genId(), type, props: JSON.parse(JSON.stringify(DEFAULT_PROPS[type])) }
     setBlocks([...blocks, newBlock])
     setSelectedBlockId(newBlock.id)
     setRightPanel('edit')
@@ -561,20 +563,11 @@ export default function PageBuilder({ event, onSave, onClose }) {
 
   const uploadImage = async (file) => {
     const { url, error } = await uploadMedia(file, 'event-pages')
-    if (error) console.error(error)
+    if (error) { alert(error); return null }
     return url || null
   }
 
   const updateDetail = (patch) => setDetails(d => ({ ...d, ...patch }))
-
-  const handleDetailBannerUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploadingBanner(true)
-    const url = await uploadImage(file)
-    if (url) updateDetail({ banner_url: url })
-    setUploadingBanner(false)
-  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -596,115 +589,104 @@ export default function PageBuilder({ event, onSave, onClose }) {
   }
 
   const selectedBlock = blocks.find(b => b.id === selectedBlockId)
-
-  if (showTemplatePicker) {
-    return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-lg">Design a landing page?</h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Optional — pick a layout to customize, or skip and use the simple default page.
-              </p>
-            </div>
-            <button onClick={onClose}><X size={18} /></button>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {Object.entries(TEMPLATES).map(([key, t]) => (
-              <button key={key} onClick={() => applyTemplate(key)}
-                className="border-2 rounded-xl p-4 text-left hover:border-indigo-400 transition-colors">
-                <p className="font-medium text-sm">{t.label}</p>
-                <p className="text-xs text-muted-foreground mt-1">{t.desc}</p>
-              </button>
-            ))}
-          </div>
-          <button onClick={skipCustomPage}
-            className="w-full text-sm border-dashed border-2 rounded-xl py-3 text-muted-foreground hover:bg-muted/30 transition-colors">
-            Skip — use the simple default page instead
-          </button>
-        </div>
-      </div>
-    )
+  const selectBlock = (block) => {
+    setSelectedBlockId(block.id)
+    setRightPanel(block.type === 'registration_form' ? 'edit' : 'edit')
   }
+
+  if (picker === 'new') {
+    return <TemplatePicker onPick={applyTemplate} onBlank={startBlank} onSkip={onClose} onClose={onClose} />
+  }
+
+  const tabs = [['details', 'Details'], ['blocks', 'Add block'], ['edit', 'Edit'], ['form', 'Questions']]
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-        <div className="flex items-center gap-3">
-          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-gray-800">← Close</button>
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-gray-800 shrink-0">← Close</button>
           <span className="text-gray-300">/</span>
-          <span className="text-sm font-semibold">{details.title || 'Event Page'}</span>
+          <span className="text-sm font-semibold truncate">{details.title || 'Event page'}</span>
         </div>
-        <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-1.5 bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          {saving ? 'Saving...' : 'Save Page'}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={() => setPicker('replace')}
+            className="hidden sm:flex items-center gap-1.5 text-sm border rounded-lg px-3 py-2 hover:bg-muted">
+            <LayoutTemplate size={14} /> Change template
+          </button>
+          {event?.id && (
+            <a href={`/event/${event.id}`} target="_blank" rel="noopener noreferrer"
+              className="hidden sm:flex items-center gap-1.5 text-sm border rounded-lg px-3 py-2 hover:bg-muted"
+              title="Opens the saved version">
+              <ExternalLink size={14} /> View live page
+            </a>
+          )}
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-1.5 bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {saving ? 'Saving...' : 'Save page'}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Canvas */}
-        <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-          <div className="max-w-md mx-auto bg-white rounded-xl shadow-sm overflow-hidden">
+        {/* Canvas: the real page, exactly as visitors see it */}
+        <div className="flex-1 overflow-y-auto bg-gray-100 p-6" onClick={() => setSelectedBlockId(null)}>
+          <p className="text-center text-xs text-muted-foreground mb-3">Click any part of the page to edit it · drag to reorder</p>
+          <div className="max-w-[420px] mx-auto bg-white rounded-[28px] shadow-xl overflow-hidden border-8 border-gray-900/90">
             {blocks.length === 0 ? (
               <div className="p-12 text-center text-sm text-muted-foreground">
                 No blocks yet. Add one from the right panel.
               </div>
             ) : (
-              blocks.map((block, idx) => {
-                const isForm = block.type === 'registration_form'
-                return (
-                  <div key={block.id}
-                    draggable
-                    onDragStart={() => handleDragStart(idx)}
-                    onDragOver={e => handleDragOver(e, idx)}
-                    onDragEnd={handleDragEnd}
-                    onClick={() => { setSelectedBlockId(block.id); setRightPanel(isForm ? 'form' : 'edit') }}
-                    className={`relative group p-3 cursor-pointer border-2 transition-colors ${
-                      selectedBlockId === block.id ? 'border-indigo-400' : 'border-transparent hover:border-gray-200'
-                    }`}>
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center pr-1">
-                      <GripVertical size={14} className="text-gray-300 cursor-grab" />
+              <EventBlocks
+                blocks={blocks}
+                accent={accent}
+                formFields={formFields}
+                info={eventInfo({ ...details, spots_left: null })}
+                preview
+                wrap={(block, node) => {
+                  const idx = blocks.findIndex(b => b.id === block.id)
+                  const isForm = block.type === 'registration_form'
+                  const selected = selectedBlockId === block.id
+                  return (
+                    <div
+                      draggable
+                      onDragStart={() => handleDragStart(idx)}
+                      onDragOver={e => handleDragOver(e, idx)}
+                      onDragEnd={handleDragEnd}
+                      onClick={e => { e.stopPropagation(); selectBlock(block) }}
+                      className={`relative group cursor-pointer outline-2 -outline-offset-2 ${selected ? 'outline outline-indigo-500' : 'hover:outline hover:outline-indigo-300'}`}>
+                      <span className={`absolute top-2 left-2 z-10 text-[10px] font-semibold uppercase tracking-wide bg-indigo-600 text-white px-2 py-0.5 rounded ${selected ? '' : 'hidden group-hover:block'}`}>
+                        {blockLabel(block.type)}
+                      </span>
+                      {node}
+                      {selected && (
+                        <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 bg-white border rounded-lg shadow">
+                          <button onClick={e => { e.stopPropagation(); moveBlock(idx, -1) }} className="p-1.5 hover:bg-muted" title="Move up"><ChevronUp size={13} /></button>
+                          <button onClick={e => { e.stopPropagation(); moveBlock(idx, 1) }} className="p-1.5 hover:bg-muted" title="Move down"><ChevronDown size={13} /></button>
+                          {!isForm && (
+                            <button onClick={e => { e.stopPropagation(); removeBlock(block.id) }} className="p-1.5 hover:bg-red-50 text-red-500" title="Delete"><Trash2 size={13} /></button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <BlockPreview block={block} accent={accent} formFields={formFields} />
-                    {selectedBlockId === block.id && (
-                      <div className="absolute top-1 right-1 flex items-center gap-1 bg-white border rounded-lg shadow-sm">
-                        <button onClick={e => { e.stopPropagation(); moveBlock(idx, -1) }} className="p-1.5 hover:bg-muted"><ChevronUp size={12} /></button>
-                        <button onClick={e => { e.stopPropagation(); moveBlock(idx, 1) }} className="p-1.5 hover:bg-muted"><ChevronDown size={12} /></button>
-                        {!isForm && (
-                          <button onClick={e => { e.stopPropagation(); removeBlock(block.id) }} className="p-1.5 hover:bg-red-50 text-red-500"><Trash2 size={12} /></button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })
+                  )
+                }}
+              />
             )}
           </div>
         </div>
 
         {/* Right panel */}
         <div className="w-80 border-l flex flex-col shrink-0">
-          {/* Panel tabs */}
           <div className="flex border-b shrink-0">
-            <button onClick={() => setRightPanel('details')}
-              className={`flex-1 py-2.5 text-xs font-medium ${rightPanel === 'details' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>
-              Details
-            </button>
-            <button onClick={() => setRightPanel('blocks')}
-              className={`flex-1 py-2.5 text-xs font-medium ${rightPanel === 'blocks' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>
-              Add Blocks
-            </button>
-            <button onClick={() => setRightPanel('edit')} disabled={!selectedBlock}
-              className={`flex-1 py-2.5 text-xs font-medium disabled:opacity-40 ${rightPanel === 'edit' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>
-              Edit Block
-            </button>
-            <button onClick={() => setRightPanel('form')}
-              className={`flex-1 py-2.5 text-xs font-medium ${rightPanel === 'form' ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>
-              Form Fields
-            </button>
+            {tabs.map(([k, l]) => (
+              <button key={k} onClick={() => setRightPanel(k)} disabled={k === 'edit' && !selectedBlock}
+                className={`flex-1 py-2.5 text-xs font-medium disabled:opacity-40 ${rightPanel === k ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>
+                {l}
+              </button>
+            ))}
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
@@ -712,10 +694,9 @@ export default function PageBuilder({ event, onSave, onClose }) {
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground mb-1">Shown on the registration page and in WhatsApp confirmations</p>
                 <TextField label="Event title" value={details.title} onChange={v => updateDetail({ title: v })} />
-                <TextAreaField label="Description" value={details.description} onChange={v => updateDetail({ description: v })} rows={3} />
-                <ImageUploadField label="Banner image" value={details.banner_url}
-                  onChange={url => updateDetail({ banner_url: url })}
-                  onUploadImage={async (file) => { const url = await uploadImage(file); return url }} />
+                <TextAreaField label="Short description" value={details.description} onChange={v => updateDetail({ description: v })} rows={3} />
+                <ImageUploadField label="Cover image (event list & WhatsApp)" value={details.banner_url}
+                  onChange={url => updateDetail({ banner_url: url })} onUploadImage={uploadImage} />
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Date</label>
@@ -726,14 +707,23 @@ export default function PageBuilder({ event, onSave, onClose }) {
                 </div>
                 <TextField label="Location" value={details.location} onChange={v => updateDetail({ location: v })} placeholder="Chennai Trade Centre" />
                 <div className="grid grid-cols-2 gap-2">
-                  <TextField label="Capacity (optional)" value={details.capacity} onChange={v => updateDetail({ capacity: v })} placeholder="Unlimited" />
+                  <TextField label="Seats (optional)" value={details.capacity} onChange={v => updateDetail({ capacity: v })} placeholder="Unlimited" />
                   <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Accent color</label>
+                    <label className="text-xs text-muted-foreground">Theme colour</label>
                     <input type="color" className="w-full h-9 border rounded-lg cursor-pointer"
                       value={details.accent_color} onChange={e => updateDetail({ accent_color: e.target.value })} />
                   </div>
                 </div>
-                <TextField label={'Contact phone (for "Call to Attend")'} value={details.contact_phone} onChange={v => updateDetail({ contact_phone: v })} placeholder="+91 98765 43210" />
+                <div className="flex gap-1.5 flex-wrap">
+                  {['#4f46e5', '#0d9488', '#2563eb', '#db2777', '#b45309', '#059669', '#7c3aed', '#dc2626', '#111827'].map(c => (
+                    <button key={c} onClick={() => updateDetail({ accent_color: c })} title={c}
+                      className="w-6 h-6 rounded-full ring-offset-1 flex items-center justify-center"
+                      style={{ background: c, boxShadow: details.accent_color === c ? `0 0 0 2px white, 0 0 0 4px ${c}` : 'none' }}>
+                      {details.accent_color === c && <Check size={12} className="text-white" />}
+                    </button>
+                  ))}
+                </div>
+                <TextField label={'Contact phone (for "Call to attend")'} value={details.contact_phone} onChange={v => updateDetail({ contact_phone: v })} placeholder="+91 98765 43210" />
 
                 {/* Let the AI bot register directly in chat for THIS event —
                     per-event, not project-wide, since a merchant may want
@@ -754,7 +744,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
 
             {rightPanel === 'blocks' && (
               <div className="space-y-2">
-                <p className="text-xs text-muted-foreground mb-3">Click to add a block to the page</p>
+                <p className="text-xs text-muted-foreground mb-3">Click to add a block at the end of the page</p>
                 {BLOCK_TYPES.map(bt => {
                   const Icon = bt.icon
                   return (
@@ -771,24 +761,38 @@ export default function PageBuilder({ event, onSave, onClose }) {
               </div>
             )}
 
-            {rightPanel === 'edit' && selectedBlock && (
-              <div>
-                <p className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
-                  Editing: {BLOCK_TYPES.find(b => b.type === selectedBlock.type)?.label}
-                </p>
-                <BlockEditPanel block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)} onUploadImage={uploadImage} />
-              </div>
+            {rightPanel === 'edit' && (
+              selectedBlock ? (
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+                    {blockLabel(selectedBlock.type)}
+                  </p>
+                  <BlockEditPanel block={selectedBlock} onChange={props => updateBlock(selectedBlock.id, props)}
+                    onUploadImage={uploadImage} onOpenFields={() => setRightPanel('form')} />
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Click a part of the page to edit it.</p>
+              )
             )}
 
             {rightPanel === 'form' && (
               <div>
-                <p className="text-xs text-muted-foreground mb-3">Customize what info you collect from registrants</p>
+                <p className="text-xs text-muted-foreground mb-3">What you ask people when they register</p>
                 <FormFieldsEditor fields={formFields} onChange={setFormFields} />
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {picker === 'replace' && (
+        <TemplatePicker
+          replacing
+          onPick={applyTemplate}
+          onBlank={() => { startBlank(); setPicker(null) }}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   )
 }

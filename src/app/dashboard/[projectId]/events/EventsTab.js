@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Loader2, Copy, Layout } from 'lucide-react'
+import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Copy, Layout, ExternalLink, Download, Check, CalendarRange } from 'lucide-react'
 import PageBuilder from '@/components/builder/PageBuilder'
 import { confirmDialog } from '@/components/confirmDialog'
 
@@ -15,6 +15,7 @@ export default function EventsTab({ project }) {
   const [loadingRegs, setLoadingRegs] = useState(false)
   const [loadError, setLoadError] = useState(null)
   const [regsError, setRegsError] = useState(null)
+  const [copiedId, setCopiedId] = useState(null)
 
   // Create form now only asks for the event name — everything else
   // (description, banner, date, location, capacity, contact phone, colors)
@@ -182,6 +183,42 @@ export default function EventsTab({ project }) {
   const registrationUrl = (eventId) =>
     `${typeof window !== 'undefined' ? window.location.origin : ''}/event/${eventId}`
 
+  const copyLink = (eventId) => {
+    navigator.clipboard.writeText(registrationUrl(eventId))
+    setCopiedId(eventId)
+    setTimeout(() => setCopiedId(c => (c === eventId ? null : c)), 1500)
+  }
+
+  // The event's extra questions (beyond name / phone / email), in form order.
+  const extraFields = (event) =>
+    (Array.isArray(event?.form_schema) ? event.form_schema : []).filter(f => !['name', 'phone', 'email'].includes(f.id))
+  const answerText = (v) => (v === true ? 'Yes' : v === false ? 'No' : v == null ? '' : String(v))
+
+  // Same CSV safety as the Leads export: quotes doubled, and a value that
+  // starts with = + - @ is kept as text so Excel doesn't run it as a formula.
+  const csvCell = (value) => {
+    let t = value == null ? '' : String(value)
+    if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`
+    return `"${t.replace(/"/g, '""')}"`
+  }
+  const exportRegistrations = () => {
+    const extras = extraFields(viewingEvent)
+    const rows = [
+      ['Name', 'Phone', 'Email', ...extras.map(f => f.label), 'Status', 'Registered'],
+      ...registrations.map(r => [
+        r.name, `+${r.phone}`, r.email || '', ...extras.map(f => answerText((r.answers || {})[f.id])),
+        r.status, new Date(r.created_at).toLocaleString(),
+      ]),
+    ]
+    const csv = '\ufeff' + rows.map(row => row.map(csvCell).join(',')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(viewingEvent.title || 'registrations').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading events...</div>
 
   // Registrations detail view
@@ -191,9 +228,17 @@ export default function EventsTab({ project }) {
         <button onClick={() => setViewingEvent(null)} className="text-sm text-muted-foreground hover:text-gray-800">
           ← Back to Registrations
         </button>
-        <div>
-          <h2 className="text-lg font-semibold">{viewingEvent.title}</h2>
-          <p className="text-sm text-muted-foreground">{registrations.length} registration{registrations.length !== 1 ? 's' : ''}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">{viewingEvent.title}</h2>
+            <p className="text-sm text-muted-foreground">{registrations.length} registration{registrations.length !== 1 ? 's' : ''}</p>
+          </div>
+          {registrations.length > 0 && (
+            <button onClick={exportRegistrations}
+              className="text-sm border rounded-lg px-3 py-1.5 hover:bg-muted flex items-center gap-1.5 shrink-0">
+              <Download size={13} /> Export CSV
+            </button>
+          )}
         </div>
 
         {loadingRegs ? (
@@ -213,13 +258,16 @@ export default function EventsTab({ project }) {
             No registrations yet. Share the registration link to get started.
           </div>
         ) : (
-          <div className="border rounded-xl overflow-hidden">
+          <div className="border rounded-xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium">Name</th>
                   <th className="text-left px-4 py-3 font-medium">Phone</th>
                   <th className="text-left px-4 py-3 font-medium">Email</th>
+                  {extraFields(viewingEvent).map(f => (
+                    <th key={f.id} className="text-left px-4 py-3 font-medium whitespace-nowrap">{f.label}</th>
+                  ))}
                   <th className="text-left px-4 py-3 font-medium">Status</th>
                   <th className="text-left px-4 py-3 font-medium">Registered</th>
                 </tr>
@@ -230,6 +278,9 @@ export default function EventsTab({ project }) {
                     <td className="px-4 py-3 font-medium">{r.name}</td>
                     <td className="px-4 py-3">+{r.phone}</td>
                     <td className="px-4 py-3 text-muted-foreground">{r.email || '—'}</td>
+                    {extraFields(viewingEvent).map(f => (
+                      <td key={f.id} className="px-4 py-3 text-muted-foreground">{answerText((r.answers || {})[f.id]) || '—'}</td>
+                    ))}
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         r.status === 'confirmed' ? 'bg-green-100 text-green-700' :
@@ -259,7 +310,7 @@ export default function EventsTab({ project }) {
         </div>
         <button onClick={() => setShowCreate(true)}
           className="flex items-center gap-1.5 bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">
-          <Plus size={14} /> New Event
+          <Plus size={14} /> New event
         </button>
       </div>
 
@@ -309,15 +360,29 @@ export default function EventsTab({ project }) {
           </button>
         </div>
       ) : events.length === 0 ? (
-        <div className="text-center py-12 border rounded-xl text-sm text-muted-foreground">
-          No events yet. Create your first event to start collecting registrations.
+        <div className="text-center py-14 border-2 border-dashed rounded-2xl space-y-3">
+          <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+            <CalendarRange size={22} />
+          </div>
+          <div>
+            <p className="font-medium">Create your first event page</p>
+            <p className="text-sm text-muted-foreground mt-1">Pick a ready-made template - conference, workshop, webinar, open house, health camp and more.</p>
+          </div>
+          <button onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-1.5 bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">
+            <Plus size={14} /> New event
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {events.map(event => (
             <div key={event.id} className="border rounded-xl overflow-hidden bg-white">
-              {event.banner_url && (
-                <img src={event.banner_url} className="w-full h-32 object-cover" />
+              {event.banner_url ? (
+                <img src={event.banner_url} alt="" className="w-full h-32 object-cover" />
+              ) : (
+                <div className="w-full h-32 flex items-end p-3" style={{ background: `linear-gradient(135deg, ${event.accent_color || '#6366f1'}, ${event.accent_color || '#6366f1'}99)` }}>
+                  <span className="text-white/90 text-xs font-medium">No cover image yet</span>
+                </div>
               )}
               <div className="p-4 space-y-2">
                 <div className="flex items-start justify-between">
@@ -346,10 +411,14 @@ export default function EventsTab({ project }) {
                 <div className="flex items-center gap-2 pt-1">
                   <input readOnly value={registrationUrl(event.id)}
                     className="flex-1 text-xs border rounded px-2 py-1 bg-muted/30 text-muted-foreground truncate" />
-                  <button onClick={() => navigator.clipboard.writeText(registrationUrl(event.id))}
-                    className="text-xs border rounded px-2 py-1 hover:bg-muted shrink-0">
-                    <Copy size={11} />
+                  <button onClick={() => copyLink(event.id)} title="Copy link"
+                    className="text-xs border rounded px-2 py-1 hover:bg-muted shrink-0 flex items-center gap-1">
+                    {copiedId === event.id ? <><Check size={11} className="text-green-600" /> Copied</> : <Copy size={11} />}
                   </button>
+                  <a href={registrationUrl(event.id)} target="_blank" rel="noopener noreferrer" title="Open page"
+                    className="text-xs border rounded px-2 py-1 hover:bg-muted shrink-0">
+                    <ExternalLink size={11} />
+                  </a>
                 </div>
 
                 <div className="flex gap-2 pt-2">

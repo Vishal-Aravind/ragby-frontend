@@ -3,305 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Check, Calendar, MapPin, Users } from "lucide-react";
-import DOMPurify from "isomorphic-dompurify";
-
-// Origins allowed inside an <iframe> on a public registration page.
-// page_json is merchant-authored, but "merchant" includes any teammate
-// granted the Registrations tab, and an iframe on a page anonymous
-// visitors load is a much bigger surface than a broken embed. Anything
-// unrecognised renders as a plain link instead.
-const ALLOWED_EMBED_HOSTS = [
-  "www.youtube.com",
-  "youtube.com",
-  "www.youtube-nocookie.com",
-  "player.vimeo.com",
-  "www.google.com",       // maps embeds
-  "maps.google.com",
-  "www.openstreetmap.org",
-];
-
-function safeEmbedUrl(raw) {
-  if (!raw || typeof raw !== "string") return null;
-  try {
-    const url = new URL(raw);
-    // Blocks javascript: and data: before the host check even matters.
-    if (url.protocol !== "https:") return null;
-    if (!ALLOWED_EMBED_HOSTS.includes(url.hostname)) return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-// ─────────────────────────────────────────────────────────
-// PUBLIC BLOCK RENDERER — turns page_json into actual page
-// ─────────────────────────────────────────────────────────
-function Countdown({ targetDate, label, accent }) {
-  const [timeLeft, setTimeLeft] = useState(null);
-
-  useEffect(() => {
-    if (!targetDate) return;
-    const update = () => {
-      const diff = new Date(targetDate).getTime() - Date.now();
-      if (diff <= 0) { setTimeLeft({ days: 0, hours: 0, mins: 0 }); return; }
-      setTimeLeft({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-        mins: Math.floor((diff / (1000 * 60)) % 60),
-      });
-    };
-    update();
-    const interval = setInterval(update, 60000);
-    return () => clearInterval(interval);
-  }, [targetDate]);
-
-  if (!targetDate || !timeLeft) return null;
-
-  return (
-    <div className="text-center py-5 px-4 rounded-xl" style={{ background: `${accent}11` }}>
-      <p className="text-xs text-gray-500 mb-2">{label}</p>
-      <div className="flex items-center justify-center gap-4">
-        {[["Days", timeLeft.days], ["Hours", timeLeft.hours], ["Mins", timeLeft.mins]].map(([l, v]) => (
-          <div key={l}>
-            <p className="text-2xl font-bold" style={{ color: accent }}>{v}</p>
-            <p className="text-xs text-gray-400">{l}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function BlockRenderer({ blocks, accent, formFields, onSubmit, submitting, spotsFull, registrationClosed, contactPhone }) {
-  return (
-    <div>
-      {(blocks || []).map(block => {
-        const p = block.props;
-        switch (block.type) {
-          case "registration_form":
-            return (
-              <div key={block.id} className="px-4 py-4">
-                {spotsFull || registrationClosed ? (
-                  <div className="bg-gray-50 rounded-2xl border p-6 text-center space-y-2">
-                    <p className="text-gray-600 font-medium text-sm">{spotsFull ? "This event is fully booked" : "Registration is closed"}</p>
-                    {contactPhone && <p className="text-xs text-gray-400">Call {contactPhone} for more info</p>}
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 rounded-2xl border p-4">
-                    <p className="font-semibold text-sm text-gray-800 mb-3">Register now</p>
-                    <DynamicForm fields={formFields} accent={accent} onSubmit={onSubmit} submitting={submitting} />
-                  </div>
-                )}
-              </div>
-            );
-
-          case "hero":
-            return (
-              <div key={block.id} className="relative" style={{ minHeight: 200, background: p.image_url ? `url(${p.image_url}) center/cover` : accent }}>
-                <div className="flex flex-col justify-end p-6" style={{ minHeight: 200, background: p.overlay ? "linear-gradient(transparent, rgba(0,0,0,0.65))" : "none" }}>
-                  <h1 className="text-white font-bold text-2xl">{p.title}</h1>
-                  {p.subtitle && <p className="text-white opacity-90 text-sm mt-1">{p.subtitle}</p>}
-                </div>
-              </div>
-            );
-
-          case "text":
-            return (
-              <div key={block.id} className="px-4 py-4" style={{ textAlign: p.align }}>
-                {p.heading && <h2 className="font-bold text-lg mb-2 text-gray-900">{p.heading}</h2>}
-                <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{p.body}</p>
-              </div>
-            );
-
-          case "countdown":
-            return (
-              <div key={block.id} className="px-4 py-3">
-                <Countdown targetDate={p.target_date} label={p.label} accent={accent} />
-              </div>
-            );
-
-          case "speakers":
-            return (
-              <div key={block.id} className="px-4 py-4">
-                {p.heading && <h2 className="font-bold text-lg mb-3 text-gray-900">{p.heading}</h2>}
-                <div className="grid grid-cols-3 gap-3">
-                  {p.items.map((s, i) => (
-                    <div key={i} className="text-center">
-                      <div className="w-16 h-16 rounded-full bg-gray-200 mx-auto mb-1.5" style={s.photo_url ? { backgroundImage: `url(${s.photo_url})`, backgroundSize: "cover", backgroundPosition: "center" } : {}} />
-                      <p className="text-xs font-semibold text-gray-800 truncate">{s.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{s.role}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-
-          case "faq":
-            return (
-              <div key={block.id} className="px-4 py-4">
-                {p.heading && <h2 className="font-bold text-lg mb-3 text-gray-900">{p.heading}</h2>}
-                <div className="space-y-2">
-                  {p.items.map((f, i) => <FaqItem key={i} q={f.q} a={f.a} />)}
-                </div>
-              </div>
-            );
-
-          case "gallery":
-            return (
-              <div key={block.id} className="px-4 py-4 grid grid-cols-3 gap-1.5">
-                {p.images.map((img, i) => (
-                  <img key={i} src={img} className="aspect-square object-cover rounded-lg" />
-                ))}
-              </div>
-            );
-
-          case "video": {
-            if (!p.url) return null;
-            // The YouTube rewrite is a convenience, not a filter — any
-            // other URL used to fall straight through into the iframe src.
-            const ytMatch = p.url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-            const embedUrl = ytMatch
-              ? `https://www.youtube.com/embed/${ytMatch[1]}`
-              : safeEmbedUrl(p.url);
-            if (!embedUrl) {
-              return (
-                <div key={block.id} className="px-4 py-4">
-                  <a href={p.url} target="_blank" rel="noopener noreferrer"
-                     className="text-sm underline text-gray-500 break-all">
-                    {p.caption || p.url}
-                  </a>
-                </div>
-              );
-            }
-            return (
-              <div key={block.id} className="px-4 py-4">
-                <div className="rounded-xl overflow-hidden" style={{ aspectRatio: "16/9" }}>
-                  <iframe src={embedUrl} className="w-full h-full" allowFullScreen
-                          sandbox="allow-scripts allow-same-origin allow-presentation" />
-                </div>
-                {p.caption && <p className="text-xs text-gray-400 mt-2 text-center">{p.caption}</p>}
-              </div>
-            );
-          }
-
-          case "map": {
-            const mapUrl = safeEmbedUrl(p.embed_url);
-            return (
-              <div key={block.id} className="px-4 py-4">
-                {mapUrl ? (
-                  <iframe src={mapUrl} className="w-full rounded-xl" style={{ height: 200, border: 0 }}
-                          loading="lazy" sandbox="allow-scripts allow-same-origin" />
-                ) : (
-                  <div className="bg-gray-100 rounded-xl p-4 text-center text-sm text-gray-500">📍 {p.address}</div>
-                )}
-              </div>
-            );
-          }
-
-          case "divider":
-            return p.style === "space"
-              ? <div key={block.id} className="h-8" />
-              : <hr key={block.id} className="mx-4 border-gray-200" />;
-
-          case "html": {
-            const safeHtml = DOMPurify.sanitize(p.code || "", { USE_PROFILES: { html: true } });
-            return <div key={block.id} className="px-4 py-2" dangerouslySetInnerHTML={{ __html: safeHtml }} />;
-          }
-
-          default:
-            return null;
-        }
-      })}
-    </div>
-  );
-}
-
-function FaqItem({ q, a }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between px-3 py-2.5 text-left">
-        <span className="text-sm font-medium text-gray-800">{q}</span>
-        <span className="text-gray-400 text-lg leading-none">{open ? "−" : "+"}</span>
-      </button>
-      {open && <div className="px-3 pb-2.5 text-sm text-gray-500">{a}</div>}
-    </div>
-  );
-}
-
-
-function DynamicForm({ fields, accent, onSubmit, submitting }) {
-  const [values, setValues] = useState(
-    Object.fromEntries(fields.map(f => [f.id, f.type === "checkbox" ? false : ""]))
-  );
-  const [error, setError] = useState(null);
-
-  const setVal = (id, v) => setValues(prev => ({ ...prev, [id]: v }));
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError(null);
-    for (const f of fields) {
-      // `!values[f.id]` alone treated a legitimate 0 as missing, and let a
-      // string of spaces through as present.
-      const raw = values[f.id];
-      const empty =
-        raw === undefined || raw === null || raw === false ||
-        (typeof raw === "string" && !raw.trim());
-      if (f.required && empty) {
-        setError(`${f.label} is required`);
-        return;
-      }
-    }
-
-    // The backend is the authority on this (it has to be — anyone can POST
-    // the endpoint directly), but catching it here saves a round trip and
-    // gives a clearer message than a 400 does.
-    const phone = String(values.phone ?? "").replace(/\D/g, "");
-    if (phone && (phone.length < 8 || phone.length > 15)) {
-      setError("Please enter a valid phone number with country code");
-      return;
-    }
-
-    onSubmit(values);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
-      {fields.map(f => (
-        <div key={f.id} className="space-y-1">
-          <label className="text-xs text-gray-500">{f.label}{f.required && " *"}</label>
-          {f.type === "textarea" ? (
-            <textarea rows={3} value={values[f.id]} onChange={e => setVal(f.id, e.target.value)}
-              className="w-full border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2" />
-          ) : f.type === "dropdown" ? (
-            <select value={values[f.id]} onChange={e => setVal(f.id, e.target.value)}
-              className="w-full border rounded-xl px-3 py-3 text-sm outline-none bg-white">
-              <option value="">Select...</option>
-              {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          ) : f.type === "checkbox" ? (
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              <input type="checkbox" checked={values[f.id]} onChange={e => setVal(f.id, e.target.checked)} />
-              {f.label}
-            </label>
-          ) : (
-            <input
-              type={f.type === "email" ? "email" : f.type === "phone" ? "tel" : f.type === "number" ? "number" : "text"}
-              value={values[f.id]} onChange={e => setVal(f.id, e.target.value)}
-              className="w-full border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2" />
-          )}
-        </div>
-      ))}
-      <button type="submit" disabled={submitting}
-        className="w-full py-4 rounded-xl text-white font-semibold text-base disabled:opacity-60"
-        style={{ background: accent }}>
-        {submitting ? "Registering..." : "Confirm Registration ✓"}
-      </button>
-    </form>
-  );
-}
+// Shared with the page builder, so the merchant's design is exactly what
+// visitors see.
+import EventBlocks, { DynamicForm, eventInfo } from "@/components/builder/EventBlocks";
 
 export default function EventRegistrationPage() {
   const { eventId } = useParams();
@@ -407,7 +111,7 @@ export default function EventRegistrationPage() {
 
       {hasCustomPage ? (
         <div className="max-w-md mx-auto bg-white">
-          <BlockRenderer
+          <EventBlocks
             blocks={event.page_json}
             accent={accent}
             formFields={formFields}
@@ -416,6 +120,7 @@ export default function EventRegistrationPage() {
             spotsFull={spotsFull}
             registrationClosed={registrationClosed}
             contactPhone={event.contact_phone}
+            info={eventInfo(event)}
           />
         </div>
       ) : (
@@ -433,7 +138,9 @@ export default function EventRegistrationPage() {
       )}
 
       <div className="px-4 pt-4 max-w-md mx-auto space-y-4">
-        {/* Event details card */}
+        {/* Event details card - a designed page with a banner shows these
+            right under the banner instead (EventBlocks InfoCard). */}
+        {!(hasCustomPage && event.page_json.some(b => b.type === "hero")) && (
         <div className="bg-white rounded-2xl shadow-sm border p-4 space-y-3">
           {event.event_date && (
             <div className="flex items-center gap-2 text-sm">
@@ -457,6 +164,7 @@ export default function EventRegistrationPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Registration form or closed message — skipped when the custom
             page already renders it inline as a registration_form block,
