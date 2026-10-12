@@ -4,6 +4,25 @@ import { useRouter } from 'next/navigation'
 import { Plus, Send, CheckCircle, XCircle, Clock, Sparkles, RefreshCw } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { confirmDialog } from '@/components/confirmDialog'
+import { uploadMedia } from '@/lib/uploadMedia'
+import { varNumbers } from '../templates/templateShared'
+
+// What a template needs besides its message values, and whether campaigns
+// can fill it. Mirrors backend/campaigns.py _template_header.
+function templateNeeds(t) {
+  const comps = t?.components || []
+  const header = comps.find(c => c.type === 'HEADER')
+  const buttons = comps.find(c => c.type === 'BUTTONS')
+  if ((buttons?.buttons || []).some(b => b.type === 'URL' && String(b.url || '').includes('{{'))) {
+    return { unsupported: 'has a link button with a variable' }
+  }
+  if (header && !['TEXT', 'IMAGE'].includes(header.format)) {
+    return { unsupported: `has a ${String(header.format || '').toLowerCase()} header` }
+  }
+  if (header?.format === 'IMAGE') return { header: 'image' }
+  if (header?.format === 'TEXT' && varNumbers(header.text).length) return { header: 'text', headerTemplate: header.text }
+  return {}
+}
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://ragby-backend.onrender.com'
 
@@ -25,6 +44,10 @@ export default function CampaignsTab({ project }) {
   const [name, setName]               = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
   const [variables, setVariables]     = useState([])
+  // For templates with a header: the image on top, or the header's {{1}}.
+  const [headerImageUrl, setHeaderImageUrl] = useState('')
+  const [headerText, setHeaderText]   = useState('')
+  const [uploadingHeader, setUploadingHeader] = useState(false)
   const [recipientFilter, setRecipientFilter] = useState('whatsapp')
   const [tagFilter, setTagFilter]     = useState('')
   const [availableTags, setAvailableTags] = useState([])
@@ -158,11 +181,25 @@ export default function CampaignsTab({ project }) {
   }, [projectId])
 
   const selectTemplate = (t) => {
+    if (templateNeeds(t).unsupported) return
     setSelectedTemplate(t)
     const body = t.components?.find(c => c.type === "BODY")
-    const text = body?.text || ""
-    const count = (text.match(/\{\{\d+\}\}/g) || []).length
-    setVariables(Array(count).fill(""))
+    // One field per distinct variable: "{{1}} ... {{1}}" is still one value.
+    setVariables(Array(varNumbers(body?.text).length).fill(""))
+    setHeaderImageUrl('')
+    setHeaderText('')
+  }
+
+  const onHeaderImage = async (file) => {
+    if (!file) return
+    if (!/\.(jpe?g|png)$/i.test(file.name)) return setError('Header image: use a JPG or PNG.')
+    if (file.size > 5 * 1024 * 1024) return setError('Header image: 5MB at most.')
+    setError(null)
+    setUploadingHeader(true)
+    const { url, error: upErr } = await uploadMedia(file, 'wa-template')
+    setUploadingHeader(false)
+    if (upErr) return setError(upErr)
+    setHeaderImageUrl(url)
   }
 
   const resetForm = () => {
@@ -170,6 +207,8 @@ export default function CampaignsTab({ project }) {
     setName('')
     setSelectedTemplate(null)
     setVariables([])
+    setHeaderImageUrl('')
+    setHeaderText('')
     setCsvContacts([])
     setRecipientFilter('whatsapp')
     setTagFilter('')
@@ -185,6 +224,10 @@ export default function CampaignsTab({ project }) {
   const handleSend = async () => {
     if (!name.trim()) return setError("Campaign name is required")
     if (!selectedTemplate) return setError("Select a template")
+    const needs = templateNeeds(selectedTemplate)
+    if (needs.header === 'image' && !headerImageUrl) return setError("Upload the image for this template's header")
+    if (needs.header === 'text' && !headerText.trim()) return setError("Fill in the header value")
+    if (variables.some(v => !String(v).trim())) return setError("Fill in every template variable")
     if (recipientFilter === 'csv' && csvContacts.length === 0) return setError("Upload a CSV file first")
     if (recipientFilter === 'tag' && !tagFilter) return setError("Pick a tag first")
     if (sendTiming === 'later') {
@@ -249,6 +292,8 @@ export default function CampaignsTab({ project }) {
       template_name: selectedTemplate.name,
       template_language: selectedTemplate.language || 'en_US',
       variables,
+      header_image_url: templateNeeds(selectedTemplate).header === 'image' ? headerImageUrl : null,
+      header_text: templateNeeds(selectedTemplate).header === 'text' ? headerText : null,
       recipient_filter: recipientFilter,
       tag_filter: tagFilter || null,
       csv_contacts: recipientFilter === 'csv' ? csvContacts : null,
@@ -297,6 +342,8 @@ export default function CampaignsTab({ project }) {
     setSelectedTemplate(matchedTemplate)
     setName(campaign.name)
     setVariables(tv.variables && tv.variables.length ? tv.variables : Array((tv.variables || []).length).fill(''))
+    setHeaderImageUrl(tv.header?.image || '')
+    setHeaderText(tv.header?.text || '')
     setRecipientFilter(campaign.recipient_filter || 'all')
     setTagFilter(campaign.tag_filter || '')
     setCsvContacts([])
@@ -415,25 +462,56 @@ export default function CampaignsTab({ project }) {
               <div className="mt-1 space-y-2 max-h-48 overflow-y-auto">
                 {templates.map(t => {
                   const body = t.components?.find(c => c.type === "BODY")
+                  const needs = templateNeeds(t)
                   return (
-                    <div key={t.name}
+                    <div key={`${t.name}|${t.language}`}
                       onClick={() => selectTemplate(t)}
-                      className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                        selectedTemplate?.name === t.name
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'hover:bg-muted/50'
+                      className={`border rounded-lg p-3 transition-colors ${
+                        needs.unsupported ? 'opacity-60 cursor-not-allowed'
+                          : selectedTemplate?.name === t.name
+                          ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                          : 'hover:bg-muted/50 cursor-pointer'
                       }`}>
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">{t.name}</p>
+                        <p className="text-sm font-medium">{t.name}{needs.header === 'image' ? ' · 🖼️' : ''}</p>
                         {templateStatusBadge(t.status)}
                       </div>
                       {body && <p className="text-xs text-muted-foreground mt-1 truncate">{body.text}</p>}
+                      {needs.unsupported && (
+                        <p className="text-[11px] text-amber-700 mt-1">Can&apos;t be sent from campaigns yet - it {needs.unsupported}.</p>
+                      )}
                     </div>
                   )
                 })}
               </div>
             )}
           </div>
+
+          {/* Header: the image on top, or the header's {{1}} */}
+          {selectedTemplate && templateNeeds(selectedTemplate).header === 'image' && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Header image</label>
+              <div className="mt-1 flex items-center gap-3">
+                {headerImageUrl && <img src={headerImageUrl} alt="" className="h-16 w-24 object-cover rounded border" />}
+                <label className="text-sm border rounded-lg px-3 py-1.5 hover:bg-muted cursor-pointer">
+                  {uploadingHeader ? 'Uploading...' : headerImageUrl ? 'Replace image' : 'Upload image'}
+                  <input type="file" accept="image/jpeg,image/png" className="hidden" disabled={uploadingHeader}
+                    onChange={e => { onHeaderImage(e.target.files?.[0]); e.target.value = '' }} />
+                </label>
+                <span className="text-[11px] text-muted-foreground">JPG or PNG, up to 5MB. Shown on top of the message.</span>
+              </div>
+            </div>
+          )}
+          {selectedTemplate && templateNeeds(selectedTemplate).header === 'text' && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Header value</label>
+              <p className="text-[11px] text-muted-foreground">{templateNeeds(selectedTemplate).headerTemplate}</p>
+              <input
+                className="mt-1 w-full border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="Value for {{1}} in the header" maxLength={60}
+                value={headerText} onChange={e => setHeaderText(e.target.value)} />
+            </div>
+          )}
 
           {/* Variables */}
           {selectedTemplate && variables.length > 0 && (

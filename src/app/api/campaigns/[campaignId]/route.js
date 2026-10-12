@@ -40,6 +40,8 @@ export async function PUT(req, { params }) {
       template_name: body.template_name,
       template_language: body.template_language,
       variables: body.variables,
+      header_image_url: body.header_image_url || null,
+      header_text: body.header_text || null,
       recipient_filter: body.recipient_filter,
       tag_filter: body.tag_filter,
       csv_contacts: body.csv_contacts || null,

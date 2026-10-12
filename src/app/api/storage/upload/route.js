@@ -49,6 +49,9 @@ const FOLDER_RULES = {
   "web-video":      { limit: 16 * 1024 * 1024,  types: { mp4: "video/mp4", webm: "video/webm" } },
   "web-audio":      { limit: 16 * 1024 * 1024,  types: { ...AUDIO_TYPES, wav: "audio/wav" } },
   "web-document":   { limit: 16 * 1024 * 1024,  types: DOC_TYPES },
+  // WhatsApp template header images (template creation and campaigns):
+  // WhatsApp takes JPG/PNG up to 5MB.
+  "wa-template":    { limit: 5 * 1024 * 1024,   types: WA_IMAGE_TYPES },
 };
 
 export async function POST(req) {
