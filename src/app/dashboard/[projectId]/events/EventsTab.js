@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Copy, Layout, ExternalLink, Download, Check, CalendarRange } from 'lucide-react'
+import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Copy, Layout, ExternalLink, Download, Check, CalendarRange, Clock } from 'lucide-react'
 import PageBuilder from '@/components/builder/PageBuilder'
 import { confirmDialog } from '@/components/confirmDialog'
 
@@ -16,6 +16,7 @@ export default function EventsTab({ project }) {
   const [loadError, setLoadError] = useState(null)
   const [regsError, setRegsError] = useState(null)
   const [copiedId, setCopiedId] = useState(null)
+  const [statusSaving, setStatusSaving] = useState(null)
 
   // Create form now only asks for the event name — everything else
   // (description, banner, date, location, capacity, contact phone, colors)
@@ -114,15 +115,16 @@ export default function EventsTab({ project }) {
     } catch (e) {
       console.error(e)
       alert("Couldn't save your changes. Check your connection — your design is still here.")
-      return
+      return false
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       alert(err.error || err.detail || "Couldn't save your changes. Your design is still here.")
-      return
+      return false
     }
     setBuilderEvent(null)
     fetchEvents()
+    return true
   }
 
   const toggleActive = async (event) => {
@@ -183,6 +185,35 @@ export default function EventsTab({ project }) {
   const registrationUrl = (eventId) =>
     `${typeof window !== 'undefined' ? window.location.origin : ''}/event/${eventId}`
 
+  // Confirmed / attended / no-show / cancelled. Cancelling frees the seat
+  // and sends the person a WhatsApp message, so it asks first.
+  const STATUS_OPTIONS = [['confirmed', 'Confirmed'], ['attended', 'Attended'], ['no_show', 'No-show'], ['cancelled', 'Cancelled']]
+  const changeStatus = async (reg, status) => {
+    if (status === reg.status) return
+    if (status === 'cancelled' && !(await confirmDialog({
+      title: `Cancel ${reg.name}'s registration?`,
+      description: 'Their seat is freed and they get a WhatsApp message. This cannot be undone.',
+      confirmText: 'Cancel registration', cancelText: 'Keep it',
+    }))) return
+    setStatusSaving(reg.id)
+    try {
+      const res = await fetch(`/api/events/registrations/${reg.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || err.detail || "Couldn't change the status.")
+        return
+      }
+      setRegistrations(prev => prev.map(r => (r.id === reg.id ? { ...r, status } : r)))
+    } finally {
+      setStatusSaving(null)
+    }
+  }
+  const statusCount = (s) => registrations.filter(r => r.status === s).length
+
   const copyLink = (eventId) => {
     navigator.clipboard.writeText(registrationUrl(eventId))
     setCopiedId(eventId)
@@ -231,7 +262,10 @@ export default function EventsTab({ project }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">{viewingEvent.title}</h2>
-            <p className="text-sm text-muted-foreground">{registrations.length} registration{registrations.length !== 1 ? 's' : ''}</p>
+            <p className="text-sm text-muted-foreground">
+              {registrations.length} registration{registrations.length !== 1 ? 's' : ''}
+              {registrations.length > 0 && ` · ${statusCount('confirmed')} confirmed · ${statusCount('attended')} attended · ${statusCount('no_show')} no-show · ${statusCount('cancelled')} cancelled`}
+            </p>
           </div>
           {registrations.length > 0 && (
             <button onClick={exportRegistrations}
@@ -282,11 +316,19 @@ export default function EventsTab({ project }) {
                       <td key={f.id} className="px-4 py-3 text-muted-foreground">{answerText((r.answers || {})[f.id]) || '—'}</td>
                     ))}
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        r.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                        r.status === 'cancelled' ? 'bg-red-100 text-red-600' :
-                        'bg-blue-100 text-blue-700'
-                      }`}>{r.status}</span>
+                      <select value={r.status} disabled={r.status === 'cancelled' || statusSaving === r.id}
+                        onChange={e => changeStatus(r, e.target.value)}
+                        title={r.status === 'cancelled' ? 'Cancelled registrations stay cancelled - they can register again from the page' : 'Change status'}
+                        className={`text-xs rounded-full font-medium px-2 py-1 border-0 outline-none cursor-pointer disabled:cursor-default ${
+                          r.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          r.status === 'attended' ? 'bg-indigo-100 text-indigo-700' :
+                          r.status === 'no_show' ? 'bg-amber-100 text-amber-700' :
+                          r.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                        {!STATUS_OPTIONS.some(([v]) => v === r.status) && <option value={r.status}>{r.status}</option>}
+                        {STATUS_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">
                       {new Date(r.created_at).toLocaleDateString()}
@@ -406,6 +448,11 @@ export default function EventsTab({ project }) {
                   <div className="flex items-center gap-1.5">
                     <Users size={11} /> {event.registration_count} registered{event.capacity ? ` / ${event.capacity}` : ''}
                   </div>
+                  {event.registration_deadline && (
+                    <div className={`flex items-center gap-1.5 ${new Date(event.registration_deadline) < new Date() ? 'text-red-600' : ''}`}>
+                      <Clock size={11} /> {new Date(event.registration_deadline) < new Date() ? 'Registration closed' : 'Closes'} {new Date(event.registration_deadline).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 pt-1">

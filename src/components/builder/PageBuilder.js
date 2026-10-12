@@ -1,11 +1,12 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Image as ImageIcon, Type, Clock, Users, HelpCircle, Grid, Minus,
   Video, MapPin, Code2, Trash2, ChevronUp, ChevronDown,
   X, Save, Loader2, ListOrdered, LayoutTemplate, ExternalLink, Check,
 } from 'lucide-react'
 import { uploadMedia } from '@/lib/uploadMedia'
+import { confirmDialog } from '@/components/confirmDialog'
 import EventBlocks, { eventInfo } from './EventBlocks'
 import { EVENT_TEMPLATES, buildTemplate } from './eventTemplates'
 
@@ -59,6 +60,16 @@ const DEFAULT_FIELDS = [
 const DEFAULT_ACCENT = '#6366f1'
 
 const genId = () => `b_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+// timestamptz (UTC) <-> the "YYYY-MM-DDTHH:mm" local value a
+// datetime-local input uses.
+const toLocalInput = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d)) return ''
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+const fromLocalInput = (v) => (v ? new Date(v).toISOString() : null)
 
 // Registration form is a singleton block — always exactly one, never
 // manually added/removed (only reordered), so it gets a fixed id instead
@@ -497,7 +508,31 @@ export default function PageBuilder({ event, onSave, onClose }) {
     contact_phone: event?.contact_phone || '',
     accent_color: event?.accent_color || DEFAULT_ACCENT,
     bot_can_register: event?.bot_can_register ?? false,
+    registration_deadline: toLocalInput(event?.registration_deadline),
   })
+
+  // Unsaved-changes guard: what was last saved (or loaded), to compare on Close.
+  const snapshot = (b, f, d) => JSON.stringify({ b, f, d })
+  const savedRef = useRef(null)
+  if (savedRef.current === null) savedRef.current = snapshot(blocks, formFields, details)
+  const dirty = snapshot(blocks, formFields, details) !== savedRef.current
+
+  // Closing the browser tab with unsaved edits asks first too.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  const requestClose = async () => {
+    if (dirty && !(await confirmDialog({
+      title: 'Discard your changes?',
+      description: "You have changes that aren't saved. Close without saving?",
+      confirmText: 'Discard', cancelText: 'Keep editing',
+    }))) return
+    onClose()
+  }
 
   const accent = details.accent_color || DEFAULT_ACCENT
 
@@ -571,7 +606,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
 
   const handleSave = async () => {
     setSaving(true)
-    await onSave({
+    const ok = await onSave({
       page_json: blocks,
       form_schema: formFields,
       title: details.title.trim(),
@@ -584,7 +619,11 @@ export default function PageBuilder({ event, onSave, onClose }) {
       contact_phone: details.contact_phone.trim() || null,
       accent_color: details.accent_color,
       bot_can_register: details.bot_can_register,
+      registration_deadline: fromLocalInput(details.registration_deadline),
     })
+    // Only a successful save counts as saved (a failed one keeps the
+    // builder open and the edits still unsaved).
+    if (ok !== false) savedRef.current = snapshot(blocks, formFields, details)
     setSaving(false)
   }
 
@@ -605,7 +644,8 @@ export default function PageBuilder({ event, onSave, onClose }) {
       {/* Top bar */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 border-b shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-gray-800 shrink-0">← Close</button>
+          <button onClick={requestClose} className="text-sm text-muted-foreground hover:text-gray-800 shrink-0">← Close</button>
+          {dirty && <span className="text-[11px] text-amber-600 shrink-0">Unsaved changes</span>}
           <span className="text-gray-300">/</span>
           <span className="text-sm font-semibold truncate">{details.title || 'Event page'}</span>
         </div>
@@ -706,6 +746,17 @@ export default function PageBuilder({ event, onSave, onClose }) {
                   <TextField label="Time" value={details.event_time} onChange={v => updateDetail({ event_time: v })} placeholder="10 AM - 4 PM" />
                 </div>
                 <TextField label="Location" value={details.location} onChange={v => updateDetail({ location: v })} placeholder="Chennai Trade Centre" />
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Registration closes on (optional)</label>
+                  <div className="flex gap-1.5">
+                    <input type="datetime-local" className="flex-1 border rounded-lg px-3 py-2 text-sm"
+                      value={details.registration_deadline} onChange={e => updateDetail({ registration_deadline: e.target.value })} />
+                    {details.registration_deadline && (
+                      <button onClick={() => updateDetail({ registration_deadline: '' })} className="text-xs border rounded-lg px-2 hover:bg-muted">Clear</button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">After this, the page shows "Registration is closed". Leave empty to keep it open.</p>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <TextField label="Seats (optional)" value={details.capacity} onChange={v => updateDetail({ capacity: v })} placeholder="Unlimited" />
                   <div className="space-y-1">
