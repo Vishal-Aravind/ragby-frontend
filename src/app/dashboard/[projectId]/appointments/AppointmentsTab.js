@@ -707,6 +707,11 @@ export default function AppointmentsTab({ project }) {
           {/* Availability */}
           <div className="border rounded-xl p-4 bg-white space-y-4">
             <p className="text-sm font-semibold">Availability</p>
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+              WhatsApp only delivers messages to people who book from your website when they're sent as approved templates.
+              Add <strong>Appointment Confirmed</strong>, <strong>Appointment Reminder</strong> and <strong>Appointment Cancelled</strong> in
+              {' '}<a href="templates" className="underline font-medium">Templates → Template library</a>.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Buffer between slots</label>
