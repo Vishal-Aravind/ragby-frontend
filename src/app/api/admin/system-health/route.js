@@ -9,7 +9,6 @@ const JOB_NAMES = [
   "shopify_reconciliation",
   "appointment_hold_release",
   "whatsapp_sync_monitor",
-  "storage_cleanup",
 ];
 
 export async function GET(req) {

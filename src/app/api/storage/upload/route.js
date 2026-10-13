@@ -36,12 +36,6 @@ const DOC_TYPES = {
 // flow node types (FlowsTab's MEDIA_CONFIG), ShopTab's product images, and
 // PageBuilder's event pages. Limits mirror the client-side ones so the two
 // can't disagree. Adding a new upload surface means adding a key here.
-//
-// Storage clean-up (backend/storage_cleanup.py) deletes files nobody uses -
-// but ONLY in folders listed in its CLEANABLE_FOLDERS. A new folder here is
-// therefore never cleaned up until it is added there too, together with the
-// table/column where its URLs are saved (REFERENCE_SOURCES). Add both or
-// neither.
 const FOLDER_RULES = {
   message_media:    { limit: 5 * 1024 * 1024,   types: WA_IMAGE_TYPES },
   message_video:    { limit: 16 * 1024 * 1024,  types: VIDEO_TYPES },
