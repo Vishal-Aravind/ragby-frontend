@@ -8,7 +8,18 @@ const JOB_LABELS = {
   shopify_reconciliation: "Shopify reconciliation (every 6h)",
   appointment_hold_release: "Appointment hold release (every 2m)",
   whatsapp_sync_monitor: "WhatsApp Coexistence sync monitor (every 30m)",
+  storage_cleanup: "Unused media clean-up (daily)",
 };
+
+// A plain one-line summary of what a run did (not a warning).
+function jobSummary(name, detail) {
+  if (!detail) return null;
+  if (name === "storage_cleanup") {
+    if (detail.skipped) return `Skipped as a precaution - no files in use were found (${detail.files} files checked)`;
+    return `${detail.files ?? 0} files checked · ${detail.noted ?? 0} newly unused · ${detail.back_in_use ?? 0} back in use · ${detail.deleted ?? 0} deleted`;
+  }
+  return null;
+}
 
 /**
  * A job can succeed and still have found something that needs a human.
@@ -63,6 +74,7 @@ export default function SystemHealthTab() {
           {data.jobs.map(j => {
             const status = j.lastRun?.status;
             const warning = jobWarning(j.name, j.lastRun?.detail);
+            const summary = jobSummary(j.name, j.lastRun?.detail);
             return (
               <div key={j.name} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
@@ -84,6 +96,9 @@ export default function SystemHealthTab() {
                 </div>
                 {warning && (
                   <p className="text-xs text-amber-700 mt-1.5 ml-[23px]">{warning}</p>
+                )}
+                {summary && (
+                  <p className="text-xs text-muted-foreground mt-1.5 ml-[23px]">{summary}</p>
                 )}
               </div>
             );
