@@ -534,15 +534,43 @@ function useRegistrationTemplateStatus(projectId) {
     fetch(`/api/template-library/sync/${projectId}`)
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        if (!alive || !d) return
+        if (!alive) return
+        if (!d) { setStatus('UNKNOWN'); return }
         const t = (d.templates || []).find(x => x.name === 'event_registration' && x.language === 'en_US')
           || (d.templates || []).find(x => x.name === 'event_registration')
         setStatus(t ? t.status : 'MISSING')
       })
-      .catch(() => {})
+      .catch(() => { if (alive) setStatus('UNKNOWN') })
     return () => { alive = false }
   }, [projectId])
   return status
+}
+
+// What the template's state means for people registering from the website.
+function ConfirmationStatus({ status }) {
+  const ready = status === 'APPROVED'
+  const waiting = status === 'PENDING' || status === 'IN_APPEAL'
+  const blocked = ['REJECTED', 'PAUSED', 'DISABLED'].includes(status)
+  const text = ready
+    ? 'Ready - everyone who registers, including from the website link, gets the WhatsApp confirmation.'
+    : waiting
+    ? "Waiting for WhatsApp to approve the confirmation message (minutes to a day). Until then, website registrations won't get a WhatsApp message."
+    : blocked
+    ? "WhatsApp didn't approve the confirmation message, so website registrations won't get a WhatsApp message. Check it in Templates."
+    : status === 'MISSING'
+    ? "The confirmation message isn't set up yet, so website registrations won't get a WhatsApp message. Add \"Event Registration Confirmed\" in Templates - WhatsApp approves it, usually within a day."
+    : status === 'UNKNOWN'
+    ? "Couldn't check the confirmation message right now (is WhatsApp connected?). Website registrations get a WhatsApp message only once it's approved."
+    : 'Checking...'
+  return (
+    <div className={`text-[11px] rounded-lg px-2.5 py-2 border space-y-1 ${ready ? 'bg-green-50 border-green-200 text-green-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+      <p>{ready ? '✓ ' : ''}{text}</p>
+      {!ready && status && status !== 'UNKNOWN' && (
+        <a href="templates" className="underline font-medium inline-block">Open Templates →</a>
+      )}
+      <p className="text-muted-foreground">WhatsApp bills each confirmation message.</p>
+    </div>
+  )
 }
 
 export default function PageBuilder({ event, onSave, onClose, projectId }) {
@@ -857,22 +885,7 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
                     </span>
                   </label>
                   {details.send_wa_confirmation && (
-                    <div className="text-[11px] rounded-lg px-2.5 py-2 bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
-                      <p>
-                        Uses the <strong>Event Registration Confirmed</strong> template. WhatsApp must approve it first - until then,
-                        people from the website link get no message. Each message is billed by WhatsApp.
-                      </p>
-                      <p className="flex items-center gap-1.5">
-                        Template:{' '}
-                        {templateStatus === 'APPROVED' ? <span className="font-semibold text-green-700">✓ Approved</span>
-                          : templateStatus === 'MISSING' ? <span className="font-semibold text-red-700">Not added</span>
-                          : templateStatus ? <span className="font-semibold">{templateStatus.toLowerCase().replace(/_/g, ' ')}</span>
-                          : <span className="text-muted-foreground">checking...</span>}
-                        {templateStatus !== 'APPROVED' && (
-                          <a href="templates" className="underline font-medium ml-1">Add / check in Templates →</a>
-                        )}
-                      </p>
-                    </div>
+                    <ConfirmationStatus status={templateStatus} />
                   )}
                 </div>
 
