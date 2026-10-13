@@ -773,6 +773,11 @@ export default function PageBuilder({ event, onSave, onClose }) {
             {rightPanel === 'details' && (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground mb-1">Shown on the registration page and in WhatsApp confirmations</p>
+                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                  To send WhatsApp confirmations to people who register from the website link, add the
+                  {' '}<a href="templates" className="underline font-medium">Event Registration Confirmed</a> template
+                  (Templates → Template library). Without it, only people who came from a WhatsApp chat get the confirmation.
+                </p>
                 <TextField label="Event title" value={details.title} onChange={v => updateDetail({ title: v })} />
                 <TextAreaField label="Short description" value={details.description} onChange={v => updateDetail({ description: v })} rows={3} />
                 <ImageUploadField label="Cover image (event list & WhatsApp)" value={details.banner_url}
