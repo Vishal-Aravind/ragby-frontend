@@ -496,6 +496,7 @@ export default function EventsTab({ project }) {
       {builderEvent && (
         <PageBuilder
           event={builderEvent}
+          projectId={projectId}
           onSave={savePage}
           onClose={() => setBuilderEvent(null)}
         />

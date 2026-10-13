@@ -524,7 +524,28 @@ function TemplatePicker({ onPick, onBlank, onSkip, onClose, replacing }) {
 // ─────────────────────────────────────────────────────────
 // MAIN BUILDER COMPONENT
 // ─────────────────────────────────────────────────────────
-export default function PageBuilder({ event, onSave, onClose }) {
+// The "Event Registration Confirmed" template's status in the WhatsApp
+// account: 'APPROVED' | 'PENDING' | ... | 'MISSING' | null (unknown).
+function useRegistrationTemplateStatus(projectId) {
+  const [status, setStatus] = useState(null)
+  useEffect(() => {
+    if (!projectId) return
+    let alive = true
+    fetch(`/api/template-library/sync/${projectId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!alive || !d) return
+        const t = (d.templates || []).find(x => x.name === 'event_registration' && x.language === 'en_US')
+          || (d.templates || []).find(x => x.name === 'event_registration')
+        setStatus(t ? t.status : 'MISSING')
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [projectId])
+  return status
+}
+
+export default function PageBuilder({ event, onSave, onClose, projectId }) {
   const [picker, setPicker] = useState(!event?.page_json?.length ? 'new' : null) // 'new' | 'replace' | null
   const [blocks, setBlocks] = useState(() => ensureRegistrationFormBlock(event?.page_json || []))
   const [formFields, setFormFields] = useState(event?.form_schema?.length ? event.form_schema : DEFAULT_FIELDS)
@@ -547,7 +568,9 @@ export default function PageBuilder({ event, onSave, onClose }) {
     accent_color: event?.accent_color || DEFAULT_ACCENT,
     bot_can_register: event?.bot_can_register ?? false,
     registration_deadline: toLocalInput(event?.registration_deadline),
+    send_wa_confirmation: event?.send_wa_confirmation ?? false,
   })
+  const templateStatus = useRegistrationTemplateStatus(projectId || event?.project_id)
 
   // Unsaved-changes guard: what was last saved (or loaded), to compare on Close.
   const snapshot = (b, f, d) => JSON.stringify({ b, f, d })
@@ -660,6 +683,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
       accent_color: details.accent_color,
       bot_can_register: details.bot_can_register,
       registration_deadline: fromLocalInput(details.registration_deadline),
+      send_wa_confirmation: details.send_wa_confirmation,
     })
     // Only a successful save counts as saved (a failed one keeps the
     // builder open and the edits still unsaved).
@@ -773,11 +797,7 @@ export default function PageBuilder({ event, onSave, onClose }) {
             {rightPanel === 'details' && (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground mb-1">Shown on the registration page and in WhatsApp confirmations</p>
-                <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
-                  To send WhatsApp confirmations to people who register from the website link, add the
-                  {' '}<a href="templates" className="underline font-medium">Event Registration Confirmed</a> template
-                  (Templates → Template library). Without it, only people who came from a WhatsApp chat get the confirmation.
-                </p>
+
                 <TextField label="Event title" value={details.title} onChange={v => updateDetail({ title: v })} />
                 <TextAreaField label="Short description" value={details.description} onChange={v => updateDetail({ description: v })} rows={3} />
                 <ImageUploadField label="Cover image (event list & WhatsApp)" value={details.banner_url}
@@ -820,6 +840,41 @@ export default function PageBuilder({ event, onSave, onClose }) {
                   ))}
                 </div>
                 <TextField label={'Contact phone (for "Call to attend")'} value={details.contact_phone} onChange={v => updateDetail({ contact_phone: v })} placeholder="+91 98765 43210" />
+
+                {/* WhatsApp confirmation for everyone (template) vs only
+                    people who came through WhatsApp (plain text). */}
+                <div className="border rounded-xl px-3 py-3 bg-white space-y-2">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input type="checkbox" className="mt-0.5" checked={details.send_wa_confirmation}
+                      onChange={e => updateDetail({ send_wa_confirmation: e.target.checked })} />
+                    <span>
+                      <span className="text-sm font-medium block">Send WhatsApp confirmation to everyone</span>
+                      <span className="text-xs text-muted-foreground block mt-0.5">
+                        {details.send_wa_confirmation
+                          ? 'Everyone who registers - including from the website link - gets a WhatsApp confirmation, once the template is approved.'
+                          : 'Only people who register through WhatsApp (flows or AI chat) get a confirmation. People from the website link get none.'}
+                      </span>
+                    </span>
+                  </label>
+                  {details.send_wa_confirmation && (
+                    <div className="text-[11px] rounded-lg px-2.5 py-2 bg-amber-50 border border-amber-200 text-amber-900 space-y-1">
+                      <p>
+                        Uses the <strong>Event Registration Confirmed</strong> template. WhatsApp must approve it first - until then,
+                        people from the website link get no message. Each message is billed by WhatsApp.
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        Template:{' '}
+                        {templateStatus === 'APPROVED' ? <span className="font-semibold text-green-700">✓ Approved</span>
+                          : templateStatus === 'MISSING' ? <span className="font-semibold text-red-700">Not added</span>
+                          : templateStatus ? <span className="font-semibold">{templateStatus.toLowerCase().replace(/_/g, ' ')}</span>
+                          : <span className="text-muted-foreground">checking...</span>}
+                        {templateStatus !== 'APPROVED' && (
+                          <a href="templates" className="underline font-medium ml-1">Add / check in Templates →</a>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 {/* Let the AI bot register directly in chat for THIS event —
                     per-event, not project-wide, since a merchant may want
