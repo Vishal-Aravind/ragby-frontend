@@ -13,7 +13,7 @@ export default function EventRegistrationPage() {
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(null);   // the registration result once done
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function EventRegistrationPage() {
       // showed the visitor a raw "Unexpected token" parse error.
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || data.error || "Registration failed");
-      setSubmitted(true);
+      setSubmitted(data);
     } catch (e) {
       alert(e.message);
     } finally {
@@ -87,7 +87,23 @@ export default function EventRegistrationPage() {
           <h2 className="text-xl font-bold text-gray-900">You're Registered!</h2>
           <p className="text-sm text-gray-500 mt-1">{event.title}</p>
         </div>
-        <p className="text-xs text-gray-400">A confirmation has been sent to your WhatsApp.</p>
+        {(event.event_date || event.event_time || event.location) && (
+          <div className="bg-white border rounded-2xl p-4 text-sm text-gray-700 space-y-1.5 text-left">
+            {(event.event_date || event.event_time) && (
+              <p className="flex items-center gap-2"><Calendar size={14} style={{ color: accent }} />
+                {event.event_date ? formatDate(event.event_date) : ""}{event.event_date && event.event_time ? " • " : ""}{event.event_time || ""}</p>
+            )}
+            {event.location && <p className="flex items-center gap-2"><MapPin size={14} style={{ color: accent }} />{event.location}</p>}
+          </div>
+        )}
+        {submitted.booking_id && (
+          <p className="text-sm text-gray-600">Booking ID: <span className="font-mono font-semibold">#{submitted.booking_id}</span></p>
+        )}
+        <p className="text-xs text-gray-400">
+          {submitted.confirmation_sent
+            ? "A confirmation has been sent to your WhatsApp."
+            : "Your spot is saved. Please take a screenshot of this page for your reference."}
+        </p>
       </div>
     </div>
   );
