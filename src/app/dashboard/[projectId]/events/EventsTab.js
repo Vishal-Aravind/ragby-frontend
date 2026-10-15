@@ -186,21 +186,31 @@ export default function EventsTab({ project }) {
     `${typeof window !== 'undefined' ? window.location.origin : ''}/event/${eventId}`
 
   // Confirmed / attended / no-show / cancelled. Cancelling frees the seat
-  // and sends the person a WhatsApp message, so it asks first.
+  // and can't be undone, so it asks first - then whether to tell the person.
   const STATUS_OPTIONS = [['confirmed', 'Confirmed'], ['attended', 'Attended'], ['no_show', 'No-show'], ['cancelled', 'Cancelled']]
   const changeStatus = async (reg, status) => {
     if (status === reg.status) return
-    if (status === 'cancelled' && !(await confirmDialog({
-      title: `Cancel ${reg.name}'s registration?`,
-      description: 'Their seat is freed and they get a WhatsApp message. This cannot be undone.',
-      confirmText: 'Cancel registration', cancelText: 'Keep it',
-    }))) return
+    let notify = false
+    if (status === 'cancelled') {
+      if (!(await confirmDialog({
+        title: `Cancel ${reg.name}'s registration?`,
+        description: 'Their seat is freed. This cannot be undone.',
+        confirmText: 'Cancel registration', cancelText: 'Keep it',
+      }))) return
+      notify = await confirmDialog({
+        title: 'Send a WhatsApp message?',
+        description: `Tell ${reg.phone ? '+' + reg.phone : 'them'} on WhatsApp that their registration is cancelled?\n\n` +
+          'Note: this needs your WhatsApp account connected in Integrations, and the "Event Registration Cancelled" template ' +
+          'added and approved in Templates. Without an approved template, the message only reaches people who messaged you in the last 24 hours.',
+        confirmText: 'Yes, send', cancelText: "No, don't send",
+      })
+    }
     setStatusSaving(reg.id)
     try {
       const res = await fetch(`/api/events/registrations/${reg.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, notify }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
