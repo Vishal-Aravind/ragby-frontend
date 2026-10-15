@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { uploadMedia } from '@/lib/uploadMedia'
 import { confirmDialog } from '@/components/confirmDialog'
-import { useWhatsAppBilling, WhatsAppBillingNotice } from '@/components/WhatsAppBilling'
+import { WhatsAppBillingNote } from '@/components/WhatsAppBilling'
 import EventBlocks, { eventInfo } from './EventBlocks'
 import { EVENT_TEMPLATES, buildTemplate } from './eventTemplates'
 
@@ -548,9 +548,7 @@ function useRegistrationTemplateStatus(projectId) {
 }
 
 // What the template's state means for people registering from the website.
-function ConfirmationStatus({ status, billing }) {
-  // No payment method in Meta: WhatsApp refuses every template, approved or not.
-  if (billing === 'missing') return <WhatsAppBillingNotice status="missing" compact />
+function ConfirmationStatus({ status }) {
   const ready = status === 'APPROVED'
   const waiting = status === 'PENDING' || status === 'IN_APPEAL'
   const blocked = ['REJECTED', 'PAUSED', 'DISABLED'].includes(status)
@@ -602,7 +600,6 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
     send_wa_confirmation: event?.send_wa_confirmation ?? false,
   })
   const templateStatus = useRegistrationTemplateStatus(projectId || event?.project_id)
-  const billing = useWhatsAppBilling(projectId || event?.project_id)
 
   // Unsaved-changes guard: what was last saved (or loaded), to compare on Close.
   const snapshot = (b, f, d) => JSON.stringify({ b, f, d })
@@ -889,7 +886,10 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
                     </span>
                   </label>
                   {details.send_wa_confirmation && (
-                    <ConfirmationStatus status={templateStatus} billing={billing} />
+                    <>
+                      <ConfirmationStatus status={templateStatus} />
+                      <WhatsAppBillingNote compact />
+                    </>
                   )}
                 </div>
 
