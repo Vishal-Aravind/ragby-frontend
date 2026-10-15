@@ -15,6 +15,7 @@ export default function EventRegistrationPage() {
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(null);   // the registration result once done
   const [submitting, setSubmitting] = useState(false);
+  const [popup, setPopup] = useState(null);   // registration error, shown in the page's own popup
 
   useEffect(() => {
     if (!eventId) return;
@@ -55,7 +56,7 @@ export default function EventRegistrationPage() {
       if (!res.ok) throw new Error(data.detail || data.error || "Registration failed");
       setSubmitted(data);
     } catch (e) {
-      alert(e.message);
+      setPopup(e.message);
     } finally {
       setSubmitting(false);
     }
@@ -199,6 +200,19 @@ export default function EventRegistrationPage() {
           )
         )}
       </div>
+
+      {popup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6 bg-black/40" onClick={() => setPopup(null)}>
+          <div role="alertdialog" aria-modal="true" onClick={e => e.stopPropagation()}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-xs p-6 text-center space-y-4">
+            <p className="text-sm text-gray-700">{popup}</p>
+            <button type="button" autoFocus onClick={() => setPopup(null)}
+              className="w-full py-3 rounded-xl text-white font-semibold text-sm" style={{ background: accent }}>
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
