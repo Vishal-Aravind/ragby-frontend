@@ -47,6 +47,7 @@ export default function EventRegistrationPage() {
         // sending it at all was what made that limit forgeable.
         body: JSON.stringify({
           event_id: eventId,
+          source: new URLSearchParams(window.location.search).get("src") || undefined,
           data: values,
         }),
       });

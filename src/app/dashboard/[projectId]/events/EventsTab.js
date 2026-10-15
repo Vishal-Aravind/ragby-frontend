@@ -242,13 +242,15 @@ export default function EventsTab({ project }) {
     if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`
     return `"${t.replace(/"/g, '""')}"`
   }
+  const SOURCE_LABELS = { flow: 'WhatsApp flow', whatsapp_chat: 'WhatsApp chat', website_chat: 'Website chat', direct: 'Direct link' }
+  const sourceText = (s) => SOURCE_LABELS[s] || 'Direct link'
   const exportRegistrations = () => {
     const extras = extraFields(viewingEvent)
     const rows = [
-      ['Name', 'Phone', 'Email', ...extras.map(f => f.label), 'Status', 'Registered'],
+      ['Name', 'Phone', 'Email', ...extras.map(f => f.label), 'Source', 'Status', 'Registered'],
       ...registrations.map(r => [
         r.name, `+${r.phone}`, r.email || '', ...extras.map(f => answerText((r.answers || {})[f.id])),
-        r.status, new Date(r.created_at).toLocaleString(),
+        sourceText(r.source), r.status, new Date(r.created_at).toLocaleString(),
       ]),
     ]
     const csv = '\ufeff' + rows.map(row => row.map(csvCell).join(',')).join('\r\n')
@@ -312,6 +314,7 @@ export default function EventsTab({ project }) {
                   {extraFields(viewingEvent).map(f => (
                     <th key={f.id} className="text-left px-4 py-3 font-medium whitespace-nowrap">{f.label}</th>
                   ))}
+                  <th className="text-left px-4 py-3 font-medium">Came from</th>
                   <th className="text-left px-4 py-3 font-medium">Status</th>
                   <th className="text-left px-4 py-3 font-medium">Registered</th>
                 </tr>
@@ -325,6 +328,7 @@ export default function EventsTab({ project }) {
                     {extraFields(viewingEvent).map(f => (
                       <td key={f.id} className="px-4 py-3 text-muted-foreground">{answerText((r.answers || {})[f.id]) || '—'}</td>
                     ))}
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{sourceText(r.source)}</td>
                     <td className="px-4 py-3">
                       <select value={r.status} disabled={r.status === 'cancelled' || statusSaving === r.id}
                         onChange={e => changeStatus(r, e.target.value)}
