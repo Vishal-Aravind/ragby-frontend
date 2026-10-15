@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { confirmDialog } from '@/components/confirmDialog'
 import CreateTemplateDialog from './CreateTemplateDialog'
 import { TemplatePreview, previewFromMeta, languageName } from './templateShared'
+import { useWhatsAppBilling, WhatsAppBillingNotice } from '@/components/WhatsAppBilling'
 
 // What WhatsApp says about a template in the account.
 const STATUS = {
@@ -32,6 +33,7 @@ export default function TemplateLibraryClient({ projectId, initialTemplates, ini
   const [syncNote, setSyncNote]     = useState('')
   const [creating, setCreating]     = useState(false)
   const [deleting, setDeleting]     = useState({})
+  const billing = useWhatsAppBilling(projectId)
 
   const loadAccount = async () => {
     setSyncing(true)
@@ -145,6 +147,7 @@ export default function TemplateLibraryClient({ projectId, initialTemplates, ini
       </div>
 
       {initialError && <p className="text-sm text-red-600">{initialError}</p>}
+      <WhatsAppBillingNotice status={billing} />
       {syncNote && <p className="text-sm text-amber-700">{syncNote}</p>}
 
       {/* Tabs */}
