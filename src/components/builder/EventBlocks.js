@@ -141,13 +141,27 @@ export function DynamicForm({ fields, accent, onSubmit, submitting, preview }) {
     // The backend is the authority on this (it has to be — anyone can POST
     // the endpoint directly), but catching it here saves a round trip and
     // gives a clearer message than a 400 does.
-    const phone = String(values.phone ?? "").replace(/\D/g, "");
-    if (phone && (phone.length < 8 || phone.length > 15)) {
-      setError("Please enter a valid phone number with country code");
-      return;
+    // Phone fields are two boxes (country code + number) so the code can't
+    // be forgotten - without it WhatsApp can't deliver the confirmation.
+    // They're joined into one digits-only number before sending.
+    const out = { ...values };
+    for (const f of fields.filter(f => f.type === "phone")) {
+      const cc = String(values[`${f.id}__cc`] ?? "").replace(/\D/g, "");
+      const num = String(values[f.id] ?? "").replace(/\D/g, "").replace(/^0+/, "");
+      delete out[`${f.id}__cc`];
+      if (!num && !f.required) { delete out[f.id]; continue; }
+      if (!cc || cc.length > 4) {
+        setError(`Please enter the country code for ${f.label} (e.g. 91)`);
+        return;
+      }
+      if (num.length < 6 || cc.length + num.length > 15) {
+        setError(`Please enter a valid ${f.label}`);
+        return;
+      }
+      out[f.id] = cc + num;
     }
 
-    onSubmit(values);
+    onSubmit(out);
   };
 
   return (
@@ -170,10 +184,22 @@ export function DynamicForm({ fields, accent, onSubmit, submitting, preview }) {
               <input type="checkbox" checked={!!values[f.id]} onChange={e => setVal(f.id, e.target.checked)} />
               {f.label}{f.required && " *"}
             </label>
+          ) : f.type === "phone" ? (
+            <div className="flex gap-2">
+              <div className="relative w-20 shrink-0">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">+</span>
+                <input type="tel" inputMode="numeric" placeholder="91" maxLength={4} aria-label="Country code"
+                  value={values[`${f.id}__cc`] ?? ""} onChange={e => setVal(`${f.id}__cc`, e.target.value.replace(/\D/g, ""))}
+                  className="w-full border rounded-xl pl-6 pr-2 py-3 text-sm outline-none focus:ring-2 bg-white" />
+              </div>
+              <input type="tel" inputMode="numeric" placeholder="98765 43210" aria-label={f.label}
+                value={values[f.id] ?? ""} onChange={e => setVal(f.id, e.target.value)}
+                className="flex-1 min-w-0 border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2 bg-white" />
+            </div>
           ) : (
             <input
-              type={f.type === "email" ? "email" : f.type === "phone" ? "tel" : f.type === "number" ? "number" : "text"}
-              placeholder={f.type === "phone" ? "+91 98765 43210" : f.type === "email" ? "you@example.com" : ""}
+              type={f.type === "email" ? "email" : f.type === "number" ? "number" : "text"}
+              placeholder={f.type === "email" ? "you@example.com" : ""}
               value={values[f.id] ?? ""} onChange={e => setVal(f.id, e.target.value)}
               className="w-full border rounded-xl px-3 py-3 text-sm outline-none focus:ring-2 bg-white" />
           )}
