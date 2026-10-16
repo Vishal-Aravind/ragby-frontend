@@ -69,6 +69,7 @@ export async function POST(req) {
       recipient_filter: body.recipient_filter,
       tag_filter: body.tag_filter,
       csv_contacts: body.csv_contacts || null,
+      csv_region: body.csv_region || null,
       scheduled_at: body.scheduled_at || null,
       recurrence: body.recurrence || null,
     }),

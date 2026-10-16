@@ -7,6 +7,14 @@ import { confirmDialog } from '@/components/confirmDialog'
 import { uploadMedia } from '@/lib/uploadMedia'
 import { varNumbers } from '../templates/templateShared'
 
+// Countries offered for numbers written without a country code. Empty value =
+// the country of the business's own WhatsApp number (decided on the server).
+const CSV_REGIONS = ['IN', 'AE', 'SA', 'QA', 'KW', 'OM', 'BH', 'US', 'CA', 'GB', 'AU', 'NZ', 'SG', 'MY',
+  'LK', 'NP', 'BD', 'PK', 'ZA', 'NG', 'KE', 'DE', 'FR', 'IT', 'ES', 'NL', 'IE']
+const regionName = (code) => {
+  try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) } catch { return code }
+}
+
 // What a template needs besides its message values, and whether campaigns
 // can fill it. Mirrors backend/campaigns.py _template_header.
 function templateNeeds(t) {
@@ -52,6 +60,10 @@ export default function CampaignsTab({ project }) {
   const [tagFilter, setTagFilter]     = useState('')
   const [availableTags, setAvailableTags] = useState([])
   const [csvContacts, setCsvContacts] = useState([])
+  // Server's check of the uploaded numbers: final form, and what's skipped.
+  const [csvRegion, setCsvRegion]     = useState('')
+  const [numberCheck, setNumberCheck] = useState(null)
+  const [checkingNumbers, setCheckingNumbers] = useState(false)
   const [sendTiming, setSendTiming]   = useState('now') // now | later
   const [scheduledAt, setScheduledAt] = useState('')
   const [recurrence, setRecurrence]   = useState('none') // none | daily | weekly | monthly
@@ -82,17 +94,14 @@ export default function CampaignsTab({ project }) {
     const file = e.target.files[0]
     if (!file) return
     const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
-    if (isExcel) {
-      const buffer = await file.arrayBuffer()
-      const wb = XLSX.read(buffer)
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
-      parseRows(rows)
-    } else {
-      const text = await file.text()
-      const rows = text.split('\n').map(r => r.split(',').map(c => c.trim().replace(/^"|"$/g, '')))
-      parseRows(rows)
-    }
+    // Same reader for both, and every cell read as text: a hand-split CSV broke
+    // on quoted commas, and number conversion drops a leading + or 0.
+    const wb = isExcel
+      ? XLSX.read(await file.arrayBuffer())
+      : XLSX.read(await file.text(), { type: 'string', raw: true })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    parseRows(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }))
+    e.target.value = ''   // picking the same file again re-reads it
   }
 
   const parseRows = (rows) => {
@@ -101,14 +110,36 @@ export default function CampaignsTab({ project }) {
     const phoneIdx = headers.findIndex(h => h.includes('phone') || h.includes('mobile') || h.includes('number'))
     const nameIdx  = headers.findIndex(h => h.includes('name'))
     if (phoneIdx === -1) { setError('No phone column found.'); return }
+    // Numbers are sent as written; the server decides what each one really is
+    // (and skips what it can't be sure of), so the preview and the send agree.
     const contacts = rows.slice(1)
       .map(row => ({
-        phone: String(row[phoneIdx] || '').trim().replace(/\s|-/g, ''),
-        name:  nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '',
+        phone: String(row[phoneIdx] ?? '').trim(),
+        name:  nameIdx >= 0 ? String(row[nameIdx] ?? '').trim() : '',
       }))
-      .filter(c => c.phone && c.phone.length >= 7)
+      .filter(c => c.phone)
     setCsvContacts(contacts)
     setError(null)
+    checkNumbers(contacts, csvRegion)
+  }
+
+  const checkNumbers = async (contacts, region) => {
+    setNumberCheck(null)
+    if (!contacts.length) return
+    setCheckingNumbers(true)
+    try {
+      const res = await fetch('/api/campaigns/check-numbers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, contacts, region: region || null }),
+      })
+      if (!res.ok) { setError(await readError(res, 'Could not check the numbers.')); return }
+      setNumberCheck(await res.json())
+    } catch {
+      setError('Could not reach the server to check the numbers.')
+    } finally {
+      setCheckingNumbers(false)
+    }
   }
 
   const fetchData = async () => {
@@ -210,6 +241,8 @@ export default function CampaignsTab({ project }) {
     setHeaderImageUrl('')
     setHeaderText('')
     setCsvContacts([])
+    setNumberCheck(null)
+    setCsvRegion('')
     setRecipientFilter('whatsapp')
     setTagFilter('')
     setSendTiming('now')
@@ -229,6 +262,11 @@ export default function CampaignsTab({ project }) {
     if (needs.header === 'text' && !headerText.trim()) return setError("Fill in the header value")
     if (variables.some(v => !String(v).trim())) return setError("Fill in every template variable")
     if (recipientFilter === 'csv' && csvContacts.length === 0) return setError("Upload a CSV file first")
+    if (recipientFilter === 'csv' && checkingNumbers) return setError("Still checking the numbers - one moment")
+    if (recipientFilter === 'csv' && !numberCheck) return setError("The numbers haven't been checked yet - upload the file again")
+    if (recipientFilter === 'csv' && numberCheck.ready_count === 0) {
+      return setError("None of the numbers in this file can be used - see the reasons under the upload")
+    }
     if (recipientFilter === 'tag' && !tagFilter) return setError("Pick a tag first")
     if (sendTiming === 'later') {
       if (!scheduledAt) return setError("Pick a date and time first")
@@ -242,7 +280,8 @@ export default function CampaignsTab({ project }) {
     // Every recipient is one WhatsApp message billed by Meta, and there was
     // no confirmation of any kind before this. Ask with the REAL number —
     // for a server-side filter the browser can't know it, so fetch it.
-    let recipientCount = csvContacts.length
+    let recipientCount = recipientFilter === 'csv' ? numberCheck.ready_count : 0
+    let skippedCount = recipientFilter === 'csv' ? numberCheck.skipped_count : 0
     if (recipientFilter !== 'csv') {
       setCounting(true)
       try {
@@ -258,6 +297,7 @@ export default function CampaignsTab({ project }) {
         }
         const countData = await countRes.json()
         recipientCount = countData.count
+        skippedCount = countData.skipped_count || 0
         if (countData.over_limit) {
           setError(`This would message ${countData.count} people. A single campaign can reach at most ${countData.max} — narrow the filter or split it up.`)
           return
@@ -280,6 +320,9 @@ export default function CampaignsTab({ project }) {
       title: editingCampaignId ? 'Update this campaign?' : sendTiming === 'later' ? 'Schedule this campaign?' : 'Send this campaign?',
       description:
         `${verb} ${recipientCount} ${recipientCount === 1 ? 'person' : 'people'}, using the "${selectedTemplate.name}" template.\n\n` +
+        (skippedCount
+          ? `${skippedCount} ${skippedCount === 1 ? 'number is' : 'numbers are'} skipped - missing a country code or not a valid number. They won't be messaged or charged.\n\n`
+          : '') +
         `Each one is a WhatsApp message billed to your account. This can't be undone once sending starts.`,
       confirmText: editingCampaignId ? 'Update' : sendTiming === 'later' ? 'Schedule' : 'Send',
     }))) return
@@ -297,6 +340,7 @@ export default function CampaignsTab({ project }) {
       recipient_filter: recipientFilter,
       tag_filter: tagFilter || null,
       csv_contacts: recipientFilter === 'csv' ? csvContacts : null,
+      csv_region: recipientFilter === 'csv' ? (csvRegion || null) : null,
       // datetime-local has no timezone info — treat it as local time and
       // convert to a proper ISO string with offset for the backend.
       scheduled_at: sendTiming === 'later' ? new Date(scheduledAt).toISOString() : null,
@@ -347,6 +391,8 @@ export default function CampaignsTab({ project }) {
     setRecipientFilter(campaign.recipient_filter || 'all')
     setTagFilter(campaign.tag_filter || '')
     setCsvContacts([])
+    setNumberCheck(null)
+    setCsvRegion('')
     setSendTiming('later')
     // scheduled_at is stored as UTC ISO — datetime-local inputs need
     // "YYYY-MM-DDTHH:mm" in the browser's local time.
@@ -600,20 +646,52 @@ export default function CampaignsTab({ project }) {
                   onClick={() => document.getElementById('csv-upload').click()}>
                   <input id="csv-upload" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleCsvUpload} />
                   {csvContacts.length > 0 ? (
-                    <p className="text-sm text-green-700 font-medium">✅ {csvContacts.length} contacts loaded</p>
+                    <p className="text-sm text-muted-foreground">{csvContacts.length} rows in the file · click to upload a different one</p>
                   ) : (
                     <>
                       <p className="text-sm text-muted-foreground">Click to upload CSV or Excel file</p>
-                      <p className="text-xs text-muted-foreground mt-1">Required column: phone — Optional: name</p>
+                      <p className="text-xs text-muted-foreground mt-1">Required column: phone — Optional: name. Best: numbers with country code (+91…)</p>
                     </>
                   )}
                 </div>
-                {csvContacts.length > 0 && (
-                  <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2 max-h-24 overflow-y-auto">
-                    {csvContacts.slice(0, 5).map((c, i) => (
-                      <p key={i}>{c.phone} {c.name ? `— ${c.name}` : ''}</p>
-                    ))}
-                    {csvContacts.length > 5 && <p>...and {csvContacts.length - 5} more</p>}
+
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">Numbers without a country code are from</span>
+                  <select value={csvRegion}
+                    onChange={e => { setCsvRegion(e.target.value); checkNumbers(csvContacts, e.target.value) }}
+                    className="border rounded-lg px-2 py-1 text-xs bg-white">
+                    <option value="">Same country as my WhatsApp number</option>
+                    {CSV_REGIONS.map(r => <option key={r} value={r}>{regionName(r)}</option>)}
+                  </select>
+                </div>
+
+                {checkingNumbers && <p className="text-xs text-muted-foreground">Checking numbers…</p>}
+                {numberCheck && !checkingNumbers && (
+                  <div className="text-xs space-y-2">
+                    <p className="text-green-700 font-medium">
+                      ✅ {numberCheck.ready_count} ready
+                      <span className="text-muted-foreground font-normal">
+                        {' '}· numbers without a code read as {regionName(numberCheck.region)} (+{numberCheck.calling_code})
+                        {numberCheck.duplicates ? ` · ${numberCheck.duplicates} duplicate${numberCheck.duplicates === 1 ? '' : 's'} removed` : ''}
+                      </span>
+                    </p>
+                    {numberCheck.ready.length > 0 && (
+                      <div className="text-muted-foreground bg-muted/30 rounded p-2">
+                        {numberCheck.ready.map((c, i) => (
+                          <p key={i}><span className="font-mono">{c.phone}</span>{c.name ? ` — ${c.name}` : ''}</p>
+                        ))}
+                        {numberCheck.ready_count > numberCheck.ready.length && <p>...and {numberCheck.ready_count - numberCheck.ready.length} more</p>}
+                      </div>
+                    )}
+                    {numberCheck.skipped_count > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded p-2 text-amber-800 max-h-40 overflow-y-auto">
+                        <p className="font-medium">⚠️ {numberCheck.skipped_count} skipped - they won't be messaged or charged:</p>
+                        {numberCheck.skipped.map((c, i) => (
+                          <p key={i}><span className="font-mono">{c.phone || '(empty)'}</span>{c.name ? ` — ${c.name}` : ''}: {c.reason}</p>
+                        ))}
+                        {numberCheck.skipped_count > numberCheck.skipped.length && <p>...and {numberCheck.skipped_count - numberCheck.skipped.length} more</p>}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
