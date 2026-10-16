@@ -517,6 +517,10 @@ export default function CampaignsTab({ project }) {
           {selectedTemplate && variables.length > 0 && (
             <div>
               <label className="text-xs font-medium text-muted-foreground">Template variables</label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Everyone gets the same text, except <span className="font-mono">{'{name}'}</span> - that becomes each person's own first name
+                (or "there" if we don't have it). Tap "Contact's name" to add it.
+              </p>
               <div className="mt-1 space-y-2">
                 {variables.map((v, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -531,6 +535,15 @@ export default function CampaignsTab({ project }) {
                         setVariables(newVars)
                       }}
                     />
+                    <button type="button"
+                      className="text-xs border rounded-lg px-2 py-1.5 shrink-0 hover:bg-muted"
+                      onClick={() => {
+                        const newVars = [...variables]
+                        newVars[i] = '{name}'
+                        setVariables(newVars)
+                      }}>
+                      Contact's name
+                    </button>
                   </div>
                 ))}
               </div>
