@@ -296,9 +296,17 @@ export default function FlowsTab({ projectId }) {
 
   useEffect(() => {
     if (!projectId) return;
-    fetch(`/api/catalogs?project_id=${projectId}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => setCatalogs(data || []));
+    // With several shop branches the same menu name exists once per branch,
+    // so the picker shows which branch each catalog belongs to.
+    Promise.all([
+      fetch(`/api/catalogs?project_id=${projectId}`).then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch(`/api/shop-branches?project_id=${projectId}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([cats, branchRes]) => {
+      const branches = Array.isArray(branchRes) ? branchRes : (branchRes?.branches || [])
+      const names = Object.fromEntries(branches.map(b => [b.id, b.name]))
+      setCatalogs((cats || []).map(c =>
+        branches.length > 1 && names[c.branch_id] ? { ...c, name: `${c.name} · ${names[c.branch_id]}` } : c))
+    });
     fetch(`/api/events?projectId=${projectId}`)
       .then(r => r.ok ? r.json() : [])
       .then(data => setEvents(data || []))

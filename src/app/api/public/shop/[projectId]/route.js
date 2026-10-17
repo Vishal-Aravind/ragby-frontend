@@ -16,11 +16,22 @@ async function forward(path, emptyValue, req) {
   return NextResponse.json(data ?? emptyValue);
 }
 
+// Only the params the backend understands, URL-encoded; empty ones dropped.
+function query(pairs) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(pairs)) {
+    if (v) qs.set(k, v);
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
 export async function GET(req, { params }) {
   const { projectId } = await params;
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
-  const catalog_id = searchParams.get("catalog_id");
+  const catalog_id = searchParams.get("catalog_id") || "";
+  const branch_id = searchParams.get("branch_id") || "";
   const id = encodeURIComponent(projectId);
 
   if (type === "config") {
@@ -28,14 +39,24 @@ export async function GET(req, { params }) {
   }
 
   if (type === "products") {
-    const qs = catalog_id
-      ? `?${new URLSearchParams({ catalog_id })}`
-      : "";
-    return forward(`/public/shop/${id}/products${qs}`, [], req);
+    return forward(`/public/shop/${id}/products${query({ branch_id, catalog_id })}`, [], req);
   }
 
   if (type === "catalogs") {
-    return forward(`/public/shop/${id}/catalogs`, [], req);
+    return forward(`/public/shop/${id}/catalogs${query({ branch_id })}`, [], req);
+  }
+
+  if (type === "status") {
+    if (!branch_id) {
+      return NextResponse.json(
+        { detail: { code: "invalid_request", message: "branch_id required" } },
+        { status: 400 }
+      );
+    }
+    return proxyToBackend(
+      `/public/shop/${id}/branches/${encodeURIComponent(branch_id)}/status`,
+      { req }
+    );
   }
 
   return NextResponse.json({ detail: "type required" }, { status: 400 });

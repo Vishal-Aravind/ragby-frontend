@@ -4,6 +4,8 @@ import { createServerClient } from "@supabase/ssr";
 import { getProjectRole } from "@/lib/supabase-api";
 import { dbError } from "@/lib/api-error";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function getSupabase(req) {
   const response = NextResponse.next();
   return {
@@ -34,11 +36,17 @@ export async function GET(req) {
   const role = await getProjectRole(user.id, project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data, error } = await supabase
+  // Optional branch filter (Shop > Orders branch selector). Ignored unless
+  // it is a UUID; RLS + the project filter keep it inside this project.
+  const branch_id = searchParams.get("branch_id");
+
+  let query = supabase
     .from("orders")
     .select("*")
-    .eq("project_id", project_id)
-    .order("created_at", { ascending: false });
+    .eq("project_id", project_id);
+  if (branch_id && UUID_RE.test(branch_id)) query = query.eq("branch_id", branch_id);
+
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) return dbError("orders", error);
   return NextResponse.json(data || []);

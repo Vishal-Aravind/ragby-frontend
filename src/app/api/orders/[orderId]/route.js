@@ -1,56 +1,25 @@
 // src/app/api/orders/[orderId]/route.js
+//
+// Order status / payment status changes go through the backend now: it
+// enforces the status vocabulary and transitions (closed orders stay
+// closed, no "out for delivery" on a pickup order) and sends the customer
+// a WhatsApp update when `notify` is true. The old direct Supabase write
+// skipped all of that. The dashboard never edited special_request, so that
+// field is no longer accepted here.
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { getProjectRole } from "@/lib/supabase-api";
-import { dbError } from "@/lib/api-error";
-
-function getSupabase(req) {
-  const response = NextResponse.next();
-  return {
-    supabase: createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          get: (name) => req.cookies.get(name)?.value,
-          set: (name, value, options) => response.cookies.set({ name, value, ...options }),
-          remove: (name, options) => response.cookies.set({ name, value: "", ...options }),
-        },
-      }
-    ),
-  };
-}
+import { authedProxy, readJson, UUID_RE } from "@/app/api/shop-branches/_proxy";
 
 export async function PUT(req, { params }) {
   const { orderId } = await params;
-  const { supabase } = getSupabase(req);
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!UUID_RE.test(orderId || "")) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // FIX: previously any logged-in user could update any order by guessing
-  // an orderId, with no check that it belongs to a project they own.
-  const { data: existingOrder } = await supabase
-    .from("orders")
-    .select("project_id")
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!existingOrder) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const role = await getProjectRole(user.id, existingOrder.project_id);
-  if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { body, error } = await readJson(req);
+  if (error) return error;
 
-  const body = await req.json();
-  const update = {};
-  if ("status" in body) update.status = body.status;
-  if ("payment_status" in body) update.payment_status = body.payment_status;
-  if ("special_request" in body) update.special_request = body.special_request;
+  const payload = {};
+  if (body && "status" in body) payload.status = body.status;
+  if (body && "payment_status" in body) payload.payment_status = body.payment_status;
+  if (body && "notify" in body) payload.notify = body.notify !== false;
 
-  const { data, error } = await supabase
-    .from("orders")
-    .update(update)
-    .eq("id", orderId)
-    .select()
-    .single();
-
-  if (error) return dbError("orders/[orderId]", error);
-  return NextResponse.json(data);
+  return authedProxy(req, `/orders/${encodeURIComponent(orderId)}`, { method: "PUT", body: payload });
 }

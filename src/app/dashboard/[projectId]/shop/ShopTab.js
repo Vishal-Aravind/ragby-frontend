@@ -1,42 +1,62 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Plus, Trash2, Loader2, ShoppingBag, Settings,
   Package, ClipboardList, ChevronLeft, Upload,
-  ToggleLeft, ToggleRight, Lock
+  ToggleLeft, ToggleRight, Lock, Store, Copy, AlertTriangle
 } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
 import { toast } from "sonner";
 import { uploadMedia } from "@/lib/uploadMedia";
 import RazorpayConnectCard from "@/components/RazorpayConnectCard";
+import { confirmDialog } from "@/components/confirmDialog";
+import BranchesPanel from "./BranchesPanel";
+import BranchSelector, { ALL_BRANCHES } from "./BranchSelector";
+import CopyMenuDialog from "./CopyMenuDialog";
+import OrderCard, { ORDER_STATUSES, normalizeStatus } from "./OrderCard";
 
 const TABS = [
   { id: "settings",  label: "Settings",  icon: Settings },
-  { id: "catalogs",  label: "Catalogs",  icon: ShoppingBag },
+  { id: "branches",  label: "Branches",  icon: Store },
+  { id: "catalogs",  label: "Menu",      icon: ShoppingBag },
   { id: "orders",    label: "Orders",    icon: ClipboardList },
 ];
 
-const ORDER_STATUS_COLORS = {
-  pending:   "bg-yellow-100 text-yellow-700 border-yellow-200",
-  confirmed: "bg-blue-100 text-blue-700 border-blue-200",
-  ready:     "bg-purple-100 text-purple-700 border-purple-200",
-  delivered: "bg-green-100 text-green-700 border-green-200",
-  cancelled: "bg-red-100 text-red-700 border-red-200",
-};
+const ORDER_FILTERS = [["all", "All"], ...ORDER_STATUSES];
 
-const PAYMENT_STATUS_COLORS = {
-  unpaid:    "bg-gray-100 text-gray-600 border-gray-200",
-  link_sent: "bg-orange-100 text-orange-700 border-orange-200",
-  paid:      "bg-green-100 text-green-700 border-green-200",
-};
+// Per-viewer UI preferences only; every read/write is guarded because
+// storage can be blocked (private mode, site data cleared).
+function readPref(key) {
+  try { return window.localStorage.getItem(key); } catch { return null; }
+}
+function writePref(key, value) {
+  try { window.localStorage.setItem(key, value); } catch { /* ignore */ }
+}
 
 export default function ShopTab({ project }) {
   const projectId = project?.id || project;
+  // UI hint only (the backend enforces roles). Admin-only controls are
+  // hidden for agents; a missing role falls back to showing them and the
+  // server's 403 message explains.
+  const myRole = project?.myRole;
+  const isAdmin = !myRole || myRole === "owner" || myRole === "admin";
+  const branchPrefKey = `zavo_shop_branch_${projectId}`;
+  const notifyPrefKey = `zavo_shop_notify_${projectId}`;
   const [activeTab, setActiveTab] = useState("settings");
+
+  // ── Branches ─────────────────────────────────────────
+  const [branches, setBranches] = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
+  const [branchesError, setBranchesError] = useState(null);
+  const [branchesLoaded, setBranchesLoaded] = useState(false);
+  const [menuBranchId, setMenuBranchId] = useState(null);
+  const [orderBranchId, setOrderBranchId] = useState(ALL_BRANCHES);
+  const selectionInitRef = useRef(false);
+  const [copyTarget, setCopyTarget] = useState(null);
 
   // ── Settings ─────────────────────────────────────────
   const [config, setConfig] = useState(null);
@@ -63,7 +83,10 @@ export default function ShopTab({ project }) {
   // ── Orders ────────────────────────────────────────────
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [ordersError, setOrdersError] = useState(null);
   const [orderFilter, setOrderFilter] = useState("all");
+  const [orderBusy, setOrderBusy] = useState(null);
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
 
   // ── Delete dialogs ────────────────────────────────────
   const [deleteCatalogOpen, setDeleteCatalogOpen] = useState(false);
@@ -95,15 +118,91 @@ export default function ShopTab({ project }) {
       });
   }, [projectId]);
 
-  // ── Load catalogs ─────────────────────────────────────
-  const fetchCatalogs = async () => {
-    setLoadingCatalogs(true);
-    const res = await fetch(`/api/catalogs?project_id=${projectId}`);
-    if (res.ok) setCatalogs(await res.json() || []);
-    setLoadingCatalogs(false);
+  // ── Load branches ─────────────────────────────────────
+  // The backend creates the default "Main" branch on first read, so every
+  // shop has at least one. If this fails (e.g. backend unreachable), Menu
+  // and Orders still work unfiltered, as before branches existed.
+  const fetchBranches = async ({ silent = false } = {}) => {
+    if (!silent) setLoadingBranches(true);
+    try {
+      const res = await fetch(`/api/shop-branches?project_id=${projectId}`);
+      const data = await res.json().catch(() => null);
+      if (res.ok && Array.isArray(data)) {
+        setBranches(data);
+        setBranchesError(null);
+      } else {
+        setBranchesError(data?.error || "Couldn't load your branches.");
+      }
+    } catch {
+      setBranchesError("Couldn't load your branches. Check your connection and try again.");
+    }
+    if (!silent) setLoadingBranches(false);
+    setBranchesLoaded(true);
   };
 
-  useEffect(() => { if (projectId) fetchCatalogs(); }, [projectId]);
+  useEffect(() => {
+    if (!projectId) return;
+    setNotifyCustomer(readPref(notifyPrefKey) !== "0");
+    fetchBranches();
+  }, [projectId]);
+
+  // Pick the Menu / Orders branch once branches arrive (remembered per
+  // project), and fall back to the default if the remembered one is gone.
+  useEffect(() => {
+    if (!branchesLoaded) return;
+    const valid = (id) => branches.some(b => b.id === id);
+    const fallback = (branches.find(b => b.is_default) || branches[0])?.id || null;
+    if (!selectionInitRef.current) {
+      selectionInitRef.current = true;
+      const stored = readPref(branchPrefKey);
+      setMenuBranchId(valid(stored) ? stored : fallback);
+      setOrderBranchId(valid(stored) ? stored : ALL_BRANCHES);
+      return;
+    }
+    setMenuBranchId(prev => (valid(prev) ? prev : fallback));
+    setOrderBranchId(prev => (prev === ALL_BRANCHES || valid(prev) ? prev : ALL_BRANCHES));
+  }, [branchesLoaded, branches]);
+
+  const pickMenuBranch = (id) => {
+    setMenuBranchId(id);
+    writePref(branchPrefKey, id);
+    setSelectedCatalog(null);
+    setShowProductForm(false);
+    setEditingProduct(null);
+  };
+  const pickOrderBranch = (id) => {
+    setOrderBranchId(id);
+    writePref(branchPrefKey, id);
+  };
+
+  const multiBranch = branches.length > 1;
+  const menuBranch = branches.find(b => b.id === menuBranchId) || null;
+  const orderBranchFilter = multiBranch && orderBranchId !== ALL_BRANCHES ? orderBranchId : null;
+  const branchNameById = Object.fromEntries(branches.map(b => [b.id, b.name]));
+  const defaultTimezone = (branches.find(b => b.is_default) || branches[0])?.timezone || "Asia/Kolkata";
+  const deliveryNotReady = branches.filter(b => (b.warnings || []).includes("delivery_not_configured"));
+
+  // ── Load catalogs ─────────────────────────────────────
+  // Request counter: switching branches quickly must not let an older,
+  // slower response overwrite the newer branch's list.
+  const catalogReqRef = useRef(0);
+  const fetchCatalogs = async () => {
+    const reqId = ++catalogReqRef.current;
+    setLoadingCatalogs(true);
+    const q = menuBranchId ? `&branch_id=${menuBranchId}` : "";
+    try {
+      const res = await fetch(`/api/catalogs?project_id=${projectId}${q}`);
+      if (reqId !== catalogReqRef.current) return;
+      if (res.ok) setCatalogs(await res.json() || []);
+    } catch {
+      if (reqId === catalogReqRef.current) toast.error("Couldn't load the menu.");
+    }
+    if (reqId === catalogReqRef.current) setLoadingCatalogs(false);
+  };
+
+  useEffect(() => {
+    if (projectId && branchesLoaded) fetchCatalogs();
+  }, [projectId, branchesLoaded, menuBranchId]);
 
   // ── Load products for selected catalog ───────────────
   const fetchProducts = async (catalogId) => {
@@ -118,14 +217,30 @@ export default function ShopTab({ project }) {
   }, [selectedCatalog]);
 
   // ── Load orders ───────────────────────────────────────
+  const orderReqRef = useRef(0);
   const fetchOrders = async () => {
+    const reqId = ++orderReqRef.current;
     setLoadingOrders(true);
-    const res = await fetch(`/api/orders?project_id=${projectId}`);
-    if (res.ok) setOrders(await res.json() || []);
-    setLoadingOrders(false);
+    const q = orderBranchFilter ? `&branch_id=${orderBranchFilter}` : "";
+    try {
+      const res = await fetch(`/api/orders?project_id=${projectId}${q}`);
+      if (reqId !== orderReqRef.current) return;
+      const data = await res.json().catch(() => null);
+      if (res.ok && Array.isArray(data)) {
+        setOrders(data);
+        setOrdersError(null);
+      } else {
+        setOrdersError(data?.error || "Couldn't load orders.");
+      }
+    } catch {
+      if (reqId === orderReqRef.current) setOrdersError("Couldn't load orders. Check your connection and try again.");
+    }
+    if (reqId === orderReqRef.current) setLoadingOrders(false);
   };
 
-  useEffect(() => { if (projectId && activeTab === "orders") fetchOrders(); }, [projectId, activeTab]);
+  useEffect(() => {
+    if (projectId && activeTab === "orders" && branchesLoaded) fetchOrders();
+  }, [projectId, activeTab, branchesLoaded, orderBranchFilter]);
 
   // ── Save config ───────────────────────────────────────
   const handleSaveConfig = async () => {
@@ -149,11 +264,19 @@ export default function ShopTab({ project }) {
     const res = await fetch("/api/catalogs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ project_id: projectId, name: newCatalogName.trim() }),
+      body: JSON.stringify({
+        project_id: projectId,
+        name: newCatalogName.trim(),
+        ...(menuBranchId ? { branch_id: menuBranchId } : {}),
+      }),
     });
     if (res.ok) {
       setNewCatalogName("");
       await fetchCatalogs();
+      fetchBranches({ silent: true }); // catalog counts / "no menu" warning
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast.error(err.error || "Couldn't create the catalog.");
     }
     setCreatingCatalog(false);
   };
@@ -178,6 +301,7 @@ export default function ShopTab({ project }) {
     setCatalogToDelete(null);
     setDeleteCatalogOpen(false);
     await fetchCatalogs();
+    fetchBranches({ silent: true });
   };
 
   // ── Save product ──────────────────────────────────────
@@ -235,18 +359,72 @@ export default function ShopTab({ project }) {
   };
 
   // ── Update order status ───────────────────────────────
-  const handleUpdateOrder = async (orderId, update) => {
-    await fetch(`/api/orders/${orderId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(update),
-    });
-    await fetchOrders();
+  // Goes through the backend, which checks the move is allowed and (when
+  // notify is on) sends the customer a WhatsApp update. Cancelling asks
+  // first, then asks whether to message the customer, the same as
+  // cancelling an event registration.
+  const STATUS_LABELS = Object.fromEntries(ORDER_STATUSES);
+  const handleOrderAction = async (order, status) => {
+    const oid = String(order.id).slice(0, 8).toUpperCase();
+    let notify = notifyCustomer;
+    if (status === "cancelled") {
+      if (!(await confirmDialog({
+        title: `Cancel order #${oid}?`,
+        description: "This cannot be undone. If the customer already paid, refund them in Razorpay.",
+        confirmText: "Cancel order", cancelText: "Keep it",
+      }))) return;
+      notify = await confirmDialog({
+        title: "Send a WhatsApp message?",
+        description: `Tell ${order.phone_number ? "+" + order.phone_number : "the customer"} on WhatsApp that their order is cancelled?\n\n` +
+          'Note: this needs your WhatsApp account connected in Integrations, and the "Order Cancelled" template ' +
+          "added and approved in Templates. Without an approved template, the message only reaches people who messaged you in the last 24 hours.",
+        confirmText: "Yes, send", cancelText: "No, don't send",
+      });
+    }
+
+    setOrderBusy(order.id);
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, notify }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Couldn't update the order.");
+        if (res.status === 409) fetchOrders(); // someone else may have moved it
+        return;
+      }
+      const { notification, ...row } = data || {};
+      setOrders(prev => prev.map(o => (o.id === order.id ? { ...o, ...row } : o)));
+
+      const done = `Order #${oid}: ${STATUS_LABELS[status] || status}`;
+      if (!notify || !notification) {
+        toast.success(done);
+      } else if (notification === "template") {
+        toast.success(done, { description: "Customer notified on WhatsApp" });
+      } else if (notification === "text") {
+        toast.success(done, { description: "Sent (24-hour window only). Add the order templates so updates reach every customer." });
+      } else if (notification === "skipped") {
+        toast.success(done, { description: "WhatsApp isn't connected, so the customer wasn't notified." });
+      } else {
+        toast.warning(done, { description: "The WhatsApp message to the customer couldn't be sent." });
+      }
+    } catch {
+      toast.error("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setOrderBusy(null);
+    }
+  };
+
+  const toggleNotify = (on) => {
+    setNotifyCustomer(on);
+    writePref(notifyPrefKey, on ? "1" : "0");
   };
 
   const filteredOrders = orderFilter === "all"
     ? orders
-    : orders.filter(o => o.status === orderFilter);
+    : orders.filter(o => normalizeStatus(o.status) === orderFilter);
 
   // Products synced from a connected Shopify store — name/description/price/
   // image/availability are overwritten on every sync (see
@@ -281,6 +459,38 @@ export default function ShopTab({ project }) {
         })}
       </div>
 
+      {/* Delivery is switched on somewhere but has no area, so customers
+          silently only get pickup (e.g. shops migrated from "Home Delivery"). */}
+      {deliveryNotReady.length > 0 && activeTab !== "branches" && (
+        <div className="flex flex-wrap items-center gap-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <AlertTriangle size={16} className="shrink-0" />
+          <p className="flex-1 min-w-0">
+            Delivery is on for <strong>{deliveryNotReady.map(b => b.name).join(", ")}</strong> but no delivery area is set,
+            so customers can only pick up. Add a map location and a max distance or pincodes.
+          </p>
+          {isAdmin && (
+            <Button size="sm" variant="outline" onClick={() => setActiveTab("branches")}>Set up delivery</Button>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════
+          BRANCHES TAB
+      ════════════════════════════════════════ */}
+      {activeTab === "branches" && (
+        <BranchesPanel
+          projectId={projectId}
+          branches={branches}
+          loading={loadingBranches}
+          error={branchesError}
+          isAdmin={isAdmin}
+          currency={config.currency || "₹"}
+          defaultTimezone={defaultTimezone}
+          onRefresh={() => fetchBranches({ silent: true })}
+          onCopyMenu={setCopyTarget}
+        />
+      )}
+
       {/* ════════════════════════════════════════
           SETTINGS TAB
       ════════════════════════════════════════ */}
@@ -299,7 +509,7 @@ export default function ShopTab({ project }) {
                     onChange={e => setConfig(c => ({ ...c, store_name: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Store Phone (for customer contact & owner notifications)</label>
+                  <label className="text-xs text-gray-500 mb-1 block">Default contact & order-alert number (used when a branch has no phone)</label>
                   <Input placeholder="+91 98765 43210"
                     value={config.store_phone || ""}
                     onChange={e => setConfig(c => ({ ...c, store_phone: e.target.value }))} />
@@ -328,15 +538,10 @@ export default function ShopTab({ project }) {
                     Auto-filled from your Shopify store's currency if you connect one before setting up Shop.
                   </p>
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Delivery Types (comma separated)</label>
-                  <Input placeholder="Takeaway, Home Delivery"
-                    value={(config.delivery_types || []).join(", ")}
-                    onChange={e => setConfig(c => ({
-                      ...c,
-                      delivery_types: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
-                    }))} />
-                </div>
+                <p className="text-xs text-gray-400">
+                  Pickup and delivery are now set per branch, in the{" "}
+                  <button type="button" onClick={() => setActiveTab("branches")} className="underline hover:text-gray-600">Branches</button> tab.
+                </p>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Terms & Conditions Note</label>
                   <Input placeholder="This order is not eligible for any discounts. T&C apply."
@@ -439,7 +644,7 @@ export default function ShopTab({ project }) {
                 <div className="flex items-center gap-3">
                   <button onClick={() => { setSelectedCatalog(null); setShowProductForm(false); setEditingProduct(null); }}
                     className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
-                    <ChevronLeft size={16} /> Catalogs
+                    <ChevronLeft size={16} /> {multiBranch && menuBranch ? `Menu · ${menuBranch.name}` : "Menu"}
                   </button>
                   <span className="text-gray-300">/</span>
                   <span className="font-semibold text-gray-900">{selectedCatalog.name}</span>
@@ -663,6 +868,21 @@ export default function ShopTab({ project }) {
           ) : (
             /* Catalog list view */
             <div className="space-y-4">
+              {/* Branch picker + copy */}
+              {multiBranch && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500">Menu for</span>
+                    <BranchSelector branches={branches} value={menuBranchId} onChange={pickMenuBranch} />
+                  </div>
+                  {isAdmin && menuBranch && (
+                    <Button variant="outline" size="sm" onClick={() => setCopyTarget(menuBranch)}>
+                      <Copy size={13} className="mr-1" /> Copy menu from another branch
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Create catalog */}
               <div className="flex gap-2">
                 <Input placeholder="Catalog name e.g. Breakfast Menu"
@@ -682,8 +902,12 @@ export default function ShopTab({ project }) {
               ) : catalogs.length === 0 ? (
                 <div className="border-2 border-dashed rounded-xl p-12 text-center">
                   <ShoppingBag size={32} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-400">No catalogs yet</p>
-                  <p className="text-xs text-gray-300 mt-1">Create a catalog to start adding products</p>
+                  <p className="text-sm text-gray-400">
+                    {multiBranch && menuBranch ? `No catalogs in ${menuBranch.name} yet` : "No catalogs yet"}
+                  </p>
+                  <p className="text-xs text-gray-300 mt-1">
+                    Create a catalog to start adding products{multiBranch && isAdmin ? ", or copy the menu from another branch" : ""}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -741,17 +965,33 @@ export default function ShopTab({ project }) {
       ════════════════════════════════════════ */}
       {activeTab === "orders" && (
         <div className="space-y-4">
+          {/* Branch + notify preference */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {multiBranch ? (
+              <BranchSelector branches={branches} value={orderBranchId} onChange={pickOrderBranch} allowAll />
+            ) : <span />}
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" checked={notifyCustomer} onChange={e => toggleNotify(e.target.checked)} />
+              Notify customer on WhatsApp
+            </label>
+          </div>
+          <p className="text-xs text-gray-400 -mt-2">
+            Add the &quot;Order Status Update&quot; and &quot;Order Cancelled&quot; templates in{" "}
+            <a href={`/dashboard/${projectId}/templates`} className="underline font-medium hover:text-gray-600">Templates</a>{" "}
+            so updates reach every customer. Without them, messages only reach people who messaged you in the last 24 hours.
+          </p>
+
           {/* Filter tabs */}
           <div className="flex gap-2 flex-wrap">
-            {["all", "pending", "confirmed", "ready", "delivered", "cancelled"].map(f => (
+            {ORDER_FILTERS.map(([f, label]) => (
               <button key={f} onClick={() => setOrderFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                   orderFilter === f
                     ? "bg-gray-900 text-white border-gray-900"
                     : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
                 }`}>
-                {f.charAt(0).toUpperCase() + f.slice(1)}
-                {f === "all" ? ` (${orders.length})` : ` (${orders.filter(o => o.status === f).length})`}
+                {label}
+                {f === "all" ? ` (${orders.length})` : ` (${orders.filter(o => normalizeStatus(o.status) === f).length})`}
               </button>
             ))}
             <Button variant="outline" size="sm" onClick={fetchOrders} className="ml-auto">
@@ -763,90 +1003,45 @@ export default function ShopTab({ project }) {
             <div className="flex items-center justify-center h-20">
               <Loader2 size={18} className="animate-spin text-gray-400" />
             </div>
+          ) : ordersError ? (
+            <div className="text-center py-10 border border-red-200 bg-red-50 rounded-xl text-sm">
+              <p className="text-red-700 font-medium">{ordersError}</p>
+              <button onClick={fetchOrders} className="mt-2 text-xs underline text-gray-500">Try again</button>
+            </div>
           ) : filteredOrders.length === 0 ? (
             <div className="border-2 border-dashed rounded-xl p-12 text-center">
               <ClipboardList size={32} className="mx-auto text-gray-300 mb-2" />
-              <p className="text-sm text-gray-400">No orders yet</p>
+              <p className="text-sm text-gray-400">
+                {orders.length === 0 ? "No orders yet" : "No orders with this status"}
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
               {filteredOrders.map(order => (
-                <Card key={order.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        {/* Order header */}
-                        <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <span className="font-mono text-xs font-semibold text-gray-600">
-                            #{order.id.slice(0, 8).toUpperCase()}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${ORDER_STATUS_COLORS[order.status] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                            {order.status}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${PAYMENT_STATUS_COLORS[order.payment_status] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                            {order.payment_status === "paid" ? "✓ Paid" : order.payment_status === "link_sent" ? "Link Sent" : "Unpaid"}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {new Date(order.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-
-                        {/* Items */}
-                        <div className="text-sm text-gray-700 mb-1">
-                          {(order.items || []).map((item, i) => (
-                            <span key={i}>
-                              {item.name} x{item.quantity}
-                              {i < order.items.length - 1 ? ", " : ""}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Meta */}
-                        <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
-                          <span>📞 +{order.phone_number}</span>
-                          <span>🏃 {order.delivery_type}</span>
-                          <span className="font-semibold text-gray-700">
-                            {config.currency || "₹"}{order.total?.toFixed(2)}
-                          </span>
-                          {order.special_request && (
-                            <span className="text-orange-600">📝 {order.special_request}</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Status actions */}
-                      <div className="flex flex-col gap-1.5 shrink-0">
-                        {order.status === "pending" && (
-                          <Button size="sm" onClick={() => handleUpdateOrder(order.id, { status: "confirmed" })}>
-                            Confirm
-                          </Button>
-                        )}
-                        {order.status === "confirmed" && (
-                          <Button size="sm" variant="outline" onClick={() => handleUpdateOrder(order.id, { status: "ready" })}>
-                            Mark Ready
-                          </Button>
-                        )}
-                        {order.status === "ready" && (
-                          <Button size="sm" variant="outline" onClick={() => handleUpdateOrder(order.id, { status: "delivered" })}>
-                            Delivered
-                          </Button>
-                        )}
-                        {!["delivered", "cancelled"].includes(order.status) && (
-                          <Button size="sm" variant="ghost"
-                            onClick={() => handleUpdateOrder(order.id, { status: "cancelled" })}
-                            className="text-red-400 hover:text-red-600 hover:bg-red-50 text-xs">
-                            Cancel
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  currency={config.currency || "₹"}
+                  branchName={multiBranch && !orderBranchFilter ? branchNameById[order.branch_id] : null}
+                  busy={orderBusy === order.id}
+                  onAction={handleOrderAction}
+                />
               ))}
             </div>
           )}
         </div>
       )}
+
+      <CopyMenuDialog
+        open={!!copyTarget}
+        target={copyTarget}
+        branches={branches}
+        onClose={() => setCopyTarget(null)}
+        onCopied={() => {
+          fetchBranches({ silent: true });
+          if (copyTarget?.id === menuBranchId) fetchCatalogs();
+        }}
+      />
 
       {/* Delete dialogs */}
       <AppAlertDialog

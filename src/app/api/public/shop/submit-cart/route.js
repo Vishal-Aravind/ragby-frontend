@@ -1,37 +1,20 @@
 // src/app/api/public/shop/submit-cart/route.js
 import { NextResponse } from "next/server";
-import { visitorHeaders } from "@/lib/visitor-ip";
+import { proxyToBackend } from "@/lib/backend-proxy";
 
+// proxyToBackend keeps the backend's status code and its `detail` (a
+// {code, message} object for shop errors), forwards the real visitor IP for
+// the per-IP limit, and turns a non-JSON backend error (a traceback) into a
+// generic message instead of showing it to an anonymous shopper.
 export async function POST(req) {
+  let body;
   try {
-    const body = await req.json();
-    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL;
-
-    if (!backendUrl) {
-      return NextResponse.json({ error: "Backend not configured" }, { status: 500 });
-    }
-
-    const res = await fetch(`${backendUrl}/public/shop/submit-cart`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...visitorHeaders(req) },
-      body: JSON.stringify(body),
-    });
-
-    const text = await res.text();
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      // Was returning the raw body — on a backend 500 that put a Python
-      // traceback in front of an anonymous shopper.
-      console.error("submit-cart non-JSON response:", res.status, text.slice(0, 300));
-      return NextResponse.json({ error: "Could not place that order. Please try again." }, { status: 502 });
-    }
-
-    return NextResponse.json(data, { status: res.status });
-  } catch (e) {
-    console.error("submit-cart proxy error:", e.message);
-    return NextResponse.json({ error: "Could not reach the store. Please try again." }, { status: 502 });
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { detail: { code: "invalid_request", message: "Invalid request." } },
+      { status: 400 }
+    );
   }
+  return proxyToBackend("/public/shop/submit-cart", { req, method: "POST", body });
 }
