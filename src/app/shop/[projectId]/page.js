@@ -801,7 +801,7 @@ export default function ShopPage() {
           <Check size={28} color="white" strokeWidth={3} />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-900">{submitted.count} items added</h2>
+          <h2 className="text-xl font-bold text-gray-900">{submitted.count} {submitted.count === 1 ? "item" : "items"} added</h2>
           {submitted.total != null && (
             <p className="text-2xl font-bold mt-1" style={{ color: accent }}>{formatMoney(currency, submitted.total)}</p>
           )}
@@ -1005,7 +1005,7 @@ export default function ShopPage() {
             {(activeCategory === "All" || Object.keys(grouped).length > 1) && (
               <div className="flex items-center gap-2 mb-3">
                 <h2 className="font-bold text-gray-900">{category}</h2>
-                <span className="text-xs text-gray-400">{items.length} items</span>
+                <span className="text-xs text-gray-400">{items.length} {items.length === 1 ? "item" : "items"}</span>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
             )}
