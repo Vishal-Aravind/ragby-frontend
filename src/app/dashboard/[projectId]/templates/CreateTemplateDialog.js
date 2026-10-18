@@ -24,6 +24,10 @@ const BUTTON_TYPES = { quick_reply: 'Quick reply', url: 'Visit website', phone: 
 const toName = (v) => v.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+/, '').slice(0, 512)
 
 const VAR_ANY = /\{\{\s*\d+\s*\}\}/
+// Meta counts "{{1}}." as a variable at the end, so punctuation next to the
+// first/last variable doesn't make it acceptable - only words do.
+const LEADING_VAR = /^[\s.,;:!?'"(\[\-\u2013\u2014\u2026]*\{\{\s*\d+\s*\}\}/
+const TRAILING_VAR = /\{\{\s*\d+\s*\}\}[\s.,;:!?'")\]\-\u2013\u2014\u2026]*$/
 const PHONE_RE = /^\+[1-9]\d{6,14}$/
 const isEmptyButton = (b) => !(b.text || '').trim() && !(b.url || '').trim() && !(b.phone || '').trim()
 
@@ -52,8 +56,8 @@ function validate(f, existingNames) {
   if (!body) required.body = 'Type the message.'
   else if (body.length > 1024) live.body = 'At most 1024 characters.'
   else if (nums.length && nums.join(',') !== nums.map((_, i) => i + 1).join(',')) live.body = 'Number the variables {{1}}, {{2}}, ... in order, without gaps.'
-  else if (new RegExp('^' + VAR_ANY.source).test(body)) live.body = "Can't start with a variable - put a word before it."
-  else if (new RegExp(VAR_ANY.source + '$').test(body)) live.body = "Can't end with a variable - put a word or a full stop after it."
+  else if (LEADING_VAR.test(body.trim())) live.body = "Can't start with a variable - put a few words before it."
+  else if (TRAILING_VAR.test(body.trim())) live.body = "Can't end with a variable - a full stop after it doesn't help, add a few words after it."
   else if (/\}\}\s*\{\{/.test(body)) live.body = "Two variables can't be right next to each other - put a word between them."
   const examples = {}
   nums.forEach((n, i) => { if (!(f.examples[i] || '').trim()) examples[i] = 'Add an example value.' })
