@@ -7,7 +7,7 @@ import { requireProjectTab } from "@/lib/supabase-api";
 // GET/PUT via select("*") — a live merchant secret shipped into the
 // dashboard's JS/network tab on every settings-page load. Explicit column
 // list excluding it, used by both handlers below — write-only from here on.
-const SHOP_CONFIG_SAFE_COLUMNS = "project_id, store_name, store_phone, gst_percent, currency, currency_code, accent_color, delivery_types, terms_note, razorpay_key_id, is_enabled, bot_can_assist, bot_can_order, cover_image_url, logo_url, notify_owner_whatsapp";
+const SHOP_CONFIG_SAFE_COLUMNS = "project_id, store_name, store_phone, gst_percent, currency, currency_code, accent_color, delivery_types, terms_note, razorpay_key_id, is_enabled, bot_can_assist, bot_can_order, cover_image_url, logo_url";
 // cover_image_url / logo_url are read-only here: they are written through the
 // backend's /shop-config/{pid}/branding endpoint (which validates the URL),
 // so the upsert below deliberately doesn't list them and PostgREST leaves
@@ -80,7 +80,6 @@ export async function PUT(req, { params }) {
       ...(newSecret ? { razorpay_key_secret: newSecret } : {}),
       project_id: projectId,
       store_name: body.store_name || null,
-      store_phone: body.store_phone || null,
       gst_percent: body.gst_percent ?? 0,
       currency: body.currency || "₹",
       accent_color: body.accent_color || "#16a34a",
@@ -90,8 +89,6 @@ export async function PUT(req, { params }) {
       is_enabled: body.is_enabled ?? false,
       bot_can_assist: body.bot_can_assist ?? false,
       bot_can_order: body.bot_can_order ?? false,
-      // Only written when sent, so an older page can't switch the alert back on.
-      ...(typeof body.notify_owner_whatsapp === "boolean" ? { notify_owner_whatsapp: body.notify_owner_whatsapp } : {}),
     }, { onConflict: "project_id" })
     .select(SHOP_CONFIG_SAFE_COLUMNS)
     .single();

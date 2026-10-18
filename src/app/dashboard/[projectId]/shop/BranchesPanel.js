@@ -12,7 +12,7 @@ import { StatusDot, branchTone } from "./BranchSelector";
 export const WARNING_TEXT = {
   no_location: "No map location set. Customers won't see how far this branch is, and distance-based delivery won't work.",
   delivery_not_configured: "Delivery is on but no delivery area is set — customers can only pick up.",
-  no_phone: "No phone number. New-order alerts go to the store phone in Settings.",
+  no_phone: "No phone number. This branch can't send new-order WhatsApp alerts - add one in Edit.",
   no_menu: "No menu yet. Add catalogs in Menu, or copy the menu from another branch.",
 };
 

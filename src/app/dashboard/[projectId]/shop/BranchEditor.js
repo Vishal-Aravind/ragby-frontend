@@ -21,6 +21,7 @@ function toForm(b, defaultTimezone) {
     address: b?.address || "",
     image_url: b?.image_url || "",
     is_active: b ? b.is_active !== false : true,
+    notify_owner_whatsapp: b ? b.notify_owner_whatsapp !== false : true,
     lat: b?.lat ?? null,
     lng: b?.lng ?? null,
     hours: b ? b.hours ?? null : null,
@@ -48,6 +49,7 @@ function toPayload(f) {
     address: f.address.trim() || null,
     image_url: f.image_url || null,
     is_active: !!f.is_active,
+    notify_owner_whatsapp: f.notify_owner_whatsapp !== false,
     lat: f.lat ?? null,
     lng: f.lng ?? null,
     hours: normalizeHours(f.hours),
@@ -184,7 +186,19 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
                 <label className="text-xs text-gray-500 mb-1 block">Phone</label>
                 <Input placeholder="+91 98765 43210" inputMode="tel"
                   value={form.phone} onChange={e => setField("phone", e.target.value)} />
-                <p className="text-xs text-gray-400 mt-1">Shown to customers & receives new-order alerts on WhatsApp</p>
+                <p className="text-xs text-gray-400 mt-1">Shown to customers & receives this branch's new-order alerts on WhatsApp</p>
+                <div className="flex items-center justify-between gap-3 mt-3 rounded-lg border px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">WhatsApp alert for new orders</p>
+                    <p className="text-xs text-gray-400">
+                      {form.phone.trim()
+                        ? "Sent to the phone above. Turn it off to watch orders in the dashboard only."
+                        : "Add a phone above to receive alerts. Until then this branch sends none."}
+                    </p>
+                  </div>
+                  <Switch checked={form.notify_owner_whatsapp !== false}
+                    onCheckedChange={(v) => setField("notify_owner_whatsapp", !!v)} aria-label="WhatsApp alert for new orders" />
+                </div>
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Address</label>

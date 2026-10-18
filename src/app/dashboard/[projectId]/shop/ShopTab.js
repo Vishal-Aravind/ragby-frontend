@@ -118,11 +118,10 @@ export default function ShopTab({ project }) {
       .then(data => {
         if (data) setConfig(data);
         else setConfig({
-          store_name: "", store_phone: "", gst_percent: 0,
+          store_name: "", gst_percent: 0,
           currency: "₹", accent_color: "#16a34a",
           delivery_types: ["Takeaway"], terms_note: "",
           razorpay_key_id: "", razorpay_key_secret: "", is_enabled: false, bot_can_assist: false, bot_can_order: false,
-          notify_owner_whatsapp: true,
         });
       });
   }, [projectId]);
@@ -552,12 +551,6 @@ export default function ShopTab({ project }) {
                     value={config.store_name || ""}
                     onChange={e => setConfig(c => ({ ...c, store_name: e.target.value }))} />
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Default contact & order-alert number (used when a branch has no phone)</label>
-                  <Input placeholder="+91 98765 43210"
-                    value={config.store_phone || ""}
-                    onChange={e => setConfig(c => ({ ...c, store_phone: e.target.value }))} />
-                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">Currency Symbol</label>
@@ -583,7 +576,7 @@ export default function ShopTab({ project }) {
                   </p>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Pickup and delivery are now set per branch, in the{" "}
+                  Pickup, delivery, phone numbers and new-order WhatsApp alerts are set per branch, in the{" "}
                   <button type="button" onClick={() => setActiveTab("branches")} className="underline hover:text-gray-600">Branches</button> tab.
                 </p>
                 <div>
@@ -658,22 +651,6 @@ export default function ShopTab({ project }) {
                   disabled={!config.bot_can_assist}
                   onClick={() => setConfig(c => ({ ...c, bot_can_order: !c.bot_can_order }))}>
                   {config.bot_can_order
-                    ? <ToggleRight size={28} className="text-green-600" />
-                    : <ToggleLeft size={28} className="text-gray-400" />}
-                </button>
-              </div>
-
-              {/* New-order alert on WhatsApp (default on). Off = use the dashboard bell. */}
-              <div className="flex items-center justify-between pt-2 border-t">
-                <div className="pr-4">
-                  <p className="text-sm font-medium text-gray-700">Send me a WhatsApp alert for new orders</p>
-                  <p className="text-xs text-gray-400">
-                    Goes to the branch phone (or the store phone above). Turn it off if you only want to watch for
-                    orders in this dashboard - the Shop menu shows a red count for new orders.
-                  </p>
-                </div>
-                <button onClick={() => setConfig(c => ({ ...c, notify_owner_whatsapp: c.notify_owner_whatsapp === false }))}>
-                  {config.notify_owner_whatsapp !== false
                     ? <ToggleRight size={28} className="text-green-600" />
                     : <ToggleLeft size={28} className="text-gray-400" />}
                 </button>
