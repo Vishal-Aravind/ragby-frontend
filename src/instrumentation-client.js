@@ -7,6 +7,7 @@
 // every Next.js API route failure and every unhandled browser error was
 // invisible unless someone happened to be watching console.error live.
 import * as Sentry from "@sentry/nextjs";
+import { scrubEvent, scrubBreadcrumb } from "@/lib/sentry-scrub";
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -28,6 +29,12 @@ Sentry.init({
   // Quiets the SDK's own console output in production; leave debug logs
   // for local dev only.
   debug: false,
+
+  // The shop link's customer token (?t=) and payment receipt (?r=) are
+  // bearer credentials; keep them out of every event, trace and breadcrumb.
+  beforeSend: scrubEvent,
+  beforeSendTransaction: scrubEvent,
+  beforeBreadcrumb: scrubBreadcrumb,
 });
 
 // Required export: without it the SDK cannot see App Router client-side

@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Plus, Trash2, Loader2, ShoppingBag, Settings,
   Package, ClipboardList, ChevronLeft, Upload,
-  ToggleLeft, ToggleRight, Lock, Store, Copy, AlertTriangle
+  ToggleLeft, ToggleRight, Lock, Store, Copy, AlertTriangle, Tag
 } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
 import { toast } from "sonner";
@@ -18,11 +18,14 @@ import BranchesPanel from "./BranchesPanel";
 import BranchSelector, { ALL_BRANCHES } from "./BranchSelector";
 import CopyMenuDialog from "./CopyMenuDialog";
 import OrderCard, { ORDER_STATUSES, normalizeStatus } from "./OrderCard";
+import OffersPanel from "./OffersPanel";
+import BrandingCard from "./BrandingCard";
 
 const TABS = [
   { id: "settings",  label: "Settings",  icon: Settings },
   { id: "branches",  label: "Branches",  icon: Store },
   { id: "catalogs",  label: "Menu",      icon: ShoppingBag },
+  { id: "offers",    label: "Offers",    icon: Tag },
   { id: "orders",    label: "Orders",    icon: ClipboardList },
 ];
 
@@ -63,6 +66,10 @@ export default function ShopTab({ project }) {
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const [razorpayConnected, setRazorpayConnected] = useState(false);
+
+  // ── Offers (only "is any offer live?" here, for the terms-note warning;
+  // the Offers tab loads and manages the full list itself) ──
+  const [hasActiveOffers, setHasActiveOffers] = useState(false);
 
   // ── Catalogs ──────────────────────────────────────────
   const [catalogs, setCatalogs] = useState([]);
@@ -144,6 +151,14 @@ export default function ShopTab({ project }) {
     if (!projectId) return;
     setNotifyCustomer(readPref(notifyPrefKey) !== "0");
     fetchBranches();
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/shop-offers?project_id=${projectId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => { if (Array.isArray(data)) setHasActiveOffers(data.some(o => o.state === "active")); })
+      .catch(() => { /* warning only; ignore */ });
   }, [projectId]);
 
   // Pick the Menu / Orders branch once branches arrive (remembered per
@@ -492,6 +507,20 @@ export default function ShopTab({ project }) {
       )}
 
       {/* ════════════════════════════════════════
+          OFFERS TAB
+      ════════════════════════════════════════ */}
+      {activeTab === "offers" && (
+        <OffersPanel
+          projectId={projectId}
+          branches={branches}
+          isAdmin={isAdmin}
+          currency={config.currency || "₹"}
+          defaultTimezone={defaultTimezone}
+          onOffersChange={(list) => setHasActiveOffers(list.some(o => o.state === "active"))}
+        />
+      )}
+
+      {/* ════════════════════════════════════════
           SETTINGS TAB
       ════════════════════════════════════════ */}
       {activeTab === "settings" && (
@@ -620,6 +649,14 @@ export default function ShopTab({ project }) {
               </div>
             </CardContent>
           </Card>
+
+          <BrandingCard
+            projectId={projectId}
+            config={config}
+            isAdmin={isAdmin}
+            hasActiveOffers={hasActiveOffers}
+            onBrandingSaved={(b) => setConfig(c => ({ ...c, ...b }))}
+          />
 
           {/* Save button */}
           <div className="md:col-span-2">

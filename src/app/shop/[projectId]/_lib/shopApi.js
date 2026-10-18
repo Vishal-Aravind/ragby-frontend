@@ -74,6 +74,85 @@ export const getOrder = (orderId, phone) =>
 export const submitCart = (body) =>
   call(`/api/public/shop/submit-cart`, { method: "POST", body });
 
+// ---- v3 -------------------------------------------------------------------
+// The customer token only ever travels in POST bodies (never a URL), so it
+// stays out of access logs and Referer headers.
+
+export const getMe = (pid, customerToken) =>
+  call(`${base(pid)}/me`, { method: "POST", body: { customer_token: customerToken } });
+
+/** Public offers strip. No identity is sent; this is a plain GET. */
+export const getOffers = (pid, branchId, fulfilment) =>
+  call(`${base(pid)}?type=offers${qs({ branch_id: branchId, fulfilment })}`);
+
+export const placeOrder = (pid, body) => call(`${base(pid)}/place-order`, { method: "POST", body });
+
+export const getMyOrders = (pid, customerToken, limit = 20) =>
+  call(`${base(pid)}/my-orders`, { method: "POST", body: { customer_token: customerToken, limit } });
+
+/** auth: {receipt} or {customer_token} */
+export const getOrderStatus = (pid, orderId, auth) =>
+  call(`${base(pid)}/orders/${encodeURIComponent(orderId)}/status`, { method: "POST", body: auth });
+
+export const cancelOrder = (pid, orderId, auth) =>
+  call(`${base(pid)}/orders/${encodeURIComponent(orderId)}/cancel`, { method: "POST", body: auth });
+
+/** Customer text for an offer reason code (B.2), when the server sent no message. */
+export function offerReasonText(reason) {
+  switch (reason) {
+    case "invalid_code": return "This code isn't valid.";
+    case "expired": return "This offer has expired.";
+    case "not_started": return "This offer hasn't started yet.";
+    case "paused": return "This offer isn't available right now.";
+    case "branch": return "This offer isn't valid at this branch.";
+    case "fulfilment": return "This offer isn't valid for this order type.";
+    case "login_required": return "Open the menu from your WhatsApp chat to use this offer.";
+    case "min_order": return "Add more items to use this offer.";
+    case "limit_reached": return "This offer has been fully claimed.";
+    case "already_used": return "You've already used this offer.";
+    case "not_first_order": return "This offer is for your first order only.";
+    case "no_saving": return "This offer doesn't lower your total yet.";
+    case "rate_limited": return "Too many code attempts. Please try again in 15 minutes.";
+    default: return "This offer can't be used on this order.";
+  }
+}
+
+/** "17 Oct, 7:42 PM" in the viewer's own timezone. */
+export function formatDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    const date = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true });
+    return `${date}, ${time.toUpperCase()}`;
+  } catch {
+    return d.toISOString().slice(0, 16).replace("T", " ");
+  }
+}
+
+/** Remove params from the address bar without a navigation. */
+export function stripUrlParams(names) {
+  try {
+    const url = new URL(window.location.href);
+    let changed = false;
+    for (const n of names) {
+      if (url.searchParams.has(n)) {
+        url.searchParams.delete(n);
+        changed = true;
+      }
+    }
+    if (changed) window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function openWhatsAppChat(storePhone) {
+  const bizPhone = (storePhone || "").replace(/\D/g, "");
+  window.location.href = `https://wa.me/${bizPhone || "15556458639"}`;
+}
+
 /** Promise wrapper around the browser geolocation API. Rejects with "denied" | "unavailable". */
 export function getCurrentPosition() {
   return new Promise((resolve, reject) => {
@@ -135,4 +214,9 @@ export function closedToastText(status) {
   const o = status.opens_at_label;
   if (o) return /^\d/.test(o) ? `Opens at ${o}` : `Opens ${o}`;
   return status.label || "Closed now";
+}
+
+/** "#16a34a" + alpha "1a" → "#16a34a1a"; anything that isn't 6-digit hex falls back. */
+export function withAlpha(hex, alpha, fallback = "transparent") {
+  return typeof hex === "string" && /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${alpha}` : fallback;
 }

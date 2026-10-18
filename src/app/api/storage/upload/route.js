@@ -43,6 +43,9 @@ const FOLDER_RULES = {
   message_document: { limit: 16 * 1024 * 1024,  types: DOC_TYPES },
   products:         { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
   "event-pages":    { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },
+  // Shop cover, logo and branch photos. No GIF: the backend only accepts
+  // png/jpg/webp URLs for these (shop_rules.valid_media_url).
+  "shop-branding":  { limit: 5 * 1024 * 1024,   types: { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" } },
   // Website flow media is played by the visitor's browser, not WhatsApp,
   // so it takes browser formats (WEBP/GIF, WEBM, WAV).
   "web-image":      { limit: 5 * 1024 * 1024,   types: IMAGE_TYPES },

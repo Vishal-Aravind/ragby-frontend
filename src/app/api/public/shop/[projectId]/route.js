@@ -46,6 +46,13 @@ export async function GET(req, { params }) {
     return forward(`/public/shop/${id}/catalogs${query({ branch_id })}`, [], req);
   }
 
+  if (type === "offers") {
+    // Public offers strip: no identity, so a plain GET is fine here.
+    const fulfilment = searchParams.get("fulfilment") || "";
+    const ful = fulfilment === "pickup" || fulfilment === "delivery" ? fulfilment : "";
+    return forward(`/public/shop/${id}/offers${query({ branch_id, fulfilment: ful })}`, { offers: [] }, req);
+  }
+
   if (type === "status") {
     if (!branch_id) {
       return NextResponse.json(

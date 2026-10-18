@@ -28,6 +28,16 @@ function BranchCard({ branch, accent, currency, onPick }) {
       style={{ borderColor: branch.is_nearest ? accent : "#f3f4f6", borderWidth: branch.is_nearest ? 1.5 : 1 }}
     >
       <div className="flex items-start gap-3">
+        {branch.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={branch.image_url}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            className="w-[72px] h-[72px] rounded-xl object-cover bg-gray-100 shrink-0"
+          />
+        )}
         <div className="flex-1 min-w-0 space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-bold text-gray-900 text-base leading-tight">{branch.name}</h3>

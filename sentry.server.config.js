@@ -2,6 +2,7 @@
 // under src/app/api/**, server components, and route handlers. Loaded
 // from instrumentation.js's register(), never imported directly.
 import * as Sentry from "@sentry/nextjs";
+import { scrubEvent, scrubBreadcrumb } from "@/lib/sentry-scrub";
 
 Sentry.init({
   // Server code, unlike the browser bundle, doesn't need the NEXT_PUBLIC_
@@ -14,4 +15,10 @@ Sentry.init({
   tracesSampleRate: 0.1,
 
   debug: false,
+
+  // The shop link's customer token (?t=) and payment receipt (?r=) are
+  // bearer credentials; keep them out of every event, trace and breadcrumb.
+  beforeSend: scrubEvent,
+  beforeSendTransaction: scrubEvent,
+  beforeBreadcrumb: scrubBreadcrumb,
 });

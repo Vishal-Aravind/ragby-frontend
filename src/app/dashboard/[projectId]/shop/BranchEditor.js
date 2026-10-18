@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import LocationPickerMap from "@/components/shop/LocationPickerMap";
 import HoursEditor, { normalizeHours } from "./HoursEditor";
 import DeliverySettings, { num } from "./DeliverySettings";
+import ImageUploadField from "./ImageUploadField";
 
 const str = (v) => (v == null || Number(v) === 0 ? "" : String(Number(v)));
 
@@ -18,6 +19,7 @@ function toForm(b, defaultTimezone) {
     name: b?.name || "",
     phone: b?.phone ? `+${String(b.phone).replace(/^\+/, "")}` : "",
     address: b?.address || "",
+    image_url: b?.image_url || "",
     is_active: b ? b.is_active !== false : true,
     lat: b?.lat ?? null,
     lng: b?.lng ?? null,
@@ -44,6 +46,7 @@ function toPayload(f) {
     name: f.name.trim(),
     phone: f.phone.trim() || null,
     address: f.address.trim() || null,
+    image_url: f.image_url || null,
     is_active: !!f.is_active,
     lat: f.lat ?? null,
     lng: f.lng ?? null,
@@ -190,6 +193,13 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
                   placeholder="12, 100 Feet Rd, Velachery, Chennai"
                   value={form.address} onChange={e => setField("address", e.target.value)} />
               </div>
+              <ImageUploadField
+                label="Photo"
+                hint="Shown next to the branch when customers pick one. Saved with the branch."
+                value={form.image_url}
+                aspect="16 / 9"
+                onChange={(url) => setField("image_url", url || "")}
+              />
               <div className="flex items-center justify-between gap-3 pt-2 border-t">
                 <div>
                   <p className="text-sm font-medium text-gray-700">Branch is active</p>

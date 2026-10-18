@@ -148,7 +148,10 @@ export default function BranchesPanel({
             return (
               <div key={b.id} className={`border rounded-xl bg-white p-4 space-y-3 ${b.is_active === false ? "opacity-75" : ""}`}>
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  {b.image_url && (
+                    <img src={b.image_url} alt="" className="w-12 h-12 rounded-lg object-cover border shrink-0" />
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-gray-900 text-sm flex items-center gap-1.5 flex-wrap">
                       {b.name}
                       {b.is_default && <Chip tone="blue">Default</Chip>}

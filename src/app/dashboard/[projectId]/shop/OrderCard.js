@@ -32,11 +32,28 @@ const STATUS_COLORS = {
   cancelled:        "bg-red-100 text-red-700 border-red-200",
 };
 
-const PAYMENT_STATUS_COLORS = {
-  unpaid:    "bg-gray-100 text-gray-600 border-gray-200",
-  link_sent: "bg-orange-100 text-orange-700 border-orange-200",
-  paid:      "bg-green-100 text-green-700 border-green-200",
+// [label, classes] for the payment badge.
+function paymentBadge(order) {
+  switch (order.payment_status) {
+    case "paid":         return ["✓ Paid online", "bg-green-100 text-green-700 border-green-200"];
+    case "link_sent":    return ["Awaiting payment", "bg-orange-100 text-orange-700 border-orange-200"];
+    case "not_required": return ["Free", "bg-green-50 text-green-700 border-green-200"];
+    case "underpaid":    return ["Underpaid", "bg-red-100 text-red-700 border-red-200"];
+    case "refunded":     return ["Refunded", "bg-gray-100 text-gray-600 border-gray-200"];
+    default:
+      return order.payment_method === "offline"
+        ? ["Collect payment", "bg-amber-100 text-amber-800 border-amber-200"]
+        : ["Unpaid", "bg-gray-100 text-gray-600 border-gray-200"];
+  }
+}
+
+const SOLD_OUT_LABEL = {
+  remove_item: "Remove it",
+  call_me: "Call me",
+  merchant_choice: "Your recommendation",
 };
+
+const fmtTime = (iso) => new Date(iso).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function isDelivery(order) {
   if (order.fulfilment) return order.fulfilment === "delivery";
@@ -65,6 +82,15 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
   const distance = order.delivery_distance_km != null ? Number(order.delivery_distance_km) : null;
   const hasCoords = order.customer_lat != null && order.customer_lng != null;
   const deliveryFee = Number(order.delivery_fee || 0);
+  const itemsDiscount = Number(order.items_discount || 0);
+  const deliveryDiscount = Number(order.delivery_discount || 0);
+  const discountLabel = order.offer_code || order.offer_title || "Offer";
+  const isCart = !order.placed_at && status === "pending" && (order.payment_status || "unpaid") === "unpaid";
+  const [payLabel, payCls] = paymentBadge(order);
+  // Structured address (v3 page orders), else the composed text (WhatsApp / older orders).
+  const addressText = order.address_line1 || order.address_city
+    ? [order.address_line1, order.address_line2, order.address_city, order.customer_pincode].filter(Boolean).join(", ")
+    : [order.delivery_address, order.customer_pincode].filter(Boolean).join(", ");
 
   return (
     <Card>
@@ -79,9 +105,14 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
               <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[status] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
                 {STATUS_LABEL[status] || status}
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${PAYMENT_STATUS_COLORS[order.payment_status] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
-                {order.payment_status === "paid" ? "✓ Paid" : order.payment_status === "link_sent" ? "Link Sent" : "Unpaid"}
-              </span>
+              {isCart ? (
+                <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-gray-100 text-gray-500 border-gray-200"
+                  title="The customer built this cart but hasn't placed the order yet">
+                  Cart (not placed)
+                </span>
+              ) : (
+                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${payCls}`}>{payLabel}</span>
+              )}
               <span className={`text-xs px-2 py-0.5 rounded-full border ${delivery ? "bg-sky-50 text-sky-700 border-sky-200" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
                 {delivery ? `🛵 Delivery${distance != null ? ` · ${distance} km` : ""}` : "🏃 Pickup"}
               </span>
@@ -91,7 +122,7 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
                 </span>
               )}
               <span className="text-xs text-gray-400">
-                {new Date(order.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                {order.placed_at ? `Placed ${fmtTime(order.placed_at)}` : fmtTime(order.created_at)}
               </span>
             </div>
 
@@ -112,11 +143,11 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
             </div>
 
             {/* Delivery address */}
-            {delivery && (order.delivery_address || order.customer_pincode) && (
+            {delivery && addressText && (
               <div className="flex items-start gap-1.5 text-xs text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5">
                 <MapPin size={12} className="mt-0.5 shrink-0 text-gray-400" />
                 <span className="flex-1 min-w-0">
-                  {[order.delivery_address, order.customer_pincode].filter(Boolean).join(", ")}
+                  {addressText}
                   {hasCoords && (
                     <a href={`https://maps.google.com/?q=${Number(order.customer_lat)},${Number(order.customer_lng)}`}
                       target="_blank" rel="noopener noreferrer"
@@ -131,13 +162,33 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
             {/* Totals */}
             <div className="flex items-center gap-x-3 gap-y-1 text-xs text-gray-400 flex-wrap">
               {order.subtotal != null && <span>Subtotal {money(currency, order.subtotal)}</span>}
+              {itemsDiscount > 0 && (
+                <span className="text-green-700">Discount −{money(currency, itemsDiscount)} · {discountLabel}</span>
+              )}
               {Number(order.gst_amount) > 0 && <span>GST {money(currency, order.gst_amount)}</span>}
               {delivery && <span>Delivery {deliveryFee > 0 ? money(currency, deliveryFee) : "FREE"}</span>}
+              {delivery && deliveryDiscount > 0 && (
+                <span className="text-green-700">
+                  Free delivery offer −{money(currency, deliveryDiscount)}{itemsDiscount > 0 ? "" : ` · ${discountLabel}`}
+                </span>
+              )}
               <span className="font-semibold text-gray-800 text-sm">Total {money(currency, order.total)}</span>
             </div>
 
+            {order.sold_out_preference && SOLD_OUT_LABEL[order.sold_out_preference] && (
+              <span className={`inline-block text-xs px-2 py-0.5 rounded-full border ${
+                order.sold_out_preference === "call_me"
+                  ? "bg-amber-50 text-amber-800 border-amber-200 font-medium"
+                  : "bg-gray-50 text-gray-600 border-gray-200"
+              }`}>
+                If sold out: {SOLD_OUT_LABEL[order.sold_out_preference]}
+              </span>
+            )}
+
             {order.special_request && (
-              <p className="text-xs text-orange-600">📝 {order.special_request}</p>
+              <p className="text-xs text-yellow-900 bg-yellow-50 border border-yellow-200 rounded-lg px-2.5 py-1.5 whitespace-pre-line break-words">
+                📝 {order.special_request}
+              </p>
             )}
           </div>
 
