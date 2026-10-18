@@ -74,7 +74,7 @@ function nextActions(status, delivery) {
 
 const money = (currency, v) => `${currency}${Number(v || 0).toFixed(2)}`;
 
-export default function OrderCard({ order, currency = "₹", branchName, busy, onAction }) {
+export default function OrderCard({ order, currency = "₹", branchName, busy, onAction, isNew = false }) {
   const status = normalizeStatus(order.status);
   const delivery = isDelivery(order);
   const actions = nextActions(status, delivery);
@@ -102,6 +102,9 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
               <span className="font-mono text-xs font-semibold text-gray-600">
                 #{String(order.id).slice(0, 8).toUpperCase()}
               </span>
+              {isNew && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500 text-white font-semibold">NEW</span>
+              )}
               <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[status] || "bg-gray-100 text-gray-600 border-gray-200"}`}>
                 {STATUS_LABEL[status] || status}
               </span>

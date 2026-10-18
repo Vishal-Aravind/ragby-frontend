@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { hasProjectTabAccess } from "@/lib/project-access";
 import { TAB_CONFIG } from "./tabs-config";
+import { useNewOrderCount } from "@/lib/newOrders";
 
 // Fixed-size + always-rendered (opacity toggle only) so it never shifts the
 // label next to it — Next's own guidance for useLinkStatus, since a
@@ -16,6 +17,8 @@ function PendingDot() {
 
 export default function TabNav({ project }) {
   const pathname = usePathname();
+  // Red count on Shop for orders that arrived since Shop > Orders was last opened.
+  const newOrders = useNewOrderCount(project.id, hasProjectTabAccess(project, "shop"));
 
   return (
     <div className="flex flex-col gap-1 border-r pr-3">
@@ -36,6 +39,12 @@ export default function TabNav({ project }) {
               <Icon size={13} />
               {tab.label}
               <PendingDot />
+              {tab.key === "shop" && newOrders > 0 && (
+                <span className="ml-auto min-w-[18px] rounded-full bg-red-500 px-1.5 text-center text-[10px] font-semibold leading-[18px] text-white"
+                  title={`${newOrders} new order${newOrders === 1 ? "" : "s"}`}>
+                  {newOrders > 99 ? "99+" : newOrders}
+                </span>
+              )}
             </Link>
           </Button>
         );

@@ -18,6 +18,7 @@ import BranchesPanel from "./BranchesPanel";
 import BranchSelector, { ALL_BRANCHES } from "./BranchSelector";
 import CopyMenuDialog from "./CopyMenuDialog";
 import OrderCard, { ORDER_STATUSES, normalizeStatus } from "./OrderCard";
+import { getOrdersSeenAt, markOrdersSeen } from "@/lib/newOrders";
 import OffersPanel from "./OffersPanel";
 import BrandingCard from "./BrandingCard";
 
@@ -121,6 +122,7 @@ export default function ShopTab({ project }) {
           currency: "₹", accent_color: "#16a34a",
           delivery_types: ["Takeaway"], terms_note: "",
           razorpay_key_id: "", razorpay_key_secret: "", is_enabled: false, bot_can_assist: false, bot_can_order: false,
+          notify_owner_whatsapp: true,
         });
       });
   }, [projectId]);
@@ -256,6 +258,19 @@ export default function ShopTab({ project }) {
   useEffect(() => {
     if (projectId && activeTab === "orders" && branchesLoaded) fetchOrders();
   }, [projectId, activeTab, branchesLoaded, orderBranchFilter]);
+
+  // Opening Orders clears the dashboard bell. The previous marker is kept for
+  // this visit so the orders that arrived since then are tagged NEW.
+  const [ordersSeenBefore, setOrdersSeenBefore] = useState(null);
+  useEffect(() => {
+    if (!projectId || activeTab !== "orders") return;
+    setOrdersSeenBefore(prev => prev || getOrdersSeenAt(projectId));
+    markOrdersSeen(projectId);
+  }, [projectId, activeTab]);
+  const isNewOrder = (o) => {
+    if (!ordersSeenBefore || ["pending", "cancelled"].includes(o.status)) return false;
+    return new Date(o.placed_at || o.created_at).getTime() > new Date(ordersSeenBefore).getTime();
+  };
 
   // ── Save config ───────────────────────────────────────
   const handleSaveConfig = async () => {
@@ -643,6 +658,22 @@ export default function ShopTab({ project }) {
                   disabled={!config.bot_can_assist}
                   onClick={() => setConfig(c => ({ ...c, bot_can_order: !c.bot_can_order }))}>
                   {config.bot_can_order
+                    ? <ToggleRight size={28} className="text-green-600" />
+                    : <ToggleLeft size={28} className="text-gray-400" />}
+                </button>
+              </div>
+
+              {/* New-order alert on WhatsApp (default on). Off = use the dashboard bell. */}
+              <div className="flex items-center justify-between pt-2 border-t">
+                <div className="pr-4">
+                  <p className="text-sm font-medium text-gray-700">Send me a WhatsApp alert for new orders</p>
+                  <p className="text-xs text-gray-400">
+                    Goes to the branch phone (or the store phone above). Turn it off if you only want to watch for
+                    orders in this dashboard - the Shop menu shows a red count for new orders.
+                  </p>
+                </div>
+                <button onClick={() => setConfig(c => ({ ...c, notify_owner_whatsapp: c.notify_owner_whatsapp === false }))}>
+                  {config.notify_owner_whatsapp !== false
                     ? <ToggleRight size={28} className="text-green-600" />
                     : <ToggleLeft size={28} className="text-gray-400" />}
                 </button>
@@ -1062,6 +1093,7 @@ export default function ShopTab({ project }) {
                   branchName={multiBranch && !orderBranchFilter ? branchNameById[order.branch_id] : null}
                   busy={orderBusy === order.id}
                   onAction={handleOrderAction}
+                  isNew={isNewOrder(order)}
                 />
               ))}
             </div>
