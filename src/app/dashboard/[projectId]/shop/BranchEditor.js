@@ -226,7 +226,7 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
                   <input type="checkbox" className="mt-1" checked={makeDefault} onChange={e => setMakeDefault(e.target.checked)} />
                   <span>
                     <span className="text-sm font-medium text-gray-700 block">Make this the default branch</span>
-                    <span className="text-xs text-gray-400">AI chat orders and Shopify-synced items go to the default branch</span>
+                    <span className="text-xs text-gray-400">Used for products imported from Shopify and for the AI's menu answers. Customers still choose their own branch.</span>
                   </span>
                 </label>
               )}
