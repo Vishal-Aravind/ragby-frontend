@@ -5,11 +5,16 @@ import { cn } from "@/lib/utils"
 function Input({
   className,
   type,
+  onWheel,
   ...props
 }) {
   return (
     <input
       type={type}
+      // A focused number box changes its value when the page is scrolled
+      // over it, silently turning 90 into 59. Drop focus instead so the
+      // wheel scrolls the page and the typed value stays.
+      onWheel={type === "number" ? (e) => { e.currentTarget.blur(); onWheel?.(e); } : onWheel}
       data-slot="input"
       className={cn(
         "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
