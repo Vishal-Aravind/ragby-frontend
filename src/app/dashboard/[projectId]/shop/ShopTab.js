@@ -550,6 +550,27 @@ export default function ShopTab({ project }) {
       {activeTab === "settings" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
+          {/* Shop enabled — master switch for every branch, so it sits on top */}
+          <Card className="md:col-span-2">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  Shop is {config.is_enabled ? "ON" : "OFF"}
+                </p>
+                <p className="text-xs text-gray-400">
+                  {config.is_enabled
+                    ? "Customers can browse and order at every branch"
+                    : "Customers can't browse or order at any branch. Existing orders still get updates."}
+                </p>
+              </div>
+              <button onClick={() => setConfig(c => ({ ...c, is_enabled: !c.is_enabled }))}>
+                {config.is_enabled
+                  ? <ToggleRight size={28} className="text-green-600" />
+                  : <ToggleLeft size={28} className="text-gray-400" />}
+              </button>
+            </CardContent>
+          </Card>
+
           {/* Store Info */}
           <Card>
             <CardContent className="p-6 space-y-4">
@@ -621,19 +642,6 @@ export default function ShopTab({ project }) {
                   ⚠️ Connect Razorpay to collect payment — orders will be confirmed without collecting payment until then.
                 </p>
               )}
-
-              {/* Shop enabled toggle */}
-              <div className="flex items-center justify-between pt-2 border-t">
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Shop Enabled</p>
-                  <p className="text-xs text-gray-400">Allow customers to browse and order</p>
-                </div>
-                <button onClick={() => setConfig(c => ({ ...c, is_enabled: !c.is_enabled }))}>
-                  {config.is_enabled
-                    ? <ToggleRight size={28} className="text-green-600" />
-                    : <ToggleLeft size={28} className="text-gray-400" />}
-                </button>
-              </div>
 
               {/* Let the AI bot check orders / browse catalog in chat */}
               <div className="flex items-center justify-between pt-2 border-t">
