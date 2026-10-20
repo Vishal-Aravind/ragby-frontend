@@ -168,7 +168,11 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
               {itemsDiscount > 0 && (
                 <span className="text-green-700">Discount −{money(currency, itemsDiscount)} · {discountLabel}</span>
               )}
-              {Number(order.gst_amount) > 0 && <span>GST {money(currency, order.gst_amount)}</span>}
+              {(Array.isArray(order.gst_breakdown) ? order.gst_breakdown.filter(g => Number(g.tax) > 0) : []).length > 0
+                ? order.gst_breakdown.filter(g => Number(g.tax) > 0).map(g => (
+                    <span key={g.rate}>GST {Number(g.rate)}% {money(currency, g.tax)}</span>
+                  ))
+                : Number(order.gst_amount) > 0 && <span>GST {money(currency, order.gst_amount)}</span>}
               {delivery && <span>Delivery {deliveryFee > 0 ? money(currency, deliveryFee) : "FREE"}</span>}
               {delivery && deliveryDiscount > 0 && (
                 <span className="text-green-700">

@@ -80,6 +80,8 @@ export default function StepSummary({
   const fee = ready ? Number(quote.delivery_fee) || 0 : 0;
   const deliveryDiscount = ready ? Number(quote.delivery_discount) || 0 : 0;
   const itemsDiscount = ready ? Number(quote.items_discount) || 0 : 0;
+  // One GST line per rate (items can have different rates); older quotes have none.
+  const gstRows = ready ? (quote.gst_breakdown || []).filter(g => Number(g.tax) > 0) : [];
   const discountTotal = ready ? Number(quote.discount_amount) || 0 : 0;
   const discountLabel = quote?.offer ? (quote.offer.code || quote.offer.title || "Offer") : "Offer";
 
@@ -177,9 +179,17 @@ export default function StepSummary({
                 <span className="min-w-0 truncate">Discount ({discountLabel})</span><span className="shrink-0">−{money(itemsDiscount)}</span>
               </div>
             )}
-            {(!ready || Number(quote.gst_percent) > 0) && (
+            {!ready && (
+              <div className="flex justify-between text-gray-600"><span>GST</span><Skeleton /></div>
+            )}
+            {ready && gstRows.length > 0 && gstRows.map(g => (
+              <div key={g.rate} className="flex justify-between text-gray-600">
+                <span>GST{gstRows.length > 1 || g.rate > 0 ? ` (${g.rate}%)` : ""}</span><span>{money(g.tax)}</span>
+              </div>
+            ))}
+            {ready && gstRows.length === 0 && Number(quote.gst_amount) > 0 && (
               <div className="flex justify-between text-gray-600">
-                <span>GST{ready ? ` (${quote.gst_percent}%)` : ""}</span>{ready ? <span>{money(quote.gst_amount)}</span> : <Skeleton />}
+                <span>GST{Number(quote.gst_percent) > 0 ? ` (${quote.gst_percent}%)` : ""}</span><span>{money(quote.gst_amount)}</span>
               </div>
             )}
             {isDelivery && (

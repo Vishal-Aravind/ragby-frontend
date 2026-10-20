@@ -37,6 +37,9 @@ export async function PUT(req, { params }) {
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
+  if (body.gst_percent != null && !(Number(body.gst_percent) >= 0 && Number(body.gst_percent) <= 100)) {
+    return NextResponse.json({ error: "GST % must be between 0 and 100." }, { status: 400 });
+  }
   const update = {};
   if ("name" in body) update.name = body.name;
   if ("description" in body) update.description = body.description;

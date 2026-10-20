@@ -47,6 +47,9 @@ export async function POST(req) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
+  if (body.gst_percent != null && !(Number(body.gst_percent) >= 0 && Number(body.gst_percent) <= 100)) {
+    return NextResponse.json({ error: "GST % must be between 0 and 100." }, { status: 400 });
+  }
   const role = await getProjectRole(user.id, body.project_id);
   if (!role) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -60,7 +63,7 @@ export async function POST(req) {
       price: body.price,
       image_url: body.image_url || null,
       category: body.category || null,
-      gst_percent: body.gst_percent ?? 0,
+      gst_percent: body.gst_percent ?? null,   // null = the shop's GST rate
       is_available: body.is_available ?? true,
       sort_order: body.sort_order ?? 0,
     })

@@ -107,7 +107,7 @@ export default function ShopTab({ project }) {
   function emptyProductForm() {
     return {
       name: "", description: "", price: "",
-      category: "", gst_percent: "0",
+      category: "", gst_percent: "",
       image_url: "", is_available: true, sort_order: "0",
     };
   }
@@ -352,7 +352,7 @@ export default function ShopTab({ project }) {
       project_id: projectId,
       catalog_id: selectedCatalog.id,
       price: parseFloat(productForm.price),
-      gst_percent: parseFloat(productForm.gst_percent || 0),
+      gst_percent: String(productForm.gst_percent ?? "").trim() === "" ? null : parseFloat(productForm.gst_percent),
       sort_order: parseInt(productForm.sort_order || 0),
     };
 
@@ -590,10 +590,11 @@ export default function ShopTab({ project }) {
                       onChange={e => setConfig(c => ({ ...c, currency: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 mb-1 block">GST %</label>
-                    <Input type="number" min="0" max="100" placeholder="5"
+                    <label className="text-xs text-gray-500 mb-1 block">GST % (shop rate)</label>
+                    <Input type="number" min="0" max="100" step="any" placeholder="5"
                       value={config.gst_percent ?? 0}
                       onChange={e => setConfig(c => ({ ...c, gst_percent: parseFloat(e.target.value) || 0 }))} />
+                    <p className="text-[11px] text-gray-400 mt-1">Used for items without their own GST %. Prices are entered without GST - it is added at checkout.</p>
                   </div>
                 </div>
                 <div>
@@ -771,9 +772,11 @@ export default function ShopTab({ project }) {
                           </div>
                           <div>
                             <label className="text-xs text-gray-500 mb-1 block">GST %</label>
-                            <Input type="number" min="0" placeholder="5"
+                            <Input type="number" min="0" max="100" step="any"
+                              placeholder={config?.gst_percent != null ? `Shop rate (${config.gst_percent}%)` : "Shop rate"}
                               value={productForm.gst_percent}
                               onChange={e => setProductForm(f => ({ ...f, gst_percent: e.target.value }))} />
+                            <p className="text-[11px] text-gray-400 mt-1">Leave empty to use the shop rate. Type 0 for no GST on this item.</p>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -902,7 +905,7 @@ export default function ShopTab({ project }) {
                             description: product.description || "",
                             price: product.price,
                             category: product.category || "",
-                            gst_percent: product.gst_percent || 0,
+                            gst_percent: product.gst_percent == null ? "" : String(product.gst_percent),
                             image_url: product.image_url || "",
                             is_available: product.is_available,
                             sort_order: product.sort_order || 0,
