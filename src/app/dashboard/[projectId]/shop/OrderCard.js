@@ -2,7 +2,8 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, MapPin, ExternalLink, Store } from "lucide-react";
+import Link from "next/link";
+import { Loader2, MapPin, ExternalLink, Store, FileText } from "lucide-react";
 
 // Order statuses (shared contract). Old rows may still say "delivered";
 // the backend stores that as "completed".
@@ -200,7 +201,7 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
           </div>
 
           {/* Actions */}
-          {(actions.length > 0 || canCancel) && (
+          {(actions.length > 0 || canCancel || order.invoice_number) && (
             <div className="flex sm:flex-col flex-wrap gap-1.5 shrink-0">
               {actions.map(([next, label], i) => (
                 <Button key={next} size="sm" variant={i === 0 ? "default" : "outline"} disabled={busy}
@@ -214,6 +215,13 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
                   onClick={() => onAction(order, "cancelled")}
                   className="text-red-400 hover:text-red-600 hover:bg-red-50 text-xs">
                   Cancel
+                </Button>
+              )}
+              {order.invoice_number && order.project_id && (
+                <Button size="sm" variant="outline" asChild className="text-xs">
+                  <Link href={`/dashboard/${order.project_id}/shop/invoice/${order.id}`} title={order.invoice_number}>
+                    <FileText size={12} className="mr-1" /> View invoice
+                  </Link>
                 </Button>
               )}
             </div>

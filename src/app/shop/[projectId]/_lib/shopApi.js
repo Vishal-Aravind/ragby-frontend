@@ -94,6 +94,17 @@ export const getMyOrders = (pid, customerToken, limit = 20) =>
 export const getOrderStatus = (pid, orderId, auth) =>
   call(`${base(pid)}/orders/${encodeURIComponent(orderId)}/status`, { method: "POST", body: auth });
 
+/** The order's invoice (404 until it has one). auth: {receipt} or {customer_token} */
+export const getInvoice = (pid, orderId, auth) =>
+  call(`${base(pid)}/orders/${encodeURIComponent(orderId)}/invoice`, { method: "POST", body: auth });
+
+/** Link to the printable invoice page. Without a receipt the page uses the
+ * customer token from this tab's session. */
+export function invoiceHref(pid, orderId, receipt) {
+  const path = `/shop/${encodeURIComponent(pid)}/invoice/${encodeURIComponent(orderId)}`;
+  return receipt ? `${path}?${new URLSearchParams({ r: receipt })}` : path;
+}
+
 export const cancelOrder = (pid, orderId, auth) =>
   call(`${base(pid)}/orders/${encodeURIComponent(orderId)}/cancel`, { method: "POST", body: auth });
 

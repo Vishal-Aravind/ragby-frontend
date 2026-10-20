@@ -21,6 +21,7 @@ import OrderCard, { ORDER_STATUSES, normalizeStatus } from "./OrderCard";
 import { getOrdersSeenAt, markOrdersSeen } from "@/lib/newOrders";
 import OffersPanel from "./OffersPanel";
 import BrandingCard from "./BrandingCard";
+import TaxInvoiceCard from "./TaxInvoiceCard";
 
 const TABS = [
   { id: "settings",  label: "Settings",  icon: Settings },
@@ -686,6 +687,8 @@ export default function ShopTab({ project }) {
             hasActiveOffers={hasActiveOffers}
             onBrandingSaved={(b) => setConfig(c => ({ ...c, ...b }))}
           />
+
+          <TaxInvoiceCard projectId={projectId} isAdmin={isAdmin} />
 
           {/* Save button */}
           <div className="md:col-span-2">

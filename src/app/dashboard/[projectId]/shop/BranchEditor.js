@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { ChevronLeft, Loader2, MapPin, Store, Clock, Truck, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, Loader2, MapPin, Store, Clock, Truck, SlidersHorizontal, FileText } from "lucide-react";
 import { toast } from "sonner";
 import LocationPickerMap from "@/components/shop/LocationPickerMap";
 import HoursEditor, { normalizeHours } from "./HoursEditor";
@@ -36,8 +36,15 @@ function toForm(b, defaultTimezone) {
     min_order_value: str(b?.min_order_value),
     prep_minutes: b?.prep_minutes == null ? "" : String(b.prep_minutes),
     sort_order: b?.sort_order ? String(b.sort_order) : "",
+    gstin: b?.gstin || "",
+    legal_name: b?.legal_name || "",
+    registered_address: b?.registered_address || "",
+    state: b?.state || "",
   };
 }
+
+// Tax invoice override: empty = use the shop's details.
+const SELLER_KEYS = ["gstin", "legal_name", "registered_address", "state"];
 
 // Form -> request body (BranchUpsert). The server validates everything again.
 function toPayload(f) {
@@ -64,6 +71,10 @@ function toPayload(f) {
     min_order_value: num(f.min_order_value) || 0,
     prep_minutes: prep == null ? null : Math.round(prep),
     sort_order: Math.round(num(f.sort_order) || 0),
+    gstin: f.gstin.trim().toUpperCase() || null,
+    legal_name: f.legal_name.trim() || null,
+    registered_address: f.registered_address.trim() || null,
+    state: f.state.trim() || null,
   };
 }
 
@@ -116,6 +127,7 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
       const payload = toPayload(form);
       let res;
       if (isNew) {
+        for (const k of SELLER_KEYS) if (payload[k] == null) delete payload[k];
         res = await fetch("/api/shop-branches", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -297,6 +309,33 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
               </div>
             </div>
             <p className="text-xs text-gray-400">Prep time is shown to customers as "Ready in ~20 min". Lower sort order shows first.</p>
+          </Section>
+
+          <Section icon={FileText} title="Tax invoice (optional)"
+            hint="Only if this branch has its own GST registration. Leave empty to use the shop's details from Settings.">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">GSTIN</label>
+                <Input placeholder="e.g. 29ABCDE1234F1Z5" maxLength={15}
+                  value={form.gstin} onChange={e => setField("gstin", e.target.value.toUpperCase())} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Legal name</label>
+                <Input placeholder="Registered business name"
+                  value={form.legal_name} onChange={e => setField("legal_name", e.target.value)} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs text-gray-500 mb-1 block">Registered address</label>
+                <textarea rows={2} maxLength={500}
+                  className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-200 resize-none"
+                  value={form.registered_address} onChange={e => setField("registered_address", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">State</label>
+                <Input placeholder="e.g. Karnataka"
+                  value={form.state} onChange={e => setField("state", e.target.value)} />
+              </div>
+            </div>
           </Section>
         </div>
       </div>

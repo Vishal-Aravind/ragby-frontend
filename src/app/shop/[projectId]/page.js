@@ -777,6 +777,7 @@ export default function ShopPage() {
 
   if (step === "placed" && placedResult) return (
     <OrderPlaced
+      projectId={projectId}
       result={placedResult}
       currency={currency}
       accent={accent}

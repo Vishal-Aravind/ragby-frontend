@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Clock, AlertTriangle, RotateCw } from "lucide-react";
-import { getOrderStatus, formatMoney } from "../_lib/shopApi";
+import { getOrderStatus, formatMoney, invoiceHref } from "../_lib/shopApi";
 
 const POLL_MS = 3000;
 const POLL_FOR_MS = 60000;
@@ -102,6 +102,15 @@ export default function PaymentReturn({ projectId, orderId, receipt, token, curr
           </p>
         </div>
         <p className="text-sm text-gray-600">Your order is confirmed — a confirmation has been sent to your WhatsApp.</p>
+        {order?.invoice_number && (
+          <a
+            href={invoiceHref(projectId, orderId, receipt)}
+            className="w-full py-3 rounded-xl border-2 bg-white font-semibold flex items-center justify-center"
+            style={{ borderColor: accent, color: accent }}
+          >
+            View invoice
+          </a>
+        )}
       </>
     );
   } else if (phase === "underpaid") {

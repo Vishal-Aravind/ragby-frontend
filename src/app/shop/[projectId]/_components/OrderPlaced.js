@@ -1,7 +1,7 @@
 "use client";
 
-import { Check } from "lucide-react";
-import { formatMoney } from "../_lib/shopApi";
+import { Check, FileText } from "lucide-react";
+import { formatMoney, invoiceHref } from "../_lib/shopApi";
 
 export function paymentLine(method, fulfilment) {
   if (method === "online") return "Paid online";
@@ -10,7 +10,7 @@ export function paymentLine(method, fulfilment) {
 }
 
 /** Success screen for an order placed straight from the page (offline / free). */
-export default function OrderPlaced({ result, currency, accent, onMyOrders, onBackToMenu }) {
+export default function OrderPlaced({ projectId, result, currency, accent, onMyOrders, onBackToMenu }) {
   const total = result?.totals?.total;
   const saved = Number(result?.totals?.discount_amount) || 0;
   const sent = result?.whatsapp === "text" || result?.whatsapp === "template";
@@ -50,6 +50,15 @@ export default function OrderPlaced({ result, currency, accent, onMyOrders, onBa
           {sent ? "We've sent the details to your WhatsApp." : "Keep your order ID handy — the store will contact you if anything changes."}
         </p>
         <div className="space-y-2">
+          {result?.invoice_number && projectId && (
+            <a
+              href={invoiceHref(projectId, result.order_id, result.receipt)}
+              className="w-full py-3 rounded-xl border-2 bg-white font-semibold flex items-center justify-center gap-2"
+              style={{ borderColor: accent, color: accent }}
+            >
+              <FileText size={16} /> View invoice
+            </a>
+          )}
           <button onClick={onMyOrders} className="w-full py-3.5 rounded-xl text-white font-semibold" style={{ background: accent }}>
             My Orders
           </button>

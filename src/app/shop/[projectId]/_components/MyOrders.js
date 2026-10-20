@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Receipt, RotateCw, ShoppingBag, Bike } from "lucide-react";
-import { getMyOrders, formatMoney, formatDateTime, errorCode, openWhatsAppChat } from "../_lib/shopApi";
+import { getMyOrders, formatMoney, formatDateTime, errorCode, openWhatsAppChat, invoiceHref } from "../_lib/shopApi";
 
 function chipStyle(o) {
   const s = o.status;
@@ -108,6 +108,14 @@ export default function MyOrders({ projectId, token, verified, currency, accent,
                   {saved > 0 && <span className="ml-2 text-xs font-semibold text-green-700">Saved {money(saved)}</span>}
                 </div>
                 <div className="flex gap-2">
+                  {o.invoice_number && (
+                    <a
+                      href={invoiceHref(projectId, o.order_id)}
+                      className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-gray-200 bg-white text-gray-700"
+                    >
+                      Invoice
+                    </a>
+                  )}
                   {payUrl && (
                     <button
                       onClick={() => window.location.assign(payUrl)}
