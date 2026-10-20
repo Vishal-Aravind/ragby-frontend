@@ -64,6 +64,8 @@ export default function ShopTab({ project }) {
 
   // ── Settings ─────────────────────────────────────────
   const [config, setConfig] = useState(null);
+  // Only a connected Shopify store has an in-chat checkout link to switch on.
+  const [shopifyConnected, setShopifyConnected] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSaved, setConfigSaved] = useState(false);
   const [razorpayConnected, setRazorpayConnected] = useState(false);
@@ -124,6 +126,14 @@ export default function ShopTab({ project }) {
           razorpay_key_id: "", razorpay_key_secret: "", is_enabled: false, bot_can_assist: false, bot_can_order: false,
         });
       });
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/shopify/status/${projectId}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => setShopifyConnected(!!d?.connected))
+      .catch(() => {});
   }, [projectId]);
 
   // ── Load branches ─────────────────────────────────────
@@ -641,20 +651,22 @@ export default function ShopTab({ project }) {
                 </button>
               </div>
 
-              {/* Let the AI bot actually place an order — nested under assist, WhatsApp only */}
-              <div className={`flex items-center justify-between pt-2 border-t ${!config.bot_can_assist ? 'opacity-40' : ''}`}>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">Let the AI place orders (WhatsApp only)</p>
-                  <p className="text-xs text-gray-400">Bot can build a cart from what the customer says and start checkout — customer still confirms and pays via the usual WhatsApp buttons</p>
+              {/* Shopify stores only: the chat on the Shopify site can hand over a Shopify checkout link */}
+              {shopifyConnected && (
+                <div className={`flex items-center justify-between pt-2 border-t ${!config.bot_can_assist ? 'opacity-40' : ''}`}>
+                  <div className="pr-4">
+                    <p className="text-sm font-medium text-gray-700">Let the AI create Shopify checkout links</p>
+                    <p className="text-xs text-gray-400">On your Shopify store's chat, the AI can build a cart from what the customer says and give them a Shopify checkout link to pay</p>
+                  </div>
+                  <button
+                    disabled={!config.bot_can_assist}
+                    onClick={() => setConfig(c => ({ ...c, bot_can_order: !c.bot_can_order }))}>
+                    {config.bot_can_order
+                      ? <ToggleRight size={28} className="text-green-600" />
+                      : <ToggleLeft size={28} className="text-gray-400" />}
+                  </button>
                 </div>
-                <button
-                  disabled={!config.bot_can_assist}
-                  onClick={() => setConfig(c => ({ ...c, bot_can_order: !c.bot_can_order }))}>
-                  {config.bot_can_order
-                    ? <ToggleRight size={28} className="text-green-600" />
-                    : <ToggleLeft size={28} className="text-gray-400" />}
-                </button>
-              </div>
+              )}
             </CardContent>
           </Card>
 
