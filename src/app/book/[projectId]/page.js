@@ -23,7 +23,8 @@ export default function BookingPage() {
   const [slots, setSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [name, setName] = useState("");
-  const [phoneInput, setPhoneInput] = useState(phone);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [dialCode, setDialCode] = useState("91");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState(null);
@@ -87,7 +88,7 @@ export default function BookingPage() {
   const advanceDays = settings?.advance_booking_days || 30;
   const isPaidService = !isReschedule && selectedService && selectedService.payment_mode && selectedService.payment_mode !== "free";
   // The plain booking link carries no number, so ask for it.
-  const askPhone = isPaidService || (!isReschedule && !phone);
+  const askPhone = !isReschedule && !phone;
 
   const handleServiceSelect = (svc) => {
     setSelectedService(svc);
@@ -174,7 +175,7 @@ export default function BookingPage() {
 
   const handleSubmit = async () => {
     if (!name.trim() || !selectedDate || !selectedSlot) return;
-    if (askPhone && !phoneInput.trim()) return;
+    if (askPhone && (!dialCode || !phoneInput.trim())) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/public/appointments/book", {
@@ -187,7 +188,7 @@ export default function BookingPage() {
           // brand-new booking always has one.
           service_id: selectedService?.id || null,
           customer_name: name.trim(),
-          customer_phone: (askPhone ? phoneInput : phone).replace(/\D/g, ""),
+          customer_phone: askPhone ? `+${dialCode}${phoneInput.replace(/\D/g, "")}` : phone.replace(/\D/g, ""),
           appointment_date: formatDate(selectedDate),
           start_time: selectedSlot,
           notes: notes.trim() || null,
@@ -502,10 +503,19 @@ export default function BookingPage() {
                   <label className="text-[11px] text-gray-500 flex items-center gap-1">
                     <Phone size={10} /> {isPaidService ? "Phone number (for payment)" : "WhatsApp number (for your confirmation)"}
                   </label>
-                  <input type="tel" placeholder="e.g. 9198xxxxxxx"
-                    value={phoneInput} onChange={e => setPhoneInput(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2"
-                    style={{ "--tw-ring-color": accent }} />
+                  <div className="flex gap-2">
+                    <div className="flex items-center border rounded-lg px-2 w-20 shrink-0 focus-within:ring-2"
+                      style={{ "--tw-ring-color": accent }}>
+                      <span className="text-sm text-gray-500">+</span>
+                      <input type="tel" inputMode="numeric" maxLength={4} aria-label="Country code"
+                        value={dialCode} onChange={e => setDialCode(e.target.value.replace(/\D/g, ""))}
+                        className="w-full py-2 pl-0.5 text-sm outline-none bg-transparent" />
+                    </div>
+                    <input type="tel" inputMode="numeric" placeholder="98765 43210" aria-label="Phone number"
+                      value={phoneInput} onChange={e => setPhoneInput(e.target.value)}
+                      className="flex-1 min-w-0 border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2"
+                      style={{ "--tw-ring-color": accent }} />
+                  </div>
                 </div>
               ) : phone && (
                 <div className="flex items-center gap-2 text-xs bg-gray-50 rounded-lg px-3 py-2 border">
@@ -551,7 +561,7 @@ export default function BookingPage() {
               )}
 
               <button onClick={handleSubmit}
-                disabled={submitting || !name.trim() || (askPhone && !phoneInput.trim())}
+                disabled={submitting || !name.trim() || (askPhone && (!dialCode || !phoneInput.trim()))}
                 className="w-full py-2.5 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{ background: accent }}>
                 {submitting
