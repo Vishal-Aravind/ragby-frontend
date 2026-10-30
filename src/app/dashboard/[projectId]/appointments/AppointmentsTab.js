@@ -250,14 +250,15 @@ export default function AppointmentsTab({ project }) {
   const todayStr = new Date().toISOString().slice(0, 10)
 
   const statusCounts = {
-    upcoming: appointments.filter(a => ['confirmed', 'rescheduled'].includes(a.status) && a.appointment_date >= todayStr).length,
+    upcoming: appointments.filter(a => a.status === 'confirmed' && a.appointment_date >= todayStr).length,
     completed: appointments.filter(a => a.status === 'completed').length,
     cancelled: appointments.filter(a => a.status === 'cancelled').length,
     all: appointments.length,
   }
 
   const filteredAppointments = appointments.filter(appt => {
-    if (statusFilter === 'upcoming' && !(['confirmed', 'rescheduled'].includes(appt.status) && appt.appointment_date >= todayStr)) return false
+    // A 'rescheduled' row is the old time; its replacement is a new row.
+    if (statusFilter === 'upcoming' && !(appt.status === 'confirmed' && appt.appointment_date >= todayStr)) return false
     if (statusFilter === 'completed' && appt.status !== 'completed') return false
     if (statusFilter === 'cancelled' && appt.status !== 'cancelled') return false
     if (search.trim()) {
@@ -330,7 +331,7 @@ export default function AppointmentsTab({ project }) {
         {statusBadge(appt.status)}
       </div>
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><Clock size={11} /> {appt.start_time} – {appt.end_time}</span>
+        <span className="flex items-center gap-1"><Clock size={11} /> {formatDateHeader(appt.appointment_date)}, {appt.start_time} – {appt.end_time}</span>
       </div>
       {appt.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{appt.notes}</p>}
       {appt.status === 'confirmed' && (
