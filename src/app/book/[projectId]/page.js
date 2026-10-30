@@ -86,6 +86,8 @@ export default function BookingPage() {
   const duration = selectedService?.duration_minutes || 30;
   const advanceDays = settings?.advance_booking_days || 30;
   const isPaidService = !isReschedule && selectedService && selectedService.payment_mode && selectedService.payment_mode !== "free";
+  // The plain booking link carries no number, so ask for it.
+  const askPhone = isPaidService || (!isReschedule && !phone);
 
   const handleServiceSelect = (svc) => {
     setSelectedService(svc);
@@ -172,7 +174,7 @@ export default function BookingPage() {
 
   const handleSubmit = async () => {
     if (!name.trim() || !selectedDate || !selectedSlot) return;
-    if (isPaidService && !phoneInput.trim()) return;
+    if (askPhone && !phoneInput.trim()) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/public/appointments/book", {
@@ -185,19 +187,19 @@ export default function BookingPage() {
           // brand-new booking always has one.
           service_id: selectedService?.id || null,
           customer_name: name.trim(),
-          customer_phone: (isPaidService ? phoneInput : phone).replace(/\D/g, ""),
+          customer_phone: (askPhone ? phoneInput : phone).replace(/\D/g, ""),
           appointment_date: formatDate(selectedDate),
           start_time: selectedSlot,
           notes: notes.trim() || null,
           reschedule_id: rescheduleId || null,
         }),
       });
-      if (!res.ok) throw new Error("Booking failed");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.error || "Booking failed. Please try again.");
       setBooking(data);
       setStep(4);
     } catch (e) {
-      alert("Booking failed. Please try again.");
+      alert(e.message);
     } finally {
       setSubmitting(false);
     }
@@ -495,10 +497,10 @@ export default function BookingPage() {
                   autoFocus />
               </div>
 
-              {isPaidService ? (
+              {askPhone ? (
                 <div className="space-y-1">
                   <label className="text-[11px] text-gray-500 flex items-center gap-1">
-                    <Phone size={10} /> Phone number (for payment)
+                    <Phone size={10} /> {isPaidService ? "Phone number (for payment)" : "WhatsApp number (for your confirmation)"}
                   </label>
                   <input type="tel" placeholder="e.g. 9198xxxxxxx"
                     value={phoneInput} onChange={e => setPhoneInput(e.target.value)}
@@ -549,7 +551,7 @@ export default function BookingPage() {
               )}
 
               <button onClick={handleSubmit}
-                disabled={submitting || !name.trim() || (isPaidService && !phoneInput.trim())}
+                disabled={submitting || !name.trim() || (askPhone && !phoneInput.trim())}
                 className="w-full py-2.5 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{ background: accent }}>
                 {submitting
