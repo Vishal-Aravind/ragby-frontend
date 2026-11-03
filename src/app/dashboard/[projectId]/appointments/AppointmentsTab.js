@@ -2,6 +2,9 @@
 import { useEffect, useState } from 'react'
 import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays, Plus, Pencil, Trash2 } from 'lucide-react'
 import { confirmDialog } from "@/components/confirmDialog";
+import { BookingRules, ServiceOverrides, ServiceOptions, QuestionsEditor, NumberField, RemindersEditor, BookingLinkCard, FollowupCard } from './AvailabilityEditor'
+import ManualBooking from './ManualBooking'
+import SchedulesCard from './SchedulesCard'
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL
 
@@ -22,7 +25,14 @@ const TIMEZONES = [
 ]
 
 function emptyServiceForm() {
-  return { name: '', description: '', duration_minutes: 30, price: 0, payment_mode: 'free', is_active: true, sort_order: 0 }
+  return {
+    name: '', description: '', duration_minutes: 30, price: 0, payment_mode: 'free', is_active: true, sort_order: 0,
+    slot_capacity: null, slot_interval_minutes: null, buffer_before_minutes: null, buffer_after_minutes: null,
+    min_notice_minutes: null, fixed_times_text: '',
+    schedule_id: null, booking_window_type: null, booking_window_days: null, booking_window_start: null,
+    booking_window_end: null, max_per_day: null, is_hidden: false, questions: [],
+    requires_approval: false, location: '', confirmation_note: '', cancel_cutoff_hours: null, duration_options_text: '',
+  }
 }
 
 const PAYMENT_MODE_LABELS = {
@@ -53,28 +63,28 @@ export default function AppointmentsTab({ project }) {
   const [serviceForm, setServiceForm] = useState(emptyServiceForm())
   const [savingService, setSavingService] = useState(false)
   const [razorpayConnected, setRazorpayConnected] = useState(false)
+  const [schedules, setSchedules] = useState([])
+  const [showManual, setShowManual] = useState(false)
 
-  const DAYS = [
-    { key: 'mon', label: 'Monday' },
-    { key: 'tue', label: 'Tuesday' },
-    { key: 'wed', label: 'Wednesday' },
-    { key: 'thu', label: 'Thursday' },
-    { key: 'fri', label: 'Friday' },
-    { key: 'sat', label: 'Saturday' },
-    { key: 'sun', label: 'Sunday' },
-  ]
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [apptRes, settingsRes, servicesRes] = await Promise.all([
+      const [apptRes, settingsRes, servicesRes, schedulesRes] = await Promise.all([
         fetch(`/api/appointments?projectId=${projectId}`),
         fetch(`/api/appointment-settings/${projectId}`),
         fetch(`/api/appointment-services?project_id=${projectId}`),
+        fetch(`/api/appointment-schedules?project_id=${projectId}`),
       ])
       if (apptRes.ok) setAppointments(await apptRes.json())
-      if (settingsRes.ok) setSettings(await settingsRes.json())
+      if (settingsRes.ok) {
+        // The owner's WhatsApp number is shown as a country code and a number
+        const st = await settingsRes.json()
+        const code = String(st.owner_phone_code || '91')
+        setSettings({ ...st, owner_phone_code: code, owner_phone_number: st.owner_phone ? String(st.owner_phone).slice(String(st.owner_phone_code || '').length) : '' })
+      }
       if (servicesRes.ok) setServices(await servicesRes.json())
+      if (schedulesRes.ok) setSchedules(await schedulesRes.json())
     } catch (e) {
       console.error(e)
     }
@@ -104,6 +114,16 @@ export default function AppointmentsTab({ project }) {
       duration_minutes: svc.duration_minutes || 30,
       price: svc.price || 0, payment_mode: svc.payment_mode || 'free',
       is_active: svc.is_active, sort_order: svc.sort_order || 0,
+      slot_capacity: svc.slot_capacity ?? null, slot_interval_minutes: svc.slot_interval_minutes ?? null,
+      buffer_before_minutes: svc.buffer_before_minutes ?? null, buffer_after_minutes: svc.buffer_after_minutes ?? null,
+      min_notice_minutes: svc.min_notice_minutes ?? null, fixed_times_text: (svc.fixed_times || []).join(', '),
+      schedule_id: svc.schedule_id ?? null, booking_window_type: svc.booking_window_type ?? null,
+      booking_window_days: svc.booking_window_days ?? null, booking_window_start: svc.booking_window_start ?? null,
+      booking_window_end: svc.booking_window_end ?? null, max_per_day: svc.max_per_day ?? null,
+      is_hidden: !!svc.is_hidden, questions: svc.questions || [],
+      requires_approval: !!svc.requires_approval, location: svc.location || '',
+      confirmation_note: svc.confirmation_note || '', cancel_cutoff_hours: svc.cancel_cutoff_hours ?? null,
+      duration_options_text: (svc.duration_options || []).join(', '),
     })
     setShowServiceForm(true)
   }
@@ -112,23 +132,31 @@ export default function AppointmentsTab({ project }) {
     if (!serviceForm.name.trim()) return
     setSavingService(true)
     try {
-      if (editingService) {
-        await fetch(`/api/appointment-services/${editingService.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(serviceForm),
-        })
-      } else {
-        await fetch('/api/appointment-services', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_id: projectId, ...serviceForm }),
-        })
+      const { fixed_times_text, duration_options_text, ...rest } = serviceForm
+      const lengths = String(duration_options_text || '').split(/[,\s]+/).filter(Boolean).map(n => parseInt(n)).filter(n => n > 0)
+      rest.duration_options = lengths.length ? lengths : null
+      rest.questions = (rest.questions || []).filter(q => (q.label || '').trim()).map(({ options_text, ...q }) => q)
+      const times = String(fixed_times_text || '').split(/[,\s]+/).filter(Boolean)
+      const payload = { ...rest, fixed_times: times.length ? times : null }
+      const res = editingService
+        ? await fetch(`/api/appointment-services/${editingService.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+        : await fetch('/api/appointment-services', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project_id: projectId, ...payload }),
+          })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(typeof data.detail === 'string' ? data.detail : data.error || 'Failed to save service')
       }
       setShowServiceForm(false)
       fetchData()
     } catch (e) {
-      alert('Failed to save service')
+      alert(e.message || 'Failed to save service')
     }
     setSavingService(false)
   }
@@ -196,30 +224,32 @@ export default function AppointmentsTab({ project }) {
   const saveSettings = async () => {
     setSaving(true)
     try {
-      await fetch(`/api/appointment-settings/${projectId}`, {
+      const res = await fetch(`/api/appointment-settings/${projectId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(typeof data.detail === 'string' ? data.detail : 'Failed to save')
+      }
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      alert('Failed to save')
+      alert(e.message || 'Failed to save')
     }
     setSaving(false)
   }
 
-  const updateWorkingHours = (day, field, value) => {
-    setSettings(s => ({
-      ...s,
-      working_hours: {
-        ...s.working_hours,
-        [day]: { ...s.working_hours[day], [field]: value }
-      }
-    }))
-  }
-
   const updateAppointment = async (id, status) => {
+    if (status === 'cancelled' || status === 'declined') {
+      const ok = await confirmDialog({
+        title: status === 'declined' ? 'Decline this request?' : 'Cancel this appointment?',
+        description: 'The customer is told on WhatsApp and the time slot becomes free again.',
+        confirmText: status === 'declined' ? 'Decline' : 'Cancel appointment',
+      })
+      if (!ok) return
+    }
     await fetch(`/api/appointments/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -234,30 +264,44 @@ export default function AppointmentsTab({ project }) {
       cancelled: 'bg-red-100 text-red-600',
       completed: 'bg-blue-100 text-blue-700',
       rescheduled: 'bg-yellow-100 text-yellow-700',
+      pending_approval: 'bg-amber-100 text-amber-700',
+      declined: 'bg-gray-100 text-gray-600',
+      no_show: 'bg-gray-100 text-gray-600',
     }
     return (
       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[status] || 'bg-gray-100 text-gray-600'}`}>
-        {status}
+        {String(status).replace('_', ' ')}
       </span>
     )
   }
 
-  const bookingUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/book/${projectId}`
+  const bookingUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/book/${settings?.booking_slug || projectId}`
 
   // Date-grouped agenda view, anchored to today — the pattern every
   // booking tool (Calendly, Cal.com, Setmore) actually uses for
   // day-to-day management, since a flat list stops scaling fast.
   const todayStr = new Date().toISOString().slice(0, 10)
 
+  // A reschedule is one booking across two rows: show only the newest, with
+  // the earlier time on its card.
+  const apptById = new Map(appointments.map(a => [a.id, a]))
+  const replacedIds = new Set(appointments.map(a => a.rescheduled_from).filter(Boolean))
+  const visibleAppointments = appointments.filter(a => !replacedIds.has(a.id))
+  const shortTime = (t) => String(t).slice(0, 5)
+
   const statusCounts = {
+    pending: appointments.filter(a => a.status === 'pending_approval').length,
+    today: appointments.filter(a => a.status === 'confirmed' && a.appointment_date === todayStr).length,
     upcoming: appointments.filter(a => a.status === 'confirmed' && a.appointment_date >= todayStr).length,
     completed: appointments.filter(a => a.status === 'completed').length,
     cancelled: appointments.filter(a => a.status === 'cancelled').length,
-    all: appointments.length,
+    all: visibleAppointments.length,
   }
 
-  const filteredAppointments = appointments.filter(appt => {
+  const filteredAppointments = visibleAppointments.filter(appt => {
     // A 'rescheduled' row is the old time; its replacement is a new row.
+    if (statusFilter === 'pending' && appt.status !== 'pending_approval') return false
+    if (statusFilter === 'today' && !(appt.status === 'confirmed' && appt.appointment_date === todayStr)) return false
     if (statusFilter === 'upcoming' && !(appt.status === 'confirmed' && appt.appointment_date >= todayStr)) return false
     if (statusFilter === 'completed' && appt.status !== 'completed') return false
     if (statusFilter === 'cancelled' && appt.status !== 'cancelled') return false
@@ -331,9 +375,31 @@ export default function AppointmentsTab({ project }) {
         {statusBadge(appt.status)}
       </div>
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><Clock size={11} /> {formatDateHeader(appt.appointment_date)}, {appt.start_time} – {appt.end_time}</span>
+        <span className="flex items-center gap-1"><Clock size={11} /> {formatDateHeader(appt.appointment_date)}, {shortTime(appt.start_time)} – {shortTime(appt.end_time)}</span>
       </div>
+      {apptById.get(appt.rescheduled_from) && (
+        <p className="text-xs text-amber-700">
+          Rescheduled from {formatDateHeader(apptById.get(appt.rescheduled_from).appointment_date)}, {shortTime(apptById.get(appt.rescheduled_from).start_time)}
+        </p>
+      )}
+      {(appt.answers || []).length > 0 && (
+        <div className="text-xs bg-gray-50 rounded-lg px-3 py-2 space-y-0.5">
+          {appt.answers.map((a, i) => <p key={i}><span className="text-gray-500">{a.question}:</span> {a.answer}</p>)}
+        </div>
+      )}
       {appt.notes && <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">{appt.notes}</p>}
+      {appt.status === 'pending_approval' && (
+        <div className="flex gap-2">
+          <button onClick={() => updateAppointment(appt.id, 'confirmed')}
+            className="flex items-center gap-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded-lg px-3 py-1.5">
+            <Check size={11} /> Approve
+          </button>
+          <button onClick={() => updateAppointment(appt.id, 'declined')}
+            className="flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg px-3 py-1.5">
+            <X size={11} /> Decline
+          </button>
+        </div>
+      )}
       {appt.status === 'confirmed' && (
         <div className="flex gap-2">
           <button onClick={() => updateAppointment(appt.id, 'completed')}
@@ -344,6 +410,12 @@ export default function AppointmentsTab({ project }) {
             className="flex items-center gap-1 text-xs bg-red-50 text-red-600 border border-red-200 rounded-lg px-3 py-1.5">
             <X size={11} /> Cancel
           </button>
+          {appt.appointment_date <= todayStr && (
+            <button onClick={() => updateAppointment(appt.id, 'no_show')}
+              className="flex items-center gap-1 text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5">
+              No-show
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -360,6 +432,9 @@ export default function AppointmentsTab({ project }) {
           <p className="text-sm text-muted-foreground">Manage bookings and availability</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setShowManual(true)} className="bg-indigo-600 text-white rounded-lg px-3 py-2 text-sm flex items-center gap-1.5">
+            <Plus size={13} /> Add booking
+          </button>
           <button onClick={fetchData} className="border rounded-lg px-3 py-2 text-sm hover:bg-muted flex items-center gap-1.5">
             <RefreshCw size={13} /> Refresh
           </button>
@@ -395,12 +470,16 @@ export default function AppointmentsTab({ project }) {
       </div>
 
       {/* Appointments tab */}
+      {showManual && <ManualBooking projectId={projectId} services={services} onClose={() => setShowManual(false)} onDone={() => { setShowManual(false); fetchData() }} />}
+
       {activeTab === 'appointments' && (
         <div className="space-y-4">
           {/* Status tabs + search + view toggle */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex gap-1 flex-wrap">
               {[
+                { key: 'today', label: 'Today' },
+                { key: 'pending', label: 'Needs approval' },
                 { key: 'upcoming', label: 'Upcoming' },
                 { key: 'completed', label: 'Completed' },
                 { key: 'cancelled', label: 'Cancelled' },
@@ -647,14 +726,17 @@ export default function AppointmentsTab({ project }) {
                       <p className="text-sm font-medium flex items-center gap-2">
                         {svc.name}
                         {!svc.is_active && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">Inactive</span>}
+                        {svc.is_hidden && <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">Hidden</span>}
+                        {svc.requires_approval && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded-full">Needs approval</span>}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {svc.duration_minutes} min
+                        {[svc.duration_minutes, ...(svc.duration_options || [])].sort((a, b) => a - b).join(' / ')} min
                         {svc.payment_mode !== 'free' ? ` · ₹${svc.price} (${svc.payment_mode === 'hold_to_confirm' ? 'pay to confirm' : 'pay after'})` : ' · Free'}
                         {svc.description ? ` · ${svc.description}` : ''}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <button onClick={() => navigator.clipboard?.writeText(`${bookingUrl}?service=${svc.id}`)} title="Copy this service's own booking link" className="text-xs text-gray-500 hover:underline">Copy link</button>
                       <button onClick={() => openEditServiceForm(svc)} title="Edit" className="text-gray-400 hover:text-gray-700"><Pencil size={13} /></button>
                       <button onClick={() => toggleServiceActive(svc)} className="text-xs text-gray-500 hover:underline">
                         {svc.is_active ? 'Deactivate' : 'Activate'}
@@ -672,11 +754,8 @@ export default function AppointmentsTab({ project }) {
                   value={serviceForm.name} onChange={e => setServiceForm(f => ({ ...f, name: e.target.value }))} autoFocus />
                 <textarea placeholder="Description (optional)" rows={2} className="w-full border rounded-lg px-3 py-2 text-sm resize-none"
                   value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} />
-                <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                  value={serviceForm.duration_minutes}
-                  onChange={e => setServiceForm(f => ({ ...f, duration_minutes: parseInt(e.target.value) }))}>
-                  {[15, 20, 30, 45, 60, 90, 120].map(d => <option key={d} value={d}>{d} min</option>)}
-                </select>
+                <NumberField label="Duration (minutes)" min={5} max={1440} fallback={30} value={serviceForm.duration_minutes}
+                  onChange={v => setServiceForm(f => ({ ...f, duration_minutes: v }))} />
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Payment</label>
                   <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
@@ -693,6 +772,9 @@ export default function AppointmentsTab({ project }) {
                       onChange={e => setServiceForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
                   </div>
                 )}
+                <ServiceOptions form={serviceForm} setForm={setServiceForm} schedules={schedules} projectId={projectId} serviceId={editingService?.id} />
+                <QuestionsEditor value={serviceForm.questions} onChange={q => setServiceForm(f => ({ ...f, questions: q }))} />
+                <ServiceOverrides form={serviceForm} setForm={setServiceForm} />
                 <div className="flex gap-2">
                   <button onClick={saveService}
                     disabled={savingService || !serviceForm.name.trim() || (serviceForm.payment_mode !== 'free' && !(serviceForm.price > 0))}
@@ -713,42 +795,8 @@ export default function AppointmentsTab({ project }) {
               Add <strong>Appointment Confirmed</strong>, <strong>Appointment Reminder</strong> and <strong>Appointment Cancelled</strong> in
               {' '}<a href="templates" className="underline font-medium">Templates → Template library</a>.
             </p>
+            <BookingRules settings={settings} setSettings={setSettings} />
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Buffer between slots</label>
-                <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                  value={settings.buffer_minutes}
-                  onChange={e => setSettings(s => ({ ...s, buffer_minutes: parseInt(e.target.value) }))}>
-                  {[0, 5, 10, 15, 30].map(d => <option key={d} value={d}>{d} min</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Advance booking (days)</label>
-                <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                  value={settings.advance_booking_days}
-                  onChange={e => setSettings(s => ({ ...s, advance_booking_days: parseInt(e.target.value) }))}>
-                  {[7, 14, 30, 60, 90].map(d => <option key={d} value={d}>{d} days</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Reminder before (hours)</label>
-                <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                  value={settings.reminder_hours}
-                  onChange={e => setSettings(s => ({ ...s, reminder_hours: parseInt(e.target.value) }))}>
-                  {[1, 2, 3, 6, 12, 24, 48].map(d => <option key={d} value={d}>{d}h before</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Capacity per slot</label>
-                <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                  value={settings.slot_capacity || 1}
-                  onChange={e => setSettings(s => ({ ...s, slot_capacity: parseInt(e.target.value) }))}>
-                  {[1,2,3,4,5,6,7,8,9,10,15,20].map(n => (
-                    <option key={n} value={n}>{n} {n === 1 ? "person (exclusive)" : `people per slot`}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-muted-foreground">How many bookings can happen at the same time slot</p>
-              </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Timezone</label>
                 <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
@@ -770,35 +818,50 @@ export default function AppointmentsTab({ project }) {
             </div>
           </div>
 
-          {/* Working hours */}
+          <SchedulesCard projectId={projectId} schedules={schedules} onChanged={fetchData} />
+
+          <BookingLinkCard settings={settings} setSettings={setSettings} projectId={projectId} />
+
+          <RemindersEditor settings={settings} setSettings={setSettings} />
+
+          <FollowupCard settings={settings} setSettings={setSettings} />
+
+          {/* WhatsApp alert to the owner */}
           <div className="border rounded-xl p-4 bg-white space-y-3">
-            <p className="text-sm font-semibold">Working hours</p>
-            <div className="space-y-2">
-              {DAYS.map(({ key, label }) => {
-                const day = settings.working_hours?.[key] || { enabled: false, start: "09:00", end: "18:00" }
-                return (
-                  <div key={key} className="flex items-center gap-3">
-                    <button
-                      onClick={() => updateWorkingHours(key, 'enabled', !day.enabled)}
-                      className={`relative inline-flex h-4 w-8 items-center rounded-full transition-colors shrink-0 ${day.enabled ? 'bg-indigo-600' : 'bg-gray-200'}`}>
-                      <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${day.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                    </button>
-                    <span className={`text-xs w-20 shrink-0 ${day.enabled ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>{label}</span>
-                    {day.enabled && (
-                      <div className="flex items-center gap-2 flex-1">
-                        <input type="time" value={day.start}
-                          onChange={e => updateWorkingHours(key, 'start', e.target.value)}
-                          className="border rounded px-2 py-1 text-xs flex-1" />
-                        <span className="text-xs text-gray-400">to</span>
-                        <input type="time" value={day.end}
-                          onChange={e => updateWorkingHours(key, 'end', e.target.value)}
-                          className="border rounded px-2 py-1 text-xs flex-1" />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Booking alerts for you</p>
+                <p className="text-xs text-muted-foreground">Get a WhatsApp message when someone books, reschedules or cancels.</p>
+              </div>
+              <button type="button" onClick={() => setSettings(s => ({ ...s, notify_owner_booking: s.notify_owner_booking === false }))}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${settings.notify_owner_booking !== false ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${settings.notify_owner_booking !== false ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </button>
             </div>
+            {settings.notify_owner_booking !== false && (
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Your WhatsApp number</label>
+                <div className="flex gap-2">
+                  <div className="flex items-center border rounded-lg px-2 w-20 shrink-0">
+                    <span className="text-sm text-gray-500">+</span>
+                    <input type="tel" inputMode="numeric" maxLength={4} aria-label="Country code"
+                      value={settings.owner_phone_code ?? '91'}
+                      onChange={e => setSettings(s => ({ ...s, owner_phone_code: e.target.value.replace(/\D/g, '') }))}
+                      className="w-full py-2 pl-0.5 text-sm outline-none bg-transparent" />
+                  </div>
+                  <input type="tel" inputMode="numeric" placeholder="98765 43210" aria-label="WhatsApp number"
+                    value={settings.owner_phone_number ?? ''}
+                    onChange={e => setSettings(s => ({ ...s, owner_phone_number: e.target.value }))}
+                    className="flex-1 min-w-0 border rounded-lg px-3 py-2 text-sm outline-none" />
+                </div>
+                {!settings.owner_phone_number && <p className="text-xs text-amber-600">Add your number to start getting alerts.</p>}
+                <p className="text-xs text-muted-foreground">
+                  If your phone hasn't messaged this business number in the last 24 hours, WhatsApp only delivers a template: add
+                  {' '}<strong>Appointment New Booking Alert (for you)</strong> in{' '}
+                  <a href="templates" className="underline font-medium">Templates → Template library</a>.
+                </p>
+              </div>
+            )}
           </div>
 
           <button onClick={saveSettings} disabled={saving}

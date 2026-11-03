@@ -5,10 +5,15 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Check, Clock, Calendar, User, Phone, FileText } from "lucide-react";
 
 export default function BookingPage() {
-  const { projectId } = useParams();
+  const routeKey = useParams().projectId;
+  // The link is /book/<project id> or /book/<link name>; a name is resolved to the id first
+  const isId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(routeKey || "");
+  const [projectId, setProjectId] = useState(isId ? routeKey : null);
   const searchParams = useSearchParams();
   const phone = searchParams.get("phone") || "";
   const rescheduleId = searchParams.get("reschedule") || "";
+  // A direct link to one service: ?service=<id>. Works for hidden services too.
+  const serviceParam = searchParams.get("service") || "";
 
   const [settings, setSettings] = useState(null);
   const [services, setServices] = useState([]);
@@ -26,6 +31,8 @@ export default function BookingPage() {
   const [phoneInput, setPhoneInput] = useState("");
   const [dialCode, setDialCode] = useState("91");
   const [notes, setNotes] = useState("");
+  const [answers, setAnswers] = useState({});
+  const [pickedDuration, setPickedDuration] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [booking, setBooking] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState(null); // null | 'paid' | 'expired' | 'payment_conflict'
@@ -34,13 +41,21 @@ export default function BookingPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
+    if (projectId || !routeKey) return;
+    fetch(`/api/public/appointments/resolve/${encodeURIComponent(routeKey)}`)
+      .then(r => { if (!r.ok) throw new Error("Booking page not found"); return r.json(); })
+      .then(d => setProjectId(d.project_id))
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [routeKey]);
+
+  useEffect(() => {
     if (!projectId) return;
     Promise.all([
       fetch(`/api/public/appointments/${projectId}/settings`).then(r => {
         if (!r.ok) throw new Error("Booking not available");
         return r.json();
       }),
-      fetch(`/api/public/appointments/${projectId}/services`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/public/appointments/${projectId}/services${serviceParam ? `?service=${encodeURIComponent(serviceParam)}` : ""}`).then(r => r.ok ? r.json() : []),
       rescheduleId
         ? fetch(`/api/public/appointments/${projectId}/reschedule/${rescheduleId}`).then(r => r.ok ? r.json() : null)
         : Promise.resolve(null),
@@ -56,7 +71,12 @@ export default function BookingPage() {
         // being rescheduled anyway.
         if (rescheduleData?.service_id) {
           const match = activeServices.find(s => s.id === rescheduleData.service_id);
-          setSelectedService(match || { id: rescheduleData.service_id, name: rescheduleData.service_name, duration_minutes: 30 });
+          setSelectedService(match || { id: rescheduleData.service_id, name: rescheduleData.service_name, duration_minutes: rescheduleData.duration_minutes || 30 });
+          if (rescheduleData.duration_minutes) setPickedDuration(rescheduleData.duration_minutes);
+          setStep(1);
+        } else if (serviceParam && activeServices.some(s => s.id === serviceParam)) {
+          // Opened from a service's own link: straight to picking a date
+          setSelectedService(activeServices.find(s => s.id === serviceParam));
           setStep(1);
         } else if (activeServices.length === 1) {
           // Only one active service — same zero-friction UX as before
@@ -75,22 +95,31 @@ export default function BookingPage() {
     if (!selectedDate || !selectedService) return;
     setSlotsLoading(true);
     const dateStr = formatDate(selectedDate);
-    fetch(`/api/public/appointments/${projectId}/slots?date=${dateStr}&service_id=${selectedService.id}`)
+    const lengthParam = pickedDuration && pickedDuration !== selectedService.duration_minutes ? `&duration=${pickedDuration}` : "";
+    fetch(`/api/public/appointments/${projectId}/slots?date=${dateStr}&service_id=${selectedService.id}${lengthParam}`)
       .then(r => r.json())
       .then(data => { setSlots(data.slots || []); setSlotsLoading(false); })
       .catch(() => { setSlots([]); setSlotsLoading(false); });
-  }, [selectedDate, selectedService]);
+  }, [selectedDate, selectedService, pickedDuration]);
 
   const accent = settings?.accent_color || "#6366f1";
   const isReschedule = !!rescheduleId;
   const service = selectedService?.name || "Appointment";
-  const duration = selectedService?.duration_minutes || 30;
+  const duration = pickedDuration || selectedService?.duration_minutes || 30;
+  const durationChoices = selectedService
+    ? [...new Set([selectedService.duration_minutes, ...(selectedService.duration_options || [])])].sort((a, b) => a - b)
+    : [];
   const advanceDays = settings?.advance_booking_days || 30;
   const isPaidService = !isReschedule && selectedService && selectedService.payment_mode && selectedService.payment_mode !== "free";
   // The plain booking link carries no number, so ask for it.
   const askPhone = !isReschedule && !phone;
 
+  const questions = !isReschedule ? (selectedService?.questions || []) : [];
+  const missingAnswer = questions.some(q => q.required && !String(answers[q.id] || "").trim());
+
   const handleServiceSelect = (svc) => {
+    setAnswers({});
+    setPickedDuration(null);
     setSelectedService(svc);
     setStep(1);
   };
@@ -133,14 +162,28 @@ export default function BookingPage() {
   const isDateAvailable = (date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const maxDate = new Date();
-    maxDate.setDate(maxDate.getDate() + advanceDays);
+    if (date < today) return false;
 
-    if (date < today || date > maxDate) return false;
+    // How far ahead: the service's own booking window, else the main setting
+    const key = formatDate(date);
+    const svc = selectedService || {};
+    if (svc.booking_window_type === "range") {
+      if ((svc.booking_window_start && key < String(svc.booking_window_start).slice(0, 10)) ||
+          (svc.booking_window_end && key > String(svc.booking_window_end).slice(0, 10))) return false;
+    } else if (svc.booking_window_type !== "indefinite") {
+      const maxDate = new Date();
+      maxDate.setDate(maxDate.getDate() + ((svc.booking_window_type === "rolling" && svc.booking_window_days) || advanceDays));
+      if (date > maxDate) return false;
+    }
+
+    // The service's schedule: a date-specific entry (holiday, or different hours) wins over the weekly hours
+    const overrides = svc.date_overrides ?? settings?.date_overrides ?? [];
+    const special = overrides.find(o => o.date === key);
+    if (special) return !special.closed && (special.windows || []).length > 0;
 
     const dayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
     const dayKey = dayMap[date.getDay()];
-    const wh = settings?.working_hours || {};
+    const wh = svc.working_hours ?? settings?.working_hours ?? {};
     return wh[dayKey]?.enabled !== false;
   };
 
@@ -192,6 +235,8 @@ export default function BookingPage() {
           appointment_date: formatDate(selectedDate),
           start_time: selectedSlot,
           notes: notes.trim() || null,
+          answers: questions.length ? answers : null,
+          duration_minutes: !isReschedule && pickedDuration && pickedDuration !== selectedService?.duration_minutes ? pickedDuration : null,
           reschedule_id: rescheduleId || null,
         }),
       });
@@ -298,7 +343,7 @@ export default function BookingPage() {
           <Check size={24} color="white" strokeWidth={3} />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Booking Confirmed!</h2>
+          <h2 className="text-lg font-bold text-gray-900">{booking?.status === "pending_approval" ? "Request Sent!" : "Booking Confirmed!"}</h2>
           <p className="text-xs text-gray-400 mt-0.5">#{booking?.appointment_id?.slice(0, 8).toUpperCase()}</p>
         </div>
         <div className="bg-gray-50 rounded-xl border p-3 text-left space-y-1.5">
@@ -318,7 +363,28 @@ export default function BookingPage() {
         {paymentStatus === "paid" && (
           <p className="text-xs text-green-600 font-medium">✓ Payment received</p>
         )}
-        <p className="text-xs text-gray-400">A confirmation has been sent to your WhatsApp.</p>
+        {booking?.details && (
+          <p className="text-xs text-gray-600 bg-gray-50 rounded-xl border p-3 text-left">{booking.details}</p>
+        )}
+        <p className="text-xs text-gray-400">
+          {booking?.status === "pending_approval"
+            ? "The business will confirm your request on WhatsApp."
+            : "A confirmation has been sent to your WhatsApp."}
+        </p>
+        {booking?.status !== "pending_approval" && selectedDate && selectedSlot && (() => {
+          const stamp = (d, hm, add = 0) => {
+            const t = new Date(d.getFullYear(), d.getMonth(), d.getDate(), parseInt(hm.slice(0, 2)), parseInt(hm.slice(3, 5)) + add);
+            const p = (n) => String(n).padStart(2, "0");
+            return `${t.getFullYear()}${p(t.getMonth() + 1)}${p(t.getDate())}T${p(t.getHours())}${p(t.getMinutes())}00`;
+          };
+          const hm = String(selectedSlot).slice(0, 5);
+          const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(service)}&dates=${stamp(selectedDate, hm)}/${stamp(selectedDate, hm, duration)}${settings?.timezone ? `&ctz=${encodeURIComponent(settings.timezone)}` : ""}${booking?.details ? `&details=${encodeURIComponent(booking.details)}` : ""}`;
+          return (
+            <a href={url} target="_blank" rel="noreferrer" className="block w-full py-2.5 rounded-xl border font-semibold text-sm text-center" style={{ borderColor: accent, color: accent }}>
+              📅 Add to calendar
+            </a>
+          );
+        })()}
         {booking?.payment_url && booking?.status === "confirmed" && paymentStatus !== "paid" && (
           <button onClick={() => window.open(booking.payment_url, "_blank")}
             className="w-full py-2.5 rounded-xl border font-semibold text-sm" style={{ borderColor: accent, color: accent }}>
@@ -404,6 +470,17 @@ export default function BookingPage() {
                   <ChevronLeft size={12} /> {service}
                 </button>
               )}
+              {durationChoices.length > 1 && !isReschedule && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {durationChoices.map(m => (
+                    <button key={m} type="button" onClick={() => { setPickedDuration(m); setSelectedDate(null); setSelectedSlot(null); }}
+                      className="text-xs font-medium px-3 py-1 rounded-full border"
+                      style={duration === m ? { background: accent, color: "white", borderColor: accent } : {}}>
+                      {m} min
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <button onClick={() => setCurrentMonth(m => new Date(m.getFullYear(), m.getMonth() - 1))}
                   className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100">
@@ -450,7 +527,7 @@ export default function BookingPage() {
               <button onClick={() => setStep(1)} className="flex items-center gap-1 text-xs text-gray-500">
                 <ChevronLeft size={12} /> {formatDateDisplay(selectedDate)}
               </button>
-              <p className="font-semibold text-xs text-gray-800">Available times</p>
+              <p className="font-semibold text-xs text-gray-800">Available times{settings?.timezone ? <span className="font-normal text-gray-400"> · {settings.timezone.replace("_", " ")}</span> : null}</p>
               {slotsLoading ? (
                 <div className="grid grid-cols-3 gap-2">
                   {[1, 2, 3].map(i => (
@@ -524,6 +601,25 @@ export default function BookingPage() {
                 </div>
               )}
 
+              {questions.map(q => (
+                <div key={q.id} className="space-y-1">
+                  <label className="text-[11px] text-gray-500">{q.label}{q.required ? " *" : ""}</label>
+                  {q.type === "select" ? (
+                    <select value={answers[q.id] || ""} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                      className="w-full border rounded-lg px-3 py-2 text-sm outline-none bg-white focus:ring-2" style={{ "--tw-ring-color": accent }}>
+                      <option value="">Select…</option>
+                      {(q.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : q.type === "textarea" ? (
+                    <textarea rows={2} value={answers[q.id] || ""} maxLength={1000} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                      className="w-full border rounded-lg px-3 py-2 text-sm outline-none resize-none focus:ring-2" style={{ "--tw-ring-color": accent }} />
+                  ) : (
+                    <input value={answers[q.id] || ""} maxLength={1000} onChange={e => setAnswers(a => ({ ...a, [q.id]: e.target.value }))}
+                      className="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2" style={{ "--tw-ring-color": accent }} />
+                  )}
+                </div>
+              ))}
+
               <div className="space-y-1">
                 <label className="text-[11px] text-gray-500 flex items-center gap-1">
                   <FileText size={10} /> Notes (optional)
@@ -561,12 +657,12 @@ export default function BookingPage() {
               )}
 
               <button onClick={handleSubmit}
-                disabled={submitting || !name.trim() || (askPhone && (!dialCode || !phoneInput.trim()))}
+                disabled={submitting || !name.trim() || missingAnswer || (askPhone && (!dialCode || !phoneInput.trim()))}
                 className="w-full py-2.5 rounded-lg text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
                 style={{ background: accent }}>
                 {submitting
                   ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Booking...</>
-                  : isReschedule ? "Confirm Reschedule ✓" : isPaidService ? "Continue to Payment →" : "Confirm Booking ✓"
+                  : isReschedule ? "Confirm Reschedule ✓" : isPaidService ? "Continue to Payment →" : selectedService?.requires_approval ? "Send Request ✓" : "Confirm Booking ✓"
                 }
               </button>
             </div>

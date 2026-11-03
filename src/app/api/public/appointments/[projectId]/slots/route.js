@@ -6,6 +6,7 @@ export async function GET(req, { params }) {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
   const serviceId = searchParams.get("service_id");
+  const duration = searchParams.get("duration");
 
   // Both are required query params on the backend. Missing ones used to be
   // interpolated as the literal string "null", which reached the backend as
@@ -18,6 +19,8 @@ export async function GET(req, { params }) {
   }
 
   const qs = new URLSearchParams({ date, service_id: serviceId });
+  // One of the service's lengths, when the customer picked a different one
+  if (duration && /^\d+$/.test(duration)) qs.set("duration", duration);
   return proxyToBackend(
     `/public/appointments/${encodeURIComponent(projectId)}/slots?${qs}`,
     { req }
