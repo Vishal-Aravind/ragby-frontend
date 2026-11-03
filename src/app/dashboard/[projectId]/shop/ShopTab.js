@@ -506,7 +506,9 @@ export default function ShopTab({ project }) {
         <div className="flex flex-wrap items-center gap-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={16} className="shrink-0" />
           <p className="flex-1 min-w-0">
-            Delivery is on for <strong>{deliveryNotReady.map(b => b.name).join(", ")}</strong> but no delivery area is set,
+            {multiBranch
+              ? <>Delivery is on for <strong>{deliveryNotReady.map(b => b.name).join(", ")}</strong> but no delivery area is set,</>
+              : <>Delivery is on but no delivery area is set,</>}
             so customers can only pick up. Add a map location and a max distance or pincodes.
           </p>
           {isAdmin && (
@@ -583,6 +585,7 @@ export default function ShopTab({ project }) {
                   <Input placeholder="e.g. Geetham Veg Velachery"
                     value={config.store_name || ""}
                     onChange={e => setConfig(c => ({ ...c, store_name: e.target.value }))} />
+                  <p className="text-[11px] text-gray-400 mt-1">Shown to customers in the cart, order messages and invoices.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>

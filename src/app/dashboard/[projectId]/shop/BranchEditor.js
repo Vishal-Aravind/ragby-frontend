@@ -193,6 +193,7 @@ export default function BranchEditor({ branch, projectId, single = false, curren
                 <label className="text-xs text-gray-500 mb-1 block">{single ? "Store name *" : "Branch name *"}</label>
                 <Input placeholder={single ? "e.g. My Shop" : "e.g. Velachery"} maxLength={80}
                   value={form.name} onChange={e => setField("name", e.target.value)} />
+                {single && <p className="text-xs text-gray-400 mt-1">Same as the Store Name in Settings. Changing one changes both.</p>}
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Phone</label>
