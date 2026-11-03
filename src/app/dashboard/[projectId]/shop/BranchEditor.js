@@ -101,7 +101,7 @@ function Section({ icon: Icon, title, hint, children }) {
   );
 }
 
-export default function BranchEditor({ branch, projectId, currency = "₹", defaultTimezone, onClose, onSaved }) {
+export default function BranchEditor({ branch, projectId, single = false, currency = "₹", defaultTimezone, onClose, onSaved }) {
   const isNew = !branch;
   const [form, setForm] = useState(() => toForm(branch, defaultTimezone));
   const [makeDefault, setMakeDefault] = useState(false);
@@ -163,7 +163,7 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
           toast.error(e2.error || "Branch saved, but it couldn't be made the default.");
         }
       }
-      toast.success(isNew ? "Branch added" : "Branch saved");
+      toast.success(isNew ? "Branch added" : single ? "Store saved" : "Branch saved");
       onSaved?.(data);
     } catch (e) {
       console.error(e);
@@ -178,10 +178,10 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onClose} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 shrink-0">
-            <ChevronLeft size={16} /> Branches
+            <ChevronLeft size={16} /> {single ? "Store" : "Branches"}
           </button>
           <span className="text-gray-300">/</span>
-          <span className="font-semibold text-gray-900 truncate">{isNew ? "New branch" : branch.name}</span>
+          <span className="font-semibold text-gray-900 truncate">{isNew ? "New branch" : single ? "Edit store" : branch.name}</span>
         </div>
       </div>
 
@@ -190,22 +190,22 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
           <Section icon={Store} title="Basics">
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500 mb-1 block">Branch name *</label>
-                <Input placeholder="e.g. Velachery" maxLength={80}
+                <label className="text-xs text-gray-500 mb-1 block">{single ? "Store name *" : "Branch name *"}</label>
+                <Input placeholder={single ? "e.g. My Shop" : "e.g. Velachery"} maxLength={80}
                   value={form.name} onChange={e => setField("name", e.target.value)} />
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">Phone</label>
                 <Input placeholder="+91 98765 43210" inputMode="tel"
                   value={form.phone} onChange={e => setField("phone", e.target.value)} />
-                <p className="text-xs text-gray-400 mt-1">Shown to customers & receives this branch's new-order alerts on WhatsApp</p>
+                <p className="text-xs text-gray-400 mt-1">Shown to customers & receives {single ? "your" : "this branch's"} new-order alerts on WhatsApp</p>
                 <div className="flex items-center justify-between gap-3 mt-3 rounded-lg border px-3 py-2">
                   <div>
                     <p className="text-sm font-medium text-gray-700">WhatsApp alert for new orders</p>
                     <p className="text-xs text-gray-400">
                       {form.phone.trim()
                         ? "Sent to the phone above. Turn it off to watch orders in the dashboard only."
-                        : "Add a phone above to receive alerts. Until then this branch sends none."}
+                        : single ? "Add a phone above to receive alerts. Until then you get none." : "Add a phone above to receive alerts. Until then this branch sends none."}
                     </p>
                   </div>
                   <Switch checked={form.notify_owner_whatsapp !== false}
@@ -221,15 +221,15 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
               </div>
               <ImageUploadField
                 label="Photo"
-                hint="Shown next to the branch when customers pick one. Saved with the branch."
+                hint={single ? "Shown to customers on your shop page." : "Shown next to the branch when customers pick one. Saved with the branch."}
                 value={form.image_url}
                 aspect="16 / 9"
                 onChange={(url) => setField("image_url", url || "")}
               />
               <div className="flex items-center justify-between gap-3 pt-2 border-t">
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Branch is active</p>
-                  <p className="text-xs text-gray-400">Turn off to hide this branch from customers</p>
+                  <p className="text-sm font-medium text-gray-700">{single ? "Store is active" : "Branch is active"}</p>
+                  <p className="text-xs text-gray-400">{single ? "Turn off to hide your store from customers" : "Turn off to hide this branch from customers"}</p>
                 </div>
                 <Switch checked={form.is_active} onCheckedChange={on => setField("is_active", on)} />
               </div>
@@ -246,7 +246,7 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
           </Section>
 
           <Section icon={MapPin} title="Location"
-            hint="Used to find the nearest branch for customers and to measure delivery distance">
+            hint={single ? "Used to measure delivery distance" : "Used to find the nearest branch for customers and to measure delivery distance"}>
             <LocationPickerMap
               value={hasLocation ? { lat: form.lat, lng: form.lng } : null}
               onChange={({ lat, lng }) => setForm(f => ({ ...f, lat, lng }))}
@@ -312,7 +312,7 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
           </Section>
 
           <Section icon={FileText} title="Tax invoice (optional)"
-            hint="Only if this branch has its own GST registration. Leave empty to use the shop's details from Settings.">
+            hint={single ? "Only if this store has its own GST registration. Leave empty to use the shop's details from Settings." : "Only if this branch has its own GST registration. Leave empty to use the shop's details from Settings."}>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">GSTIN</label>
@@ -346,7 +346,7 @@ export default function BranchEditor({ branch, projectId, currency = "₹", defa
 
       <div className="flex gap-2">
         <Button onClick={save} disabled={saving || !form.name.trim()}>
-          {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving...</> : isNew ? "Add branch" : "Save branch"}
+          {saving ? <><Loader2 size={14} className="animate-spin mr-2" />Saving...</> : isNew ? "Add branch" : single ? "Save store" : "Save branch"}
         </Button>
         <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
       </div>

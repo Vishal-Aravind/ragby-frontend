@@ -41,12 +41,21 @@ function deliveryChip(b) {
   return `Delivery${parts.length ? " · " + parts.join(" / ") : ""}`;
 }
 
+// With one location the owner sees "store" wording; "branch" only appears
+// once a second location exists.
+function warningText(w, single) {
+  if (!single) return WARNING_TEXT[w];
+  if (w === "no_menu") return "No menu yet. Add catalogs in the Menu tab.";
+  return WARNING_TEXT[w].replace("this branch", "your store").replace("This branch", "Your store");
+}
+
 export default function BranchesPanel({
   projectId, branches, loading, error, isAdmin, currency, defaultTimezone,
   onRefresh, onCopyMenu,
 }) {
   const [editing, setEditing] = useState(null); // null | "new" | branch
   const [busyId, setBusyId] = useState(null);
+  const single = !loading && !error && branches.length <= 1;
 
   const togglePause = async (b) => {
     setBusyId(b.id);
@@ -103,6 +112,7 @@ export default function BranchesPanel({
       <BranchEditor
         branch={editing === "new" ? null : editing}
         projectId={projectId}
+        single={single && editing !== "new"}
         currency={currency}
         defaultTimezone={defaultTimezone}
         onClose={() => setEditing(null)}
@@ -115,10 +125,14 @@ export default function BranchesPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-gray-900">Branches</h3>
-          <p className="text-xs text-gray-400">Each branch has its own menu, opening hours, and pickup / delivery settings</p>
+          <h3 className="font-semibold text-gray-900">{single ? "Your store" : "Branches"}</h3>
+          <p className="text-xs text-gray-400">
+            {single
+              ? "Opening hours, pickup / delivery, phone number and new-order alerts"
+              : "Each branch has its own menu, opening hours, and pickup / delivery settings"}
+          </p>
         </div>
-        {isAdmin && (
+        {isAdmin && !single && (
           <Button size="sm" onClick={() => setEditing("new")}>
             <Plus size={13} className="mr-1" /> Add branch
           </Button>
@@ -196,7 +210,7 @@ export default function BranchesPanel({
                       <p key={w} className={`flex items-start gap-1.5 text-xs rounded-lg px-2.5 py-1.5 border ${
                         w === "delivery_not_configured" ? "text-red-700 bg-red-50 border-red-100" : "text-amber-700 bg-amber-50 border-amber-100"
                       }`}>
-                        <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {WARNING_TEXT[w]}
+                        <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {warningText(w, single)}
                       </p>
                     ))}
                   </div>
@@ -228,8 +242,17 @@ export default function BranchesPanel({
         </div>
       )}
 
+      {single && isAdmin && (
+        <p className="text-xs text-gray-400">
+          Have more than one location?{" "}
+          <button type="button" onClick={() => setEditing("new")} className="underline hover:text-gray-600">Add another branch</button>
+        </p>
+      )}
+
       {!isAdmin && (
-        <p className="text-xs text-gray-400">Only project admins can add or edit branches. You can pause or resume orders.</p>
+        <p className="text-xs text-gray-400">
+          {single ? "Only project admins can edit the store. You can pause or resume orders." : "Only project admins can add or edit branches. You can pause or resume orders."}
+        </p>
       )}
     </div>
   );

@@ -486,6 +486,7 @@ export default function ShopTab({ project }) {
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
         {TABS.map(tab => {
           const Icon = tab.icon;
+          const label = tab.id === "branches" && !multiBranch ? "Store" : tab.label;
           return (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -493,7 +494,7 @@ export default function ShopTab({ project }) {
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
               }`}>
-              <Icon size={14} />{tab.label}
+              <Icon size={14} />{label}
             </button>
           );
         })}
@@ -560,8 +561,8 @@ export default function ShopTab({ project }) {
                 </p>
                 <p className="text-xs text-gray-400">
                   {config.is_enabled
-                    ? "Customers can browse and order at every branch"
-                    : "Customers can't browse or order at any branch. Existing orders still get updates."}
+                    ? (multiBranch ? "Customers can browse and order at every branch" : "Customers can browse and order from your shop")
+                    : (multiBranch ? "Customers can't browse or order at any branch. Existing orders still get updates." : "Customers can't browse or order. Existing orders still get updates.")}
                 </p>
               </div>
               <button onClick={() => setConfig(c => ({ ...c, is_enabled: !c.is_enabled }))}>
@@ -609,8 +610,10 @@ export default function ShopTab({ project }) {
                   </p>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Pickup, delivery, phone numbers and new-order WhatsApp alerts are set per branch, in the{" "}
-                  <button type="button" onClick={() => setActiveTab("branches")} className="underline hover:text-gray-600">Branches</button> tab.
+                  {multiBranch
+                    ? "Pickup, delivery, phone numbers and new-order WhatsApp alerts are set per branch, in the "
+                    : "Pickup, delivery, phone number and new-order WhatsApp alerts are set in the "}
+                  <button type="button" onClick={() => setActiveTab("branches")} className="underline hover:text-gray-600">{multiBranch ? "Branches" : "Store"}</button> tab.
                 </p>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">Terms & Conditions Note</label>
