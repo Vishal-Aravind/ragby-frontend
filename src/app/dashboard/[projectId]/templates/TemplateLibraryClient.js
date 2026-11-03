@@ -116,8 +116,9 @@ export default function TemplateLibraryClient({ projectId, initialTemplates, ini
   }
 
   // Every industry that has a template.
-  const industries = ['All', ...Array.from(new Set(templates.map(t => t.industry).filter(Boolean)))]
-  const filtered = filter === 'All' ? templates : templates.filter(t => t.industry === filter)
+  const inIndustry = (t, name) => t.industry === name || (t.also_in || []).includes(name)
+  const industries = ['All', ...Array.from(new Set(templates.flatMap(t => [t.industry, ...(t.also_in || [])]).filter(Boolean)))]
+  const filtered = filter === 'All' ? templates : templates.filter(t => inIndustry(t, filter))
 
   return (
     <div className="p-6 space-y-4">
