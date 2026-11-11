@@ -459,6 +459,7 @@ export default function AppointmentsTab({ project }) {
       <div className="flex gap-1 border-b">
         {[
           { key: 'appointments', label: 'Appointments' },
+          { key: 'availability', label: 'Availability' },
           { key: 'settings', label: 'Settings' },
         ].map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -637,6 +638,15 @@ export default function AppointmentsTab({ project }) {
         </div>
       )}
 
+      {/* Availability tab — named schedules (who's free when), separate from
+          the hours/buffers card in Settings so the two "availability"
+          concepts aren't both buried under one label. */}
+      {activeTab === 'availability' && (
+        <div className="space-y-6">
+          <SchedulesCard projectId={projectId} schedules={schedules} onChanged={fetchData} />
+        </div>
+      )}
+
       {/* Settings tab */}
       {activeTab === 'settings' && settings && (
         <div className="space-y-6">
@@ -788,9 +798,10 @@ export default function AppointmentsTab({ project }) {
             )}
           </div>
 
-          {/* Availability */}
+          {/* Advanced availability — hours, buffers, notice, timezone. The
+              named-schedule picker lives in its own Availability tab. */}
           <div className="border rounded-xl p-4 bg-white space-y-4">
-            <p className="text-sm font-semibold">Availability</p>
+            <p className="text-sm font-semibold">Advanced availability</p>
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
               WhatsApp only delivers messages to people who book from your website when they're sent as approved templates.
               Add <strong>Appointment Confirmed</strong>, <strong>Appointment Reminder</strong> and <strong>Appointment Cancelled</strong> in
@@ -818,8 +829,6 @@ export default function AppointmentsTab({ project }) {
               </div>
             </div>
           </div>
-
-          <SchedulesCard projectId={projectId} schedules={schedules} onChanged={fetchData} />
 
           <BookingLinkCard settings={settings} setSettings={setSettings} projectId={projectId} />
 
