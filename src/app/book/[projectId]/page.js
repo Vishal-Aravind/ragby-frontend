@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Check, Clock, Calendar, User, Phone, FileText } from "lucide-react";
+import { toast } from "sonner";
 
 export default function BookingPage() {
   const routeKey = useParams().projectId;
@@ -245,7 +246,7 @@ export default function BookingPage() {
       setBooking(data);
       setStep(4);
     } catch (e) {
-      alert(e.message);
+      toast.error(e.message);
     } finally {
       setSubmitting(false);
     }
