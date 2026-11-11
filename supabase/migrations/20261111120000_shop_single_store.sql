@@ -9,6 +9,11 @@
 -- orders.branch_id and shop_offers.branch_ids stay until the follow-up
 -- drop migration, run only after the new single-store shop is tested.
 --
+-- The copy step below is wrapped in a check for shop_branches actually
+-- existing: on a project where the original branches migration was never
+-- run, there's no branch data to copy and shop_config's new columns just
+-- keep their defaults.
+--
 -- Run once: re-running copies the old branch values over any settings
 -- changed since.
 -- ============================================================
@@ -48,32 +53,40 @@ begin
   end if;
 end $$;
 
--- Copy each shop's default branch onto its shop settings.
-update public.shop_config c
-   set address             = b.address,
-       lat                 = b.lat,
-       lng                 = b.lng,
-       pincodes            = coalesce(b.pincodes, '{}'),
-       hours               = b.hours,
-       timezone            = coalesce(nullif(b.timezone, ''), 'Asia/Kolkata'),
-       accepting_orders    = coalesce(b.accepting_orders, true),
-       pickup_enabled      = coalesce(b.pickup_enabled, true),
-       delivery_enabled    = coalesce(b.delivery_enabled, false),
-       delivery_per_km     = coalesce(b.delivery_per_km, 0),
-       delivery_base_fee   = coalesce(b.delivery_base_fee, 0),
-       free_delivery_above = b.free_delivery_above,
-       max_delivery_km     = b.max_delivery_km,
-       min_order_value     = coalesce(b.min_order_value, 0),
-       prep_minutes        = b.prep_minutes,
-       notify_owner_whatsapp = coalesce(b.notify_owner_whatsapp, c.notify_owner_whatsapp),
-       -- The branch phone (digits) was where order alerts went.
-       store_phone         = case when b.phone is not null then '+' || b.phone else c.store_phone end,
-       store_name          = coalesce(nullif(btrim(c.store_name), ''), nullif(b.name, 'Main'), c.store_name),
-       -- A branch's own GST details win over empty shop ones.
-       gstin               = coalesce(nullif(btrim(c.gstin), ''), b.gstin),
-       legal_name          = coalesce(nullif(btrim(c.legal_name), ''), b.legal_name),
-       registered_address  = coalesce(nullif(btrim(c.registered_address), ''), b.registered_address),
-       state               = coalesce(nullif(btrim(c.state), ''), b.state)
-  from public.shop_branches b
- where b.project_id = c.project_id
-   and b.is_default;
+-- Copy each shop's default branch onto its shop settings, but only if
+-- shop_branches actually exists (see note above).
+do $$
+begin
+  if to_regclass('public.shop_branches') is not null then
+    execute $copy$
+      update public.shop_config c
+         set address             = b.address,
+             lat                 = b.lat,
+             lng                 = b.lng,
+             pincodes            = coalesce(b.pincodes, '{}'),
+             hours               = b.hours,
+             timezone            = coalesce(nullif(b.timezone, ''), 'Asia/Kolkata'),
+             accepting_orders    = coalesce(b.accepting_orders, true),
+             pickup_enabled      = coalesce(b.pickup_enabled, true),
+             delivery_enabled    = coalesce(b.delivery_enabled, false),
+             delivery_per_km     = coalesce(b.delivery_per_km, 0),
+             delivery_base_fee   = coalesce(b.delivery_base_fee, 0),
+             free_delivery_above = b.free_delivery_above,
+             max_delivery_km     = b.max_delivery_km,
+             min_order_value     = coalesce(b.min_order_value, 0),
+             prep_minutes        = b.prep_minutes,
+             notify_owner_whatsapp = coalesce(b.notify_owner_whatsapp, c.notify_owner_whatsapp),
+             -- The branch phone (digits) was where order alerts went.
+             store_phone         = case when b.phone is not null then '+' || b.phone else c.store_phone end,
+             store_name          = coalesce(nullif(btrim(c.store_name), ''), nullif(b.name, 'Main'), c.store_name),
+             -- A branch's own GST details win over empty shop ones.
+             gstin               = coalesce(nullif(btrim(c.gstin), ''), b.gstin),
+             legal_name          = coalesce(nullif(btrim(c.legal_name), ''), b.legal_name),
+             registered_address  = coalesce(nullif(btrim(c.registered_address), ''), b.registered_address),
+             state               = coalesce(nullif(btrim(c.state), ''), b.state)
+        from public.shop_branches b
+       where b.project_id = c.project_id
+         and b.is_default
+    $copy$;
+  end if;
+end $$;
