@@ -459,7 +459,9 @@ export default function AppointmentsTab({ project }) {
       <div className="flex gap-1 border-b">
         {[
           { key: 'appointments', label: 'Appointments' },
+          { key: 'services', label: 'Services' },
           { key: 'availability', label: 'Availability' },
+          { key: 'notifications', label: 'Notifications' },
           { key: 'settings', label: 'Settings' },
         ].map(t => (
           <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -638,76 +640,9 @@ export default function AppointmentsTab({ project }) {
         </div>
       )}
 
-      {/* Availability tab — named schedules (who's free when), separate from
-          the hours/buffers card in Settings so the two "availability"
-          concepts aren't both buried under one label. */}
-      {activeTab === 'availability' && (
+      {/* Services tab — Calendly-style event types: what customers can book */}
+      {activeTab === 'services' && (
         <div className="space-y-6">
-          <SchedulesCard projectId={projectId} schedules={schedules} onChanged={fetchData} />
-        </div>
-      )}
-
-      {/* Settings tab */}
-      {activeTab === 'settings' && settings && (
-        <div className="space-y-6">
-
-          {/* Enable toggle */}
-          <div className="flex items-center justify-between border rounded-xl px-4 py-3 bg-white">
-            <div>
-              <p className="text-sm font-medium">Enable booking</p>
-              <p className="text-xs text-muted-foreground">Allow customers to book appointments</p>
-            </div>
-            <button
-              onClick={() => setSettings(s => ({ ...s, is_enabled: !s.is_enabled }))}
-              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${settings.is_enabled ? 'bg-indigo-600' : 'bg-gray-200'}`}>
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${settings.is_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
-            </button>
-          </div>
-
-          {/* Let the AI bot book directly in chat — separate from the public booking page above */}
-          <div className="flex items-center justify-between border rounded-xl px-4 py-3 bg-white">
-            <div>
-              <p className="text-sm font-medium">Let the AI book in chat</p>
-              <p className="text-xs text-muted-foreground">Your chatbot can check availability and book appointments directly inside a conversation (WhatsApp, Telegram, web chat)</p>
-            </div>
-            <button
-              onClick={() => setSettings(s => ({ ...s, bot_can_book: !s.bot_can_book }))}
-              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors shrink-0 ml-4 ${settings.bot_can_book ? 'bg-indigo-600' : 'bg-gray-200'}`}>
-              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${settings.bot_can_book ? 'translate-x-5' : 'translate-x-1'}`} />
-            </button>
-          </div>
-
-          {/* Google Calendar */}
-          <div className="border rounded-xl p-4 bg-white space-y-3">
-            <p className="text-sm font-semibold flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#4285F4"/><path d="M7 10h10v2H7zm0 4h7v2H7z" fill="white"/></svg>
-              Google Calendar
-            </p>
-            {settings.google_connected ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
-                  <Check size={13} /> Connected — availability synced automatically
-                </div>
-                <button onClick={disconnectGoogle}
-                  className="text-xs text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50">
-                  Disconnect
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">Connect your Google Calendar so customers only see slots when you're actually free.</p>
-                <button onClick={connectGoogle} disabled={googleConnecting}
-                  className="flex items-center gap-2 bg-white border rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50">
-                  {googleConnecting ? <Loader2 size={13} className="animate-spin" /> : (
-                    <svg width="14" height="14" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#4285F4"/></svg>
-                  )}
-                  Connect Google Calendar
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Services (Calendly-style event types) */}
           <div className="border rounded-xl p-4 bg-white space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -797,11 +732,18 @@ export default function AppointmentsTab({ project }) {
               </div>
             )}
           </div>
+        </div>
+      )}
 
-          {/* Advanced availability — hours, buffers, notice, timezone. The
-              named-schedule picker lives in its own Availability tab. */}
+      {/* Availability tab — named schedules (who's free when) plus the
+          business-wide booking rules (buffers, notice, daily limit,
+          timezone...). Kept on one tab since both answer "when". */}
+      {activeTab === 'availability' && settings && (
+        <div className="space-y-6">
+          <SchedulesCard projectId={projectId} schedules={schedules} onChanged={fetchData} />
+
           <div className="border rounded-xl p-4 bg-white space-y-4">
-            <p className="text-sm font-semibold">Advanced availability</p>
+            <p className="text-sm font-semibold">Booking rules</p>
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
               WhatsApp only delivers messages to people who book from your website when they're sent as approved templates.
               Add <strong>Appointment Confirmed</strong>, <strong>Appointment Reminder</strong> and <strong>Appointment Cancelled</strong> in
@@ -830,8 +772,16 @@ export default function AppointmentsTab({ project }) {
             </div>
           </div>
 
-          <BookingLinkCard settings={settings} setSettings={setSettings} projectId={projectId} />
+          <button onClick={saveSettings} disabled={saving}
+            className="w-full bg-indigo-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
+            {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Settings'}
+          </button>
+        </div>
+      )}
 
+      {/* Notifications tab — what customers and the owner get told */}
+      {activeTab === 'notifications' && settings && (
+        <div className="space-y-6">
           <RemindersEditor settings={settings} setSettings={setSettings} />
 
           <FollowupCard settings={settings} setSettings={setSettings} />
@@ -873,6 +823,75 @@ export default function AppointmentsTab({ project }) {
               </div>
             )}
           </div>
+
+          <button onClick={saveSettings} disabled={saving}
+            className="w-full bg-indigo-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
+            {saving ? 'Saving...' : saved ? '✓ Saved' : 'Save Settings'}
+          </button>
+        </div>
+      )}
+
+      {/* Settings tab */}
+      {activeTab === 'settings' && settings && (
+        <div className="space-y-6">
+
+          {/* Enable toggle */}
+          <div className="flex items-center justify-between border rounded-xl px-4 py-3 bg-white">
+            <div>
+              <p className="text-sm font-medium">Enable booking</p>
+              <p className="text-xs text-muted-foreground">Allow customers to book appointments</p>
+            </div>
+            <button
+              onClick={() => setSettings(s => ({ ...s, is_enabled: !s.is_enabled }))}
+              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors ${settings.is_enabled ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${settings.is_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          {/* Let the AI bot book directly in chat — separate from the public booking page above */}
+          <div className="flex items-center justify-between border rounded-xl px-4 py-3 bg-white">
+            <div>
+              <p className="text-sm font-medium">Let the AI book in chat</p>
+              <p className="text-xs text-muted-foreground">Your chatbot can check availability and book appointments directly inside a conversation (WhatsApp, Telegram, web chat)</p>
+            </div>
+            <button
+              onClick={() => setSettings(s => ({ ...s, bot_can_book: !s.bot_can_book }))}
+              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors shrink-0 ml-4 ${settings.bot_can_book ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${settings.bot_can_book ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          {/* Google Calendar */}
+          <div className="border rounded-xl p-4 bg-white space-y-3">
+            <p className="text-sm font-semibold flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#4285F4"/><path d="M7 10h10v2H7zm0 4h7v2H7z" fill="white"/></svg>
+              Google Calendar
+            </p>
+            {settings.google_connected ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+                  <Check size={13} /> Connected — availability synced automatically
+                </div>
+                <button onClick={disconnectGoogle}
+                  className="text-xs text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50">
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Connect your Google Calendar so customers only see slots when you're actually free.</p>
+                <button onClick={connectGoogle} disabled={googleConnecting}
+                  className="flex items-center gap-2 bg-white border rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50">
+                  {googleConnecting ? <Loader2 size={13} className="animate-spin" /> : (
+                    <svg width="14" height="14" viewBox="0 0 24 24"><rect width="24" height="24" rx="4" fill="#4285F4"/></svg>
+                  )}
+                  Connect Google Calendar
+                </button>
+              </div>
+            )}
+          </div>
+
+          <BookingLinkCard settings={settings} setSettings={setSettings} projectId={projectId} />
 
           <button onClick={saveSettings} disabled={saving}
             className="w-full bg-indigo-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50">
