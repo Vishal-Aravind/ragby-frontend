@@ -335,6 +335,10 @@ export function ServiceOptions({ form, setForm, schedules, projectId, serviceId 
         <label className="text-xs text-muted-foreground">Location or video link (shown in the confirmation)</label>
         <input className={inputCls} maxLength={300} placeholder="e.g. 12 Main Street, Chennai, or a Google Meet link"
           value={form.location || ''} onChange={e => set('location', e.target.value)} />
+        <p className="text-xs text-muted-foreground">
+          For an online appointment, paste your Zoom or Google Meet link here — it's sent straight to the
+          customer in their booking confirmation, so they don't have to ask you for it.
+        </p>
       </div>
       <div className="space-y-1">
         <label className="text-xs text-muted-foreground">Message in the confirmation</label>
