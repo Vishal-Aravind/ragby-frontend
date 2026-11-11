@@ -11,7 +11,7 @@ const LocationPickerMapInner = dynamic(() => import("./LocationPickerMapInner"),
 });
 
 /**
- * Props contract (frozen; the dashboard branch editor consumes it too):
+ * Props contract (frozen; the dashboard shop settings consume it too):
  *   value            {lat, lng} | null   current pin
  *   onChange         ({lat, lng}) => void, rounded to 6 dp
  *   center           {lat, lng} | null   initial centre when there is no value

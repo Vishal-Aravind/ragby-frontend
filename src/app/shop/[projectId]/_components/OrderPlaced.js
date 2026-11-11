@@ -10,7 +10,7 @@ export function paymentLine(method, fulfilment) {
 }
 
 /** Success screen for an order placed straight from the page (offline / free). */
-export default function OrderPlaced({ projectId, result, currency, accent, onMyOrders, onBackToMenu }) {
+export default function OrderPlaced({ projectId, result, currency, accent, onMyOrders, onBackToMenu, storeName }) {
   const total = result?.totals?.total;
   const saved = Number(result?.totals?.discount_amount) || 0;
   const sent = result?.whatsapp === "text" || result?.whatsapp === "template";
@@ -38,10 +38,12 @@ export default function OrderPlaced({ projectId, result, currency, accent, onMyO
             <span className="text-gray-600">Payment</span>
             <span className="font-semibold text-gray-900">{paymentLine(result?.payment_method, fulfilment)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">{fulfilment === "delivery" ? "Delivery from" : "Pickup at"}</span>
-            <span className="font-semibold text-gray-900 text-right">{result?.branch_name || ""}</span>
-          </div>
+          {storeName && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">{fulfilment === "delivery" ? "Delivery from" : "Pickup at"}</span>
+              <span className="font-semibold text-gray-900 text-right">{storeName}</span>
+            </div>
+          )}
         </div>
         {result?.notice === "best_offer_applied" && (
           <p className="text-xs text-blue-700">We applied the best available offer for you.</p>

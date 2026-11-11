@@ -7,7 +7,7 @@
 // skipped all of that. The dashboard never edited special_request, so that
 // field is no longer accepted here.
 import { NextResponse } from "next/server";
-import { authedProxy, readJson, UUID_RE } from "@/app/api/shop-branches/_proxy";
+import { authedProxy, readJson, UUID_RE } from "@/lib/shopProxy";
 
 export async function PUT(req, { params }) {
   const { orderId } = await params;

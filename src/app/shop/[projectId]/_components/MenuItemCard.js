@@ -40,7 +40,7 @@ export function QtyStepper({ qty, accent, disabled, onAdd, onRemove, name, size 
   );
 }
 
-/** One menu row. `disabled` = branch closed/paused: adding greys out and taps explain why. */
+/** One menu row. `disabled` = shop closed/paused: adding greys out and taps explain why. */
 export default function MenuItemCard({ product, qty, accent, currency, disabled, onAdd, onRemove, onBlocked }) {
   const add = () => (disabled ? onBlocked() : onAdd(product));
   const hasImage = !!product.image_url;

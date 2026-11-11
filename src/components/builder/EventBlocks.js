@@ -6,7 +6,7 @@
 // see. `wrap(block, node)` lets the builder put a selectable frame around
 // each block; `preview` makes the form inert.
 import { useEffect, useState } from "react";
-import { Clock, Calendar, MapPin, Users } from "lucide-react";
+import { Clock, Calendar, MapPin, Users, Ticket } from "lucide-react";
 
 // Origins allowed inside an <iframe> on a public registration page.
 // page_json is merchant-authored, but "merchant" includes any teammate
@@ -220,6 +220,7 @@ function InfoCard({ info, accent }) {
     info?.date && [Calendar, info.date],
     info?.location && [MapPin, info.location],
     info?.seats && [Users, info.seats],
+    info?.price && [Ticket, info.price],
   ].filter(Boolean);
   if (!rows.length) return null;
   return (
@@ -252,7 +253,15 @@ export default function EventBlocks({
 }
 
 /** "Saturday, 14 November 2026 · 10 AM - 4 PM" etc. for the info card. */
-export function eventInfo({ event_date, event_time, location, capacity, spots_left }) {
+/** "₹500" for INR, "USD 20" otherwise; "" for a free event. */
+export function priceText(price, currency) {
+  const n = Number(price) || 0;
+  if (n <= 0) return "";
+  const amount = Number.isInteger(n) ? String(n) : n.toFixed(2);
+  return !currency || currency === "INR" ? `₹${amount}` : `${currency} ${amount}`;
+}
+
+export function eventInfo({ event_date, event_time, location, capacity, spots_left, price, currency }) {
   let date = "";
   if (event_date) {
     const d = new Date(`${String(event_date).slice(0, 10)}T00:00:00`);
@@ -262,7 +271,8 @@ export function eventInfo({ event_date, event_time, location, capacity, spots_le
   else if (!date && event_time) date = event_time;
   let seats = "";
   if (capacity) seats = spots_left == null ? `${capacity} seats` : spots_left > 0 ? `${spots_left} seats left` : "Fully booked";
-  return { date, location: location || "", seats };
+  const fee = priceText(price, currency);
+  return { date, location: location || "", seats, price: fee ? `Registration fee: ${fee}` : "" };
 }
 
 function renderBlock(block, ctx) {

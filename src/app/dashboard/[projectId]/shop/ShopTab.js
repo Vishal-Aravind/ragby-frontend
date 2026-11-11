@@ -4,19 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import {
   Plus, Trash2, Loader2, ShoppingBag, Settings,
   Package, ClipboardList, ChevronLeft, Upload,
-  ToggleLeft, ToggleRight, Lock, Store, Copy, AlertTriangle, Tag
+  ToggleLeft, ToggleRight, Lock, AlertTriangle, Tag
 } from "lucide-react";
 import AppAlertDialog from "@/components/alertdialog";
 import { toast } from "sonner";
 import { uploadMedia } from "@/lib/uploadMedia";
 import RazorpayConnectCard from "@/components/RazorpayConnectCard";
 import { confirmDialog } from "@/components/confirmDialog";
-import BranchesPanel from "./BranchesPanel";
-import BranchSelector, { ALL_BRANCHES } from "./BranchSelector";
-import CopyMenuDialog from "./CopyMenuDialog";
+import StoreSettings, { toStorePayload } from "./StoreSettings";
 import OrderCard, { ORDER_STATUSES, normalizeStatus } from "./OrderCard";
 import { getOrdersSeenAt, markOrdersSeen } from "@/lib/newOrders";
 import OffersPanel from "./OffersPanel";
@@ -25,8 +24,7 @@ import TaxInvoiceCard from "./TaxInvoiceCard";
 
 const TABS = [
   { id: "settings",  label: "Settings",  icon: Settings },
-  { id: "branches",  label: "Branches",  icon: Store },
-  { id: "catalogs",  label: "Menu",      icon: ShoppingBag },
+  { id: "catalogs",  label: "Products",  icon: ShoppingBag },
   { id: "offers",    label: "Offers",    icon: Tag },
   { id: "orders",    label: "Orders",    icon: ClipboardList },
 ];
@@ -49,19 +47,8 @@ export default function ShopTab({ project }) {
   // server's 403 message explains.
   const myRole = project?.myRole;
   const isAdmin = !myRole || myRole === "owner" || myRole === "admin";
-  const branchPrefKey = `zavo_shop_branch_${projectId}`;
   const notifyPrefKey = `zavo_shop_notify_${projectId}`;
   const [activeTab, setActiveTab] = useState("settings");
-
-  // ── Branches ─────────────────────────────────────────
-  const [branches, setBranches] = useState([]);
-  const [loadingBranches, setLoadingBranches] = useState(true);
-  const [branchesError, setBranchesError] = useState(null);
-  const [branchesLoaded, setBranchesLoaded] = useState(false);
-  const [menuBranchId, setMenuBranchId] = useState(null);
-  const [orderBranchId, setOrderBranchId] = useState(ALL_BRANCHES);
-  const selectionInitRef = useRef(false);
-  const [copyTarget, setCopyTarget] = useState(null);
 
   // ── Settings ─────────────────────────────────────────
   const [config, setConfig] = useState(null);
@@ -137,32 +124,9 @@ export default function ShopTab({ project }) {
       .catch(() => {});
   }, [projectId]);
 
-  // ── Load branches ─────────────────────────────────────
-  // The backend creates the default "Main" branch on first read, so every
-  // shop has at least one. If this fails (e.g. backend unreachable), Menu
-  // and Orders still work unfiltered, as before branches existed.
-  const fetchBranches = async ({ silent = false } = {}) => {
-    if (!silent) setLoadingBranches(true);
-    try {
-      const res = await fetch(`/api/shop-branches?project_id=${projectId}`);
-      const data = await res.json().catch(() => null);
-      if (res.ok && Array.isArray(data)) {
-        setBranches(data);
-        setBranchesError(null);
-      } else {
-        setBranchesError(data?.error || "Couldn't load your branches.");
-      }
-    } catch {
-      setBranchesError("Couldn't load your branches. Check your connection and try again.");
-    }
-    if (!silent) setLoadingBranches(false);
-    setBranchesLoaded(true);
-  };
-
   useEffect(() => {
     if (!projectId) return;
     setNotifyCustomer(readPref(notifyPrefKey) !== "0");
-    fetchBranches();
   }, [projectId]);
 
   useEffect(() => {
@@ -173,63 +137,26 @@ export default function ShopTab({ project }) {
       .catch(() => { /* warning only; ignore */ });
   }, [projectId]);
 
-  // Pick the Menu / Orders branch once branches arrive (remembered per
-  // project), and fall back to the default if the remembered one is gone.
-  useEffect(() => {
-    if (!branchesLoaded) return;
-    const valid = (id) => branches.some(b => b.id === id);
-    const fallback = (branches.find(b => b.is_default) || branches[0])?.id || null;
-    if (!selectionInitRef.current) {
-      selectionInitRef.current = true;
-      const stored = readPref(branchPrefKey);
-      setMenuBranchId(valid(stored) ? stored : fallback);
-      setOrderBranchId(valid(stored) ? stored : ALL_BRANCHES);
-      return;
-    }
-    setMenuBranchId(prev => (valid(prev) ? prev : fallback));
-    setOrderBranchId(prev => (prev === ALL_BRANCHES || valid(prev) ? prev : ALL_BRANCHES));
-  }, [branchesLoaded, branches]);
-
-  const pickMenuBranch = (id) => {
-    setMenuBranchId(id);
-    writePref(branchPrefKey, id);
-    setSelectedCatalog(null);
-    setShowProductForm(false);
-    setEditingProduct(null);
-  };
-  const pickOrderBranch = (id) => {
-    setOrderBranchId(id);
-    writePref(branchPrefKey, id);
-  };
-
-  const multiBranch = branches.length > 1;
-  const menuBranch = branches.find(b => b.id === menuBranchId) || null;
-  const orderBranchFilter = multiBranch && orderBranchId !== ALL_BRANCHES ? orderBranchId : null;
-  const branchNameById = Object.fromEntries(branches.map(b => [b.id, b.name]));
-  const defaultTimezone = (branches.find(b => b.is_default) || branches[0])?.timezone || "Asia/Kolkata";
-  const deliveryNotReady = branches.filter(b => (b.warnings || []).includes("delivery_not_configured"));
 
   // ── Load catalogs ─────────────────────────────────────
-  // Request counter: switching branches quickly must not let an older,
-  // slower response overwrite the newer branch's list.
+  // Request counter: an older, slower response must not overwrite a newer one.
   const catalogReqRef = useRef(0);
   const fetchCatalogs = async () => {
     const reqId = ++catalogReqRef.current;
     setLoadingCatalogs(true);
-    const q = menuBranchId ? `&branch_id=${menuBranchId}` : "";
     try {
-      const res = await fetch(`/api/catalogs?project_id=${projectId}${q}`);
+      const res = await fetch(`/api/catalogs?project_id=${projectId}`);
       if (reqId !== catalogReqRef.current) return;
       if (res.ok) setCatalogs(await res.json() || []);
     } catch {
-      if (reqId === catalogReqRef.current) toast.error("Couldn't load the menu.");
+      if (reqId === catalogReqRef.current) toast.error("Couldn't load your products.");
     }
     if (reqId === catalogReqRef.current) setLoadingCatalogs(false);
   };
 
   useEffect(() => {
-    if (projectId && branchesLoaded) fetchCatalogs();
-  }, [projectId, branchesLoaded, menuBranchId]);
+    if (projectId) fetchCatalogs();
+  }, [projectId]);
 
   // ── Load products for selected catalog ───────────────
   const fetchProducts = async (catalogId) => {
@@ -248,9 +175,8 @@ export default function ShopTab({ project }) {
   const fetchOrders = async () => {
     const reqId = ++orderReqRef.current;
     setLoadingOrders(true);
-    const q = orderBranchFilter ? `&branch_id=${orderBranchFilter}` : "";
     try {
-      const res = await fetch(`/api/orders?project_id=${projectId}${q}`);
+      const res = await fetch(`/api/orders?project_id=${projectId}`);
       if (reqId !== orderReqRef.current) return;
       const data = await res.json().catch(() => null);
       if (res.ok && Array.isArray(data)) {
@@ -266,8 +192,8 @@ export default function ShopTab({ project }) {
   };
 
   useEffect(() => {
-    if (projectId && activeTab === "orders" && branchesLoaded) fetchOrders();
-  }, [projectId, activeTab, branchesLoaded, orderBranchFilter]);
+    if (projectId && activeTab === "orders") fetchOrders();
+  }, [projectId, activeTab]);
 
   // Opening Orders clears the dashboard bell. The previous marker is kept for
   // this visit so the orders that arrived since then are tagged NEW.
@@ -285,14 +211,24 @@ export default function ShopTab({ project }) {
   // ── Save config ───────────────────────────────────────
   const handleSaveConfig = async () => {
     setSavingConfig(true);
-    const res = await fetch(`/api/shop-config/${projectId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(config),
-    });
-    if (res.ok) {
-      setConfigSaved(true);
-      setTimeout(() => setConfigSaved(false), 2000);
+    try {
+      const { status, warnings, ...rest } = config;
+      const res = await fetch(`/api/shop-config/${projectId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...rest, ...toStorePayload(config) }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        if (data) setConfig(data);
+        setConfigSaved(true);
+        setTimeout(() => setConfigSaved(false), 2000);
+      } else {
+        const d = data?.detail;
+        toast.error(data?.error || (typeof d === "string" ? d : d?.message) || "Couldn't save your settings.");
+      }
+    } catch {
+      toast.error("Couldn't reach the server. Check your connection and try again.");
     }
     setSavingConfig(false);
   };
@@ -307,13 +243,11 @@ export default function ShopTab({ project }) {
       body: JSON.stringify({
         project_id: projectId,
         name: newCatalogName.trim(),
-        ...(menuBranchId ? { branch_id: menuBranchId } : {}),
       }),
     });
     if (res.ok) {
       setNewCatalogName("");
       await fetchCatalogs();
-      fetchBranches({ silent: true }); // catalog counts / "no menu" warning
     } else {
       const err = await res.json().catch(() => ({}));
       toast.error(err.error || "Couldn't create the catalog.");
@@ -341,7 +275,6 @@ export default function ShopTab({ project }) {
     setCatalogToDelete(null);
     setDeleteCatalogOpen(false);
     await fetchCatalogs();
-    fetchBranches({ silent: true });
   };
 
   // ── Save product ──────────────────────────────────────
@@ -486,7 +419,6 @@ export default function ShopTab({ project }) {
       <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
         {TABS.map(tab => {
           const Icon = tab.icon;
-          const label = tab.id === "branches" && !multiBranch ? "Store" : tab.label;
           return (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -494,44 +426,25 @@ export default function ShopTab({ project }) {
                   ? "bg-white text-gray-900 shadow-sm"
                   : "text-gray-500 hover:text-gray-700"
               }`}>
-              <Icon size={14} />{label}
+              <Icon size={14} />{tab.label}
             </button>
           );
         })}
       </div>
 
-      {/* Delivery is switched on somewhere but has no area, so customers
-          silently only get pickup (e.g. shops migrated from "Home Delivery"). */}
-      {deliveryNotReady.length > 0 && activeTab !== "branches" && (
+      {/* Delivery is switched on but has no area, so customers silently
+          only get pickup. */}
+      {(config.warnings || []).includes("delivery_not_configured") && activeTab !== "settings" && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertTriangle size={16} className="shrink-0" />
           <p className="flex-1 min-w-0">
-            {multiBranch
-              ? <>Delivery is on for <strong>{deliveryNotReady.map(b => b.name).join(", ")}</strong> but no delivery area is set,</>
-              : <>Delivery is on but no delivery area is set,</>}
-            so customers can only pick up. Add a map location and a max distance or pincodes.
+            Delivery is on but no delivery area is set, so customers can only pick up.
+            Add a max distance (with your shop's pin on the map) or pincodes.
           </p>
           {isAdmin && (
-            <Button size="sm" variant="outline" onClick={() => setActiveTab("branches")}>Set up delivery</Button>
+            <Button size="sm" variant="outline" onClick={() => setActiveTab("settings")}>Set up delivery</Button>
           )}
         </div>
-      )}
-
-      {/* ════════════════════════════════════════
-          BRANCHES TAB
-      ════════════════════════════════════════ */}
-      {activeTab === "branches" && (
-        <BranchesPanel
-          projectId={projectId}
-          branches={branches}
-          loading={loadingBranches}
-          error={branchesError}
-          isAdmin={isAdmin}
-          currency={config.currency || "₹"}
-          defaultTimezone={defaultTimezone}
-          onRefresh={() => fetchBranches({ silent: true })}
-          onCopyMenu={setCopyTarget}
-        />
       )}
 
       {/* ════════════════════════════════════════
@@ -540,10 +453,9 @@ export default function ShopTab({ project }) {
       {activeTab === "offers" && (
         <OffersPanel
           projectId={projectId}
-          branches={branches}
           isAdmin={isAdmin}
           currency={config.currency || "₹"}
-          defaultTimezone={defaultTimezone}
+          defaultTimezone={config.timezone || "Asia/Kolkata"}
           onOffersChange={(list) => setHasActiveOffers(list.some(o => o.state === "active"))}
         />
       )}
@@ -554,7 +466,7 @@ export default function ShopTab({ project }) {
       {activeTab === "settings" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-          {/* Shop enabled — master switch for every branch, so it sits on top */}
+          {/* Shop enabled — the master switch, so it sits on top */}
           <Card className="md:col-span-2">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
@@ -563,8 +475,8 @@ export default function ShopTab({ project }) {
                 </p>
                 <p className="text-xs text-gray-400">
                   {config.is_enabled
-                    ? (multiBranch ? "Customers can browse and order at every branch" : "Customers can browse and order from your shop")
-                    : (multiBranch ? "Customers can't browse or order at any branch. Existing orders still get updates." : "Customers can't browse or order. Existing orders still get updates.")}
+                    ? "Customers can browse and order from your shop"
+                    : "Customers can't browse or order. Existing orders still get updates."}
                 </p>
               </div>
               <button onClick={() => setConfig(c => ({ ...c, is_enabled: !c.is_enabled }))}>
@@ -575,55 +487,77 @@ export default function ShopTab({ project }) {
             </CardContent>
           </Card>
 
-          {/* Store Info */}
-          <Card>
+          {/* Shop details */}
+          <Card className="md:col-span-2">
             <CardContent className="p-6 space-y-4">
-              <h3 className="font-semibold text-gray-900">Store Information</h3>
-              <div className="space-y-3">
+              <h3 className="font-semibold text-gray-900">Shop details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Store Name</label>
-                  <Input placeholder="e.g. Geetham Veg Velachery"
+                  <label className="text-xs text-gray-500 mb-1 block">Shop name</label>
+                  <Input placeholder="e.g. Annapoorna Sweets" maxLength={80}
                     value={config.store_name || ""}
                     onChange={e => setConfig(c => ({ ...c, store_name: e.target.value }))} />
                   <p className="text-[11px] text-gray-400 mt-1">Shown to customers in the cart, order messages and invoices.</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Currency Symbol</label>
-                    <Input placeholder="₹"
-                      value={config.currency || "₹"}
-                      onChange={e => setConfig(c => ({ ...c, currency: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">GST % (shop rate)</label>
-                    <Input type="number" min="0" max="100" step="any" placeholder="5"
-                      value={config.gst_percent ?? 0}
-                      onChange={e => setConfig(c => ({ ...c, gst_percent: parseFloat(e.target.value) || 0 }))} />
-                    <p className="text-[11px] text-gray-400 mt-1">Used for items without their own GST %. Prices are entered without GST - it is added at checkout.</p>
-                  </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Phone number</label>
+                  <Input placeholder="+91 98765 43210" inputMode="tel"
+                    value={config.store_phone || ""}
+                    onChange={e => setConfig(c => ({ ...c, store_phone: e.target.value }))} />
+                  <p className="text-[11px] text-gray-400 mt-1">Customers see it to contact you. New-order alerts go to this number on WhatsApp.</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">WhatsApp alert for new orders</p>
+                  <p className="text-xs text-gray-400">
+                    {(config.store_phone || "").trim()
+                      ? "Sent to the phone number above. Turn off to watch orders in the dashboard only."
+                      : "Add a phone number above to get alerts."}
+                  </p>
+                </div>
+                <Switch checked={config.notify_owner_whatsapp !== false}
+                  onCheckedChange={(v) => setConfig(c => ({ ...c, notify_owner_whatsapp: !!v }))}
+                  aria-label="WhatsApp alert for new orders" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Note shown at checkout (optional)</label>
+                <Input placeholder="e.g. No returns on food items. T&C apply."
+                  value={config.terms_note || ""}
+                  onChange={e => setConfig(c => ({ ...c, terms_note: e.target.value }))} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <StoreSettings config={config} setConfig={setConfig} currency={config.currency || "₹"} disabled={!isAdmin} />
+
+          {/* Prices & tax */}
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <h3 className="font-semibold text-gray-900">Prices & tax</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Currency symbol</label>
+                  <Input placeholder="₹"
+                    value={config.currency || "₹"}
+                    onChange={e => setConfig(c => ({ ...c, currency: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Currency Code (for payments)</label>
+                  <label className="text-xs text-gray-500 mb-1 block">Currency code (for payments)</label>
                   <Input placeholder="INR" maxLength={3}
                     value={config.currency_code || "INR"}
                     onChange={e => setConfig(c => ({ ...c, currency_code: e.target.value.toUpperCase() }))} />
-                  <p className="text-xs text-gray-400 mt-1">
-                    The real currency code (e.g. INR, USD) Razorpay actually charges in — separate from the ₹/$ symbol above.
-                    Auto-filled from your Shopify store's currency if you connect one before setting up Shop.
-                  </p>
                 </div>
-                <p className="text-xs text-gray-400">
-                  {multiBranch
-                    ? "Pickup, delivery, phone numbers and new-order WhatsApp alerts are set per branch, in the "
-                    : "Pickup, delivery, phone number and new-order WhatsApp alerts are set in the "}
-                  <button type="button" onClick={() => setActiveTab("branches")} className="underline hover:text-gray-600">{multiBranch ? "Branches" : "Store"}</button> tab.
-                </p>
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Terms & Conditions Note</label>
-                  <Input placeholder="This order is not eligible for any discounts. T&C apply."
-                    value={config.terms_note || ""}
-                    onChange={e => setConfig(c => ({ ...c, terms_note: e.target.value }))} />
-                </div>
+              </div>
+              <p className="text-xs text-gray-400 -mt-2">
+                The code (INR, USD...) is what Razorpay charges in. Filled from your Shopify store if you connected one first.
+              </p>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">GST % (shop rate)</label>
+                <Input type="number" min="0" max="100" step="any" placeholder="5"
+                  value={config.gst_percent ?? 0}
+                  onChange={e => setConfig(c => ({ ...c, gst_percent: parseFloat(e.target.value) || 0 }))} />
+                <p className="text-[11px] text-gray-400 mt-1">Used for products without their own GST %. Prices are entered without GST - it is added at checkout. Use 0 if you don't charge GST.</p>
               </div>
             </CardContent>
           </Card>
@@ -719,7 +653,7 @@ export default function ShopTab({ project }) {
                 <div className="flex items-center gap-3">
                   <button onClick={() => { setSelectedCatalog(null); setShowProductForm(false); setEditingProduct(null); }}
                     className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
-                    <ChevronLeft size={16} /> {multiBranch && menuBranch ? `Menu · ${menuBranch.name}` : "Menu"}
+                    <ChevronLeft size={16} /> Products
                   </button>
                   <span className="text-gray-300">/</span>
                   <span className="font-semibold text-gray-900">{selectedCatalog.name}</span>
@@ -945,24 +879,9 @@ export default function ShopTab({ project }) {
           ) : (
             /* Catalog list view */
             <div className="space-y-4">
-              {/* Branch picker + copy */}
-              {multiBranch && (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-gray-500">Menu for</span>
-                    <BranchSelector branches={branches} value={menuBranchId} onChange={pickMenuBranch} />
-                  </div>
-                  {isAdmin && menuBranch && (
-                    <Button variant="outline" size="sm" onClick={() => setCopyTarget(menuBranch)}>
-                      <Copy size={13} className="mr-1" /> Copy menu from another branch
-                    </Button>
-                  )}
-                </div>
-              )}
-
               {/* Create catalog */}
               <div className="flex gap-2">
-                <Input placeholder="Catalog name e.g. Breakfast Menu"
+                <Input placeholder="Category name, e.g. Breakfast, Keychains, T-shirts"
                   value={newCatalogName}
                   onChange={e => setNewCatalogName(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCreateCatalog()} />
@@ -980,10 +899,10 @@ export default function ShopTab({ project }) {
                 <div className="border-2 border-dashed rounded-xl p-12 text-center">
                   <ShoppingBag size={32} className="mx-auto text-gray-300 mb-2" />
                   <p className="text-sm text-gray-400">
-                    {multiBranch && menuBranch ? `No catalogs in ${menuBranch.name} yet` : "No catalogs yet"}
+                    No categories yet
                   </p>
                   <p className="text-xs text-gray-300 mt-1">
-                    Create a catalog to start adding products{multiBranch && isAdmin ? ", or copy the menu from another branch" : ""}
+                    Create a category (e.g. Breakfast or Keychains), then add products to it
                   </p>
                 </div>
               ) : (
@@ -1042,11 +961,8 @@ export default function ShopTab({ project }) {
       ════════════════════════════════════════ */}
       {activeTab === "orders" && (
         <div className="space-y-4">
-          {/* Branch + notify preference */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {multiBranch ? (
-              <BranchSelector branches={branches} value={orderBranchId} onChange={pickOrderBranch} allowAll />
-            ) : <span />}
+          {/* Notify preference */}
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
               <input type="checkbox" checked={notifyCustomer} onChange={e => toggleNotify(e.target.checked)} />
               Notify customer on WhatsApp
@@ -1099,7 +1015,6 @@ export default function ShopTab({ project }) {
                   key={order.id}
                   order={order}
                   currency={config.currency || "₹"}
-                  branchName={multiBranch && !orderBranchFilter ? branchNameById[order.branch_id] : null}
                   busy={orderBusy === order.id}
                   onAction={handleOrderAction}
                   isNew={isNewOrder(order)}
@@ -1109,17 +1024,6 @@ export default function ShopTab({ project }) {
           )}
         </div>
       )}
-
-      <CopyMenuDialog
-        open={!!copyTarget}
-        target={copyTarget}
-        branches={branches}
-        onClose={() => setCopyTarget(null)}
-        onCopied={() => {
-          fetchBranches({ silent: true });
-          if (copyTarget?.id === menuBranchId) fetchCatalogs();
-        }}
-      />
 
       {/* Delete dialogs */}
       <AppAlertDialog

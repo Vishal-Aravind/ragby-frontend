@@ -5,10 +5,10 @@ import { withAlpha } from "../_lib/shopApi";
 
 /**
  * Brand header: cover image (3:1) or an accent block, a round logo that
- * overlaps the cover's bottom-left edge, the store name and the branch line.
+ * overlaps the cover's bottom-left edge, the store name and the open/closed line.
  * The sticky search bar lives in the page, below this.
  */
-export default function ShopHeader({ storeName, coverUrl, logoUrl, accent, branchName, showBranch, canChangeBranch, onChangeBranch, statusLine }) {
+export default function ShopHeader({ storeName, coverUrl, logoUrl, accent, statusLine }) {
   const [coverOk, setCoverOk] = useState(true);
   const [logoOk, setLogoOk] = useState(true);
   const hasCover = !!coverUrl && coverOk;
@@ -48,21 +48,7 @@ export default function ShopHeader({ storeName, coverUrl, logoUrl, accent, branc
             <h1 className="font-bold text-gray-900 text-xl leading-tight truncate">{storeName || "Menu"}</h1>
           </div>
         </div>
-        {(showBranch || statusLine) && (
-          <div className="mt-1.5">
-            {showBranch && branchName && (
-              <p className="text-sm text-gray-600 truncate">
-                🏪 {branchName}
-                {canChangeBranch && (
-                  <button onClick={onChangeBranch} className="ml-1 font-semibold" style={{ color: accent }}>
-                    · Change
-                  </button>
-                )}
-              </p>
-            )}
-            {statusLine && <p className="text-xs text-gray-500 mt-0.5">{statusLine}</p>}
-          </div>
-        )}
+        {statusLine && <p className="text-xs text-gray-500 mt-1.5">{statusLine}</p>}
       </div>
     </header>
   );

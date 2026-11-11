@@ -31,7 +31,6 @@ export async function GET(req, { params }) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
   const catalog_id = searchParams.get("catalog_id") || "";
-  const branch_id = searchParams.get("branch_id") || "";
   const id = encodeURIComponent(projectId);
 
   if (type === "config") {
@@ -39,31 +38,22 @@ export async function GET(req, { params }) {
   }
 
   if (type === "products") {
-    return forward(`/public/shop/${id}/products${query({ branch_id, catalog_id })}`, [], req);
+    return forward(`/public/shop/${id}/products${query({ catalog_id })}`, [], req);
   }
 
   if (type === "catalogs") {
-    return forward(`/public/shop/${id}/catalogs${query({ branch_id })}`, [], req);
+    return forward(`/public/shop/${id}/catalogs`, [], req);
   }
 
   if (type === "offers") {
     // Public offers strip: no identity, so a plain GET is fine here.
     const fulfilment = searchParams.get("fulfilment") || "";
     const ful = fulfilment === "pickup" || fulfilment === "delivery" ? fulfilment : "";
-    return forward(`/public/shop/${id}/offers${query({ branch_id, fulfilment: ful })}`, { offers: [] }, req);
+    return forward(`/public/shop/${id}/offers${query({ fulfilment: ful })}`, { offers: [] }, req);
   }
 
   if (type === "status") {
-    if (!branch_id) {
-      return NextResponse.json(
-        { detail: { code: "invalid_request", message: "branch_id required" } },
-        { status: 400 }
-      );
-    }
-    return proxyToBackend(
-      `/public/shop/${id}/branches/${encodeURIComponent(branch_id)}/status`,
-      { req }
-    );
+    return proxyToBackend(`/public/shop/${id}/status`, { req });
   }
 
   return NextResponse.json({ detail: "type required" }, { status: 400 });

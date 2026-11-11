@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Calendar, MapPin, Users, Plus, Trash2, Eye, X, Copy, Layout, ExternalLink, Download, Check, CalendarRange, Clock } from 'lucide-react'
 import PageBuilder from '@/components/builder/PageBuilder'
+import { priceText } from '@/components/builder/EventBlocks'
 import { confirmDialog } from '@/components/confirmDialog'
 
 export default function EventsTab({ project }) {
@@ -194,7 +195,9 @@ export default function EventsTab({ project }) {
     if (status === 'cancelled') {
       if (!(await confirmDialog({
         title: `Cancel ${reg.name}'s registration?`,
-        description: 'Their seat is freed. This cannot be undone.',
+        description: reg.payment_status === 'paid'
+          ? 'Their seat is freed. This cannot be undone.\n\nThey paid online - refund them from your Razorpay dashboard if needed.'
+          : 'Their seat is freed. This cannot be undone.',
         confirmText: 'Cancel registration', cancelText: 'Keep it',
       }))) return
       notify = await confirmDialog({
@@ -223,6 +226,18 @@ export default function EventsTab({ project }) {
     }
   }
   const statusCount = (s) => registrations.filter(r => r.status === s).length
+  // Paid events only. 'expired' = left without paying (seat released);
+  // paid + cancelled = paid after the hold ran out with no seat left.
+  const PAYMENT_LABELS = {
+    paid: 'Paid', link_sent: 'Waiting for payment', unpaid: 'Waiting for payment',
+    expired: 'Not paid (seat released)', failed: 'Payment not started', underpaid: 'Paid less - check Razorpay',
+  }
+  const paymentText = (r) => {
+    if (!r.payment_status) return ''
+    if (r.payment_status === 'paid' && r.status === 'cancelled') return 'Paid - refund needed'
+    return PAYMENT_LABELS[r.payment_status] || r.payment_status
+  }
+  const isPaidEvent = registrations.some(r => r.payment_status)
 
   const copyLink = (eventId) => {
     navigator.clipboard.writeText(registrationUrl(eventId))
@@ -247,10 +262,10 @@ export default function EventsTab({ project }) {
   const exportRegistrations = () => {
     const extras = extraFields(viewingEvent)
     const rows = [
-      ['Name', 'Phone', 'Email', ...extras.map(f => f.label), 'Source', 'Status', 'Registered'],
+      ['Name', 'Phone', 'Email', ...extras.map(f => f.label), 'Source', 'Status', 'Payment', 'Registered'],
       ...registrations.map(r => [
         r.name, `+${r.phone}`, r.email || '', ...extras.map(f => answerText((r.answers || {})[f.id])),
-        sourceText(r.source), r.status, new Date(r.created_at).toLocaleString(),
+        sourceText(r.source), r.status, paymentText(r), new Date(r.created_at).toLocaleString(),
       ]),
     ]
     const csv = '\ufeff' + rows.map(row => row.map(csvCell).join(',')).join('\r\n')
@@ -316,6 +331,7 @@ export default function EventsTab({ project }) {
                   ))}
                   <th className="text-left px-4 py-3 font-medium">Came from</th>
                   <th className="text-left px-4 py-3 font-medium">Status</th>
+                  {isPaidEvent && <th className="text-left px-4 py-3 font-medium">Payment</th>}
                   <th className="text-left px-4 py-3 font-medium">Registered</th>
                 </tr>
               </thead>
@@ -340,10 +356,15 @@ export default function EventsTab({ project }) {
                           r.status === 'cancelled' ? 'bg-red-100 text-red-600' :
                           'bg-blue-100 text-blue-700'
                         }`}>
-                        {!STATUS_OPTIONS.some(([v]) => v === r.status) && <option value={r.status}>{r.status}</option>}
+                        {!STATUS_OPTIONS.some(([v]) => v === r.status) && <option value={r.status}>{r.status === 'pending_payment' ? 'Awaiting payment' : r.status}</option>}
                         {STATUS_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                     </td>
+                    {isPaidEvent && (
+                      <td className={`px-4 py-3 text-xs whitespace-nowrap ${r.payment_status === 'paid' && r.status !== 'cancelled' ? 'text-green-700' : r.payment_status === 'paid' || r.payment_status === 'underpaid' ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                        {paymentText(r) || '—'}{r.amount && r.payment_status === 'paid' ? ` · ${priceText(r.amount, viewingEvent?.currency)}` : ''}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-muted-foreground text-xs">
                       {new Date(r.created_at).toLocaleDateString()}
                     </td>

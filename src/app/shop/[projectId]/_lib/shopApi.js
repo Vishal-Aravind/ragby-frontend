@@ -51,18 +51,16 @@ function qs(pairs) {
 
 export const getConfig = (pid) => call(`${base(pid)}?type=config`);
 
-export const getCatalogs = (pid, branchId) =>
-  call(`${base(pid)}?type=catalogs${qs({ branch_id: branchId })}`);
+export const getCatalogs = (pid) =>
+  call(`${base(pid)}?type=catalogs`);
 
-export const getProducts = (pid, branchId, catalogId) =>
-  call(`${base(pid)}?type=products${qs({ branch_id: branchId, catalog_id: catalogId })}`);
+export const getProducts = (pid, catalogId) =>
+  call(`${base(pid)}?type=products${qs({ catalog_id: catalogId })}`);
 
-export const getBranchStatus = (pid, branchId) =>
-  call(`${base(pid)}?type=status${qs({ branch_id: branchId })}`);
+export const getStatus = (pid) =>
+  call(`${base(pid)}?type=status`);
 
 /** body: {} | {lat, lng} | {pincode} */
-export const findBranches = (pid, body = {}) =>
-  call(`${base(pid)}/branches`, { method: "POST", body });
 
 export const getQuote = (pid, body) => call(`${base(pid)}/quote`, { method: "POST", body });
 
@@ -82,8 +80,8 @@ export const getMe = (pid, customerToken) =>
   call(`${base(pid)}/me`, { method: "POST", body: { customer_token: customerToken } });
 
 /** Public offers strip. No identity is sent; this is a plain GET. */
-export const getOffers = (pid, branchId, fulfilment) =>
-  call(`${base(pid)}?type=offers${qs({ branch_id: branchId, fulfilment })}`);
+export const getOffers = (pid, fulfilment) =>
+  call(`${base(pid)}?type=offers${qs({ fulfilment })}`);
 
 export const placeOrder = (pid, body) => call(`${base(pid)}/place-order`, { method: "POST", body });
 
@@ -115,7 +113,6 @@ export function offerReasonText(reason) {
     case "expired": return "This offer has expired.";
     case "not_started": return "This offer hasn't started yet.";
     case "paused": return "This offer isn't available right now.";
-    case "branch": return "This offer isn't valid at this branch.";
     case "fulfilment": return "This offer isn't valid for this order type.";
     case "login_required": return "Open the menu from your WhatsApp chat to use this offer.";
     case "min_order": return "Add more items to use this offer.";
@@ -185,26 +182,6 @@ export function getCurrentPosition() {
 
 // sessionStorage can throw (private mode, blocked storage); the page must
 // work without it.
-const sessionKey = (pid) => `zavo_shop_${pid}`;
-
-export function readSession(pid) {
-  try {
-    const raw = window.sessionStorage.getItem(sessionKey(pid));
-    const v = raw ? JSON.parse(raw) : null;
-    return v && typeof v === "object" ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writeSession(pid, value) {
-  try {
-    window.sessionStorage.setItem(sessionKey(pid), JSON.stringify(value));
-  } catch {
-    /* ignore */
-  }
-}
-
 export function formatMoney(currency, n) {
   const v = Number(n);
   if (!Number.isFinite(v)) return `${currency}0`;
@@ -217,11 +194,11 @@ export function formatKm(km) {
   return v < 1 ? `${Math.round(v * 1000)} m` : `${v.toFixed(1)} km`;
 }
 
-/** "Opens at 9:00 AM" / "Opens tomorrow at 9:00 AM" from a branch_status object. */
+/** "Opens at 9:00 AM" / "Opens tomorrow at 9:00 AM" from a store status object. */
 export function closedToastText(status) {
   if (!status) return "Not taking orders right now";
   if (status.reason === "paused") return "Not taking orders right now";
-  if (status.reason === "inactive") return "This branch isn't taking orders";
+  if (status.reason === "inactive") return "We're not taking orders";
   const o = status.opens_at_label;
   if (o) return /^\d/.test(o) ? `Opens at ${o}` : `Opens ${o}`;
   return status.label || "Closed now";

@@ -73,7 +73,7 @@ export default function InvoiceView({ invoice }) {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-gray-200 pb-4">
           <div className="min-w-0">
             <p className="text-lg font-bold break-words">{s.legal_name || "—"}</p>
-            {s.branch_name && <p className="text-gray-600">{s.branch_name}</p>}
+            {s.trade_name && s.trade_name !== s.legal_name && <p className="text-gray-600">{s.trade_name}</p>}
             {s.address && <p className="text-gray-600 whitespace-pre-line break-words">{s.address}</p>}
             {s.state && <p className="text-gray-600">State: {s.state}</p>}
             {s.gstin && <p className="font-semibold">GSTIN: {s.gstin}</p>}

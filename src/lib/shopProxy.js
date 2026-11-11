@@ -1,5 +1,5 @@
-// Shared helper for the authenticated shop proxy routes (branches, copy-menu,
-// order status). Forwards to the FastAPI backend with the caller's JWT, and
+// Shared helper for the authenticated shop proxy routes (offers, branding,
+// invoices, order status). Forwards to the FastAPI backend with the caller's JWT, and
 // turns the backend's error shape into the dashboard's `{ error }` shape.
 //
 // The shop endpoints raise HTTPException(detail={"code", "message"}), FastAPI

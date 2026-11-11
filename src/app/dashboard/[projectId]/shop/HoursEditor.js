@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Copy } from "lucide-react";
 
-// Opening hours for one branch. Shape (shared contract with the backend):
+// The shop's opening hours. Shape (shared contract with the backend):
 //   null                       -> always open
 //   { mon: {closed, open, close}, ... }  (24h "HH:MM"; close < open runs past
 //   midnight, counted on the start day; open == close is 24 hours)

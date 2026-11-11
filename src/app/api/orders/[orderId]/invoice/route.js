@@ -1,7 +1,7 @@
 // src/app/api/orders/[orderId]/invoice/route.js
 // Dashboard invoice view. The backend checks shop-tab access on the order's project.
 import { NextResponse } from "next/server";
-import { authedProxy, UUID_RE } from "@/app/api/shop-branches/_proxy";
+import { authedProxy, UUID_RE } from "@/lib/shopProxy";
 
 export async function GET(req, { params }) {
   const { orderId } = await params;

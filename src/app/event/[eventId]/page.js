@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { Check, Calendar, MapPin, Users } from "lucide-react";
 // Shared with the page builder, so the merchant's design is exactly what
 // visitors see.
-import EventBlocks, { DynamicForm, eventInfo } from "@/components/builder/EventBlocks";
+import EventBlocks, { DynamicForm, eventInfo, priceText } from "@/components/builder/EventBlocks";
 
 export default function EventRegistrationPage() {
   const { eventId } = useParams();
@@ -75,6 +75,29 @@ export default function EventRegistrationPage() {
         <p className="text-2xl">😔</p>
         <p className="text-gray-600 font-medium">Registration unavailable</p>
         <p className="text-sm text-gray-400">{error}</p>
+      </div>
+    </div>
+  );
+
+  if (submitted && submitted.status === "payment_required") return (
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#f8f9fa" }}>
+      <div className="text-center space-y-5 max-w-sm w-full">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">One last step: payment</h2>
+          <p className="text-sm text-gray-500 mt-1">{event.title}</p>
+        </div>
+        <div className="bg-white border rounded-2xl p-4 text-sm text-gray-700 space-y-1.5">
+          <p>Registration fee: <span className="font-semibold">{priceText(submitted.amount, event.currency)}</span></p>
+          <p className="text-xs text-gray-500">Your seat is held for {submitted.hold_minutes || 15} minutes. It's confirmed once you pay.</p>
+        </div>
+        <a href={submitted.payment_url} target="_blank" rel="noopener noreferrer"
+          className="block w-full py-3 rounded-xl text-white font-semibold text-sm" style={{ background: accent }}>
+          Pay {priceText(submitted.amount, event.currency)}
+        </a>
+        {submitted.booking_id && (
+          <p className="text-sm text-gray-600">Booking ID: <span className="font-mono font-semibold">#{submitted.booking_id}</span></p>
+        )}
+        <p className="text-xs text-gray-400">After paying, you'll get the confirmation on WhatsApp. If you don't pay in time, the seat is released.</p>
       </div>
     </div>
   );
@@ -170,6 +193,11 @@ export default function EventRegistrationPage() {
             <div className="flex items-center gap-2 text-sm">
               <MapPin size={15} style={{ color: accent }} />
               <span className="text-gray-700">{event.location}</span>
+            </div>
+          )}
+          {Number(event.price) > 0 && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-700">Registration fee: <span className="font-semibold">{priceText(event.price, event.currency)}</span></span>
             </div>
           )}
           {event.capacity && (

@@ -78,7 +78,7 @@ export default function TaxInvoiceCard({ projectId, isAdmin }) {
           <h3 className="font-semibold text-gray-900">Tax invoice</h3>
           <p className="text-xs text-gray-400 mt-0.5">
             Printed on every order&apos;s invoice. With a GSTIN it is a GST tax invoice; without one, a receipt.
-            A branch can override these in its own settings. Changes apply to new invoices only.
+            Changes apply to new invoices only.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

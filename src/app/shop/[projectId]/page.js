@@ -4,8 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Search, X, ChevronRight, Check, RotateCw } from "lucide-react";
-import LocationStep from "./_components/LocationStep";
-import BranchList from "./_components/BranchList";
 import ClosedBanner from "./_components/ClosedBanner";
 import CheckoutFlow from "./_components/CheckoutFlow";
 import MenuItemCard from "./_components/MenuItemCard";
@@ -16,8 +14,8 @@ import MyOrders from "./_components/MyOrders";
 import OrderPlaced from "./_components/OrderPlaced";
 import PaymentReturn from "./_components/PaymentReturn";
 import {
-  UUID_RE, errorMessage, getConfig, getOrder, findBranches, getCatalogs, getProducts, getOffers,
-  getBranchStatus, getOrderStatus, cancelOrder, readSession, writeSession, formatMoney, closedToastText,
+  UUID_RE, errorMessage, getConfig, getOrder, getCatalogs, getProducts, getOffers,
+  getStatus, getOrderStatus, cancelOrder, formatMoney, closedToastText,
   stripUrlParams, openWhatsAppChat,
 } from "./_lib/shopApi";
 import { bootIdentity, storeToken, UNVERIFIED } from "./_lib/identity";
@@ -70,8 +68,7 @@ function mergeForms(...sources) {
   return out;
 }
 
-// Screens: loading → location → branches → menu (checkout full screen on top)
-// → placed | submitted. Plus payment_return, unavailable and error.
+// Screens: loading → menu (checkout full screen on top) → placed | submitted. Plus payment_return, unavailable and error.
 // `tab` switches Home / My Orders independently of the screen.
 export default function ShopPage() {
   const { projectId } = useParams();
@@ -81,7 +78,6 @@ export default function ShopPage() {
     phone: searchParams.get("phone") || "",
     catalog: searchParams.get("catalog") || "",
     orderId: searchParams.get("order_id") || "",
-    branch: searchParams.get("branch") || "",
     view: searchParams.get("view") || "",
     t: searchParams.get("t") || "",
     paid: searchParams.get("paid") || "",
@@ -99,16 +95,9 @@ export default function ShopPage() {
   const [identity, setIdentity] = useState(UNVERIFIED);
   const effectivePhone = identity.verified ? identity.phone : url.phone;
 
-  const [branches, setBranches] = useState([]);
-  const [origin, setOrigin] = useState(null);
-  const [originLabel, setOriginLabel] = useState(null);
-  const [originPincode, setOriginPincode] = useState("");
-  const [branch, setBranch] = useState(null);
-  const [locked, setLocked] = useState(false);
   const [status, setStatus] = useState(null);
 
   const [products, setProducts] = useState([]);
-  const [productsBranchId, setProductsBranchId] = useState(null);
   const [menuLoading, setMenuLoading] = useState(false);
   const [menuError, setMenuError] = useState(false);
   const [menuNonce, setMenuNonce] = useState(0);
@@ -137,46 +126,10 @@ export default function ShopPage() {
   const [reorderReq, setReorderReq] = useState(null);
   const [confirmAsk, setConfirmAsk] = useState(null); // {title, text, yes, onYes}
 
-  const branchRef = useRef(null);
-  useEffect(() => {
-    branchRef.current = branch;
-  }, [branch]);
-
   const accent = config?.accent_color || "#16a34a";
+  const shop = useMemo(() => ({ ...(config?.store || {}), name: config?.store_name || "" }), [config]);
   const currency = config?.currency || "₹";
   const india = currency === "₹";
-
-  // ---- choosing a branch ---------------------------------------------------
-  const openBranch = useCallback(
-    (b, { keepCart = false, origin: o = null, label = null, pincode = "" } = {}) => {
-      const prev = branchRef.current;
-      if (prev && prev.id !== b.id && !keepCart) {
-        setCart({});
-        setOrderItemInfo({});
-      }
-      setBranch(b);
-      setStatus(b.status || null);
-      setSearch("");
-      setActiveCategory("All");
-      setCheckoutOpen(false);
-      setStep("menu");
-      const gpsPoint = o && (o.source === "gps" || o.source === "pin") ? validPoint(o) : null;
-      setForm((f) => ({
-        ...f,
-        fulfilment:
-          f.fulfilment === "delivery" && b.delivery_available
-            ? "delivery"
-            : b.pickup_enabled || !b.delivery_available
-              ? "pickup"
-              : "delivery",
-        address: f.address.pincode || !pincode ? f.address : { ...f.address, pincode },
-        // Only a real GPS/map point; a pincode centroid must never price a delivery.
-        coords: f.coords || gpsPoint,
-      }));
-      writeSession(projectId, { branchId: b.id, origin: o, originLabel: label, pincode: pincode || "" });
-    },
-    [projectId]
-  );
 
   // ---- boot ----------------------------------------------------------------
   useEffect(() => {
@@ -221,9 +174,6 @@ export default function ShopPage() {
 
       const ident = idRes.identity;
       const phoneNow = ident.verified ? ident.phone : url.phone;
-      const saved = readSession(projectId);
-      const savedOrigin = saved ? validPoint(saved.origin) : null;
-      const savedPincode = typeof saved?.pincode === "string" ? saved.pincode : "";
       const savedCheckout = readCheckout(projectId);
       const savedCart = readCart(projectId);
 
@@ -275,55 +225,25 @@ export default function ShopPage() {
         setOrderId("");
       }
 
-      const editable = order && order.editable !== false;
-      const lockId = editable && order.branch_id ? order.branch_id : null;
-      const savedBranchId = saved && UUID_RE.test(saved.branchId || "") ? saved.branchId : null;
-      const wantId = order?.branch_id || (UUID_RE.test(url.branch) ? url.branch : null);
-      const count = cfg.data.branch_count;
-      const single = count == null || count <= 1;
-
-      const finish = (target, o, label) => {
-        if (target) {
-          if (!cartFromOrder && savedCart && savedCart.branchId === target.id && Object.keys(savedCart.items).length) {
-            setCart(savedCart.items);
-            setOrderItemInfo(savedCart.info || {});
-          }
-          openBranch(target, { keepCart: true, origin: o, label, pincode: savedPincode });
-          if (savedCheckout?.open && (cartFromOrder || (savedCart && savedCart.branchId === target.id))) setCheckoutOpen(true);
-        }
-        setPersistReady(true);
-      };
-
-      if (!wantId && !single && !savedBranchId) {
-        if (!cancelled) setStep("location");
-        finish(null);
-        return;
+      // The store: open state and which order types it offers.
+      const store = cfg.data.store || {};
+      setStatus(store.status || null);
+      setForm((f) => ({
+        ...f,
+        fulfilment:
+          f.fulfilment === "delivery" && store.delivery_available
+            ? "delivery"
+            : store.pickup_enabled !== false || !store.delivery_available
+              ? "pickup"
+              : "delivery",
+      }));
+      if (!cartFromOrder && savedCart && Object.keys(savedCart.items).length) {
+        setCart(savedCart.items);
+        setOrderItemInfo(savedCart.info || {});
       }
-
-      const listBody = savedOrigin ? { lat: savedOrigin.lat, lng: savedOrigin.lng, source: "pin" } : {};
-      const r = await findBranches(projectId, listBody);
-      if (cancelled) return;
-      if (r.status === 403 || r.status === 404) return setStep("unavailable");
-      if (!r.ok || !r.data) return setStep("error");
-      const list = Array.isArray(r.data.branches) ? r.data.branches : [];
-      if (list.length === 0) return setStep("unavailable");
-
-      const o = r.data.origin || null;
-      const label = o ? saved?.originLabel || "Your location" : null;
-      setBranches(list);
-      setOrigin(o);
-      setOriginLabel(label);
-      setOriginPincode(savedPincode);
-
-      const byId = (id) => (id ? list.find((b) => b.id === id) : null);
-      let target = byId(wantId);
-      if (target && target.id === lockId) setLocked(true);
-      if (!target && list.length === 1) target = list[0];
-      if (!target && single) target = byId(cfg.data.default_branch_id) || list[0];
-      if (!target) target = byId(savedBranchId);
-
-      if (!target) setStep(o ? "branches" : "location");
-      finish(target, o, label);
+      if (savedCheckout?.open && (cartFromOrder || (savedCart && Object.keys(savedCart.items).length))) setCheckoutOpen(true);
+      setPersistReady(true);
+      setStep("menu");
     })();
 
     return () => {
@@ -373,21 +293,21 @@ export default function ShopPage() {
     };
   }, [step, projectId]);
 
-  // ---- menu for the chosen branch -------------------------------------------
-  const branchId = branch?.id;
+  // ---- menu ------------------------------------------------------------------
+  const menuReady = step === "menu" || step === "placed" || step === "submitted";
   useEffect(() => {
-    if (!projectId || !branchId) return;
+    if (!projectId || !menuReady) return;
     let cancelled = false;
     (async () => {
       setMenuLoading(true);
       setMenuError(false);
       let catId = "";
       if (catalogHint && UUID_RE.test(catalogHint)) {
-        const c = await getCatalogs(projectId, branchId);
+        const c = await getCatalogs(projectId);
         if (cancelled) return;
         if (c.ok && Array.isArray(c.data) && c.data.some((x) => x.id === catalogHint)) catId = catalogHint;
       }
-      const p = await getProducts(projectId, branchId, catId);
+      const p = await getProducts(projectId, catId);
       if (cancelled) return;
       if (p.ok && Array.isArray(p.data)) {
         setProducts(p.data);
@@ -395,36 +315,35 @@ export default function ShopPage() {
         setProducts([]);
         setMenuError(true);
       }
-      setProductsBranchId(branchId);
       setActiveCatalogId(catId);
       setMenuLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [projectId, branchId, catalogHint, menuNonce]);
+  }, [projectId, menuReady, catalogHint, menuNonce]);
 
   // ---- offers strip ------------------------------------------------------------
   useEffect(() => {
-    if (!projectId || !branchId) return;
+    if (!projectId || !menuReady) return;
     let alive = true;
     (async () => {
-      const r = await getOffers(projectId, branchId);
+      const r = await getOffers(projectId);
       if (!alive) return;
       setOffers(r.ok && Array.isArray(r.data?.offers) ? r.data.offers : []);
     })();
     return () => {
       alive = false;
     };
-  }, [projectId, branchId]);
+  }, [projectId, menuReady]);
 
   // ---- open/closed polling ----------------------------------------------------
   useEffect(() => {
-    if (step !== "menu" || !projectId || !branchId) return;
+    if (step !== "menu" || !projectId) return;
     let alive = true;
     const tick = async () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
-      const r = await getBranchStatus(projectId, branchId);
+      const r = await getStatus(projectId);
       if (alive && r.ok && r.data && typeof r.data.can_order === "boolean") setStatus(r.data);
     };
     const id = setInterval(tick, 60000);
@@ -437,7 +356,7 @@ export default function ShopPage() {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [step, projectId, branchId]);
+  }, [step, projectId]);
 
   // ---- cart -----------------------------------------------------------------
   const canOrder = status ? status.can_order !== false : true;
@@ -465,7 +384,7 @@ export default function ShopPage() {
   // Persist the cart and the checkout form for this tab (never the token).
   useEffect(() => {
     if (!persistReady || !projectId) return;
-    if (!branchId || cartLines.length === 0) {
+    if (cartLines.length === 0) {
       clearCart(projectId);
       return;
     }
@@ -474,8 +393,8 @@ export default function ShopPage() {
       const p = productById[l.product_id] || orderItemInfo[l.product_id];
       if (p) info[l.product_id] = { name: p.name, price: p.price, image_url: p.image_url || null };
     }
-    writeCart(projectId, { branchId, items: cart, info });
-  }, [persistReady, projectId, branchId, cart, cartLines, productById, orderItemInfo]);
+    writeCart(projectId, { items: cart, info });
+  }, [persistReady, projectId, cart, cartLines, productById, orderItemInfo]);
 
   const serializeCheckout = useCallback(
     (open) => ({
@@ -525,83 +444,24 @@ export default function ShopPage() {
       ? activeCatalogId
       : null;
 
-  const canChangeBranch = branches.length > 1 && !locked;
-  const homeStep = () => (branch ? "menu" : branches.length ? "branches" : "location");
+  const homeStep = () => "menu";
 
   const openCheckout = () => {
-    if (!branch) {
-      toast("Pick a branch first", { id: "pick-branch" });
-      return;
-    }
     setTab("home");
     setStep("menu");
     setCheckout((c) => ({ ...c, step: 1 }));
     setCheckoutOpen(true);
   };
 
-  // ---- location search (LocationStep) --------------------------------------
-  const handleSearch = async (body, label) => {
-    const r = await findBranches(projectId, body);
-    if (!r.ok || !r.data) {
-      if (r.status === 0) return "Network error. Please check your connection and try again.";
-      return errorMessage(r.data, "Couldn't find branches. Please try again.");
-    }
-    const list = Array.isArray(r.data.branches) ? r.data.branches : [];
-    const o = r.data.origin || null;
-    const pc = body.pincode || "";
-    const lbl = pc || (o ? label : null);
-    setBranches(list);
-    setOrigin(o);
-    setOriginLabel(lbl);
-    setOriginPincode(pc);
-    if (pc) setForm((f) => (f.address.pincode ? f : { ...f, address: { ...f.address, pincode: pc } }));
-    if (o && (o.source === "gps" || o.source === "pin")) {
-      setForm((f) => ({ ...f, coords: validPoint(o) }));
-    }
-    writeSession(projectId, { branchId: branch?.id || null, origin: o, originLabel: lbl, pincode: pc });
-    setStep("branches");
-    return null;
-  };
-
   // ---- reorder from My Orders ----------------------------------------------------
   const startReorder = (o) => {
-    const go = async () => {
-      let list = branches;
-      let b = list.find((x) => x.id === o.branch_id);
-      if (!b) {
-        const r = await findBranches(projectId, {});
-        list = r.ok && Array.isArray(r.data?.branches) ? r.data.branches : [];
-        if (list.length) setBranches(list);
-        b = list.find((x) => x.id === o.branch_id);
-      }
-      if (!b) {
-        toast.error("That branch isn't taking online orders any more");
-        return;
-      }
-      const switching = !branch || branch.id !== b.id;
-      if (switching && orderId) {
-        setOrderId("");
-        setLocked(false);
-      }
-      if (switching) openBranch(b, { origin, label: originLabel, pincode: originPincode });
-      setReorderReq({ branchId: b.id, items: Array.isArray(o.items) ? o.items : [] });
-      setTab("home");
-      setStep("menu");
-    };
-    if (cartCount > 0 && branch && o.branch_id !== branch.id) {
-      setConfirmAsk({
-        title: "Replace your cart?",
-        text: `This order is from ${o.branch_name || "another branch"}. Your current cart will be cleared.`,
-        yes: "Replace cart",
-        onYes: go,
-      });
-    } else {
-      go();
-    }
+    setReorderReq({ items: Array.isArray(o.items) ? o.items : [] });
+    setTab("home");
+    setStep("menu");
   };
 
   useEffect(() => {
-    if (!reorderReq || menuLoading || productsBranchId !== reorderReq.branchId) return;
+    if (!reorderReq || menuLoading || step !== "menu") return;
     let added = 0;
     let missing = 0;
     const adds = {};
@@ -628,7 +488,7 @@ export default function ShopPage() {
     const msg = `${added} item${added === 1 ? "" : "s"} added${missing ? ` · ${missing} no longer available` : ""}`;
     if (added > 0) toast.success(msg, { id: "reorder" });
     else toast.error("None of those items are on the menu any more", { id: "reorder" });
-  }, [reorderReq, menuLoading, productsBranchId, productById]);
+  }, [reorderReq, menuLoading, step, productById]);
 
   // ---- checkout callbacks ------------------------------------------------------
   const onVerifiedLost = useCallback(() => {
@@ -640,7 +500,6 @@ export default function ShopPage() {
 
   const onOrderNotEditable = useCallback(({ silent = false } = {}) => {
     setOrderId("");
-    setLocked(false);
     if (!silent) setNotEditable(true);
   }, []);
 
@@ -650,7 +509,6 @@ export default function ShopPage() {
     setCart({});
     setOrderItemInfo({});
     setOrderId("");
-    setLocked(false);
     setRestored(false);
     setNotEditable(false);
     setCheckout(EMPTY_CHECKOUT);
@@ -664,10 +522,7 @@ export default function ShopPage() {
     setBannerBusy(false);
     if (r.ok) {
       clearPending(projectId);
-      if (orderId && orderId === pendingBanner.order_id) {
-        setOrderId("");
-        setLocked(false);
-      }
+      if (orderId && orderId === pendingBanner.order_id) setOrderId("");
       setPendingBanner(null);
       toast.success("Payment cancelled — your cart is still here", { id: "pay-cancelled" });
     } else {
@@ -779,6 +634,7 @@ export default function ShopPage() {
     <OrderPlaced
       projectId={projectId}
       result={placedResult}
+      storeName={config?.store_name}
       currency={currency}
       accent={accent}
       onMyOrders={() => {
@@ -807,7 +663,6 @@ export default function ShopPage() {
             <p className="text-2xl font-bold mt-1" style={{ color: accent }}>{formatMoney(currency, submitted.total)}</p>
           )}
           <p className="text-sm text-gray-600 mt-1">
-            {branches.length > 1 && submitted.branchName ? `🏪 ${submitted.branchName} · ` : ""}
             {isDel ? "🛵 Delivery" : "🏃 Pickup"}
           </p>
         </div>
@@ -857,29 +712,6 @@ export default function ShopPage() {
     </div>
   );
 
-  if (step === "location") return (
-    <LocationStep
-      storeName={config?.store_name}
-      accent={accent}
-      initialPincode={originPincode}
-      onSearch={handleSearch}
-    />
-  );
-
-  if (step === "branches") return (
-    <BranchList
-      storeName={config?.store_name}
-      branches={branches}
-      originLabel={originLabel}
-      hasDistances={branches.some((b) => b.distance_km != null)}
-      accent={accent}
-      currency={currency}
-      cartCount={branch ? cartCount : 0}
-      onPick={(b) => openBranch(b, { origin, label: originLabel, pincode: originPincode })}
-      onChangeLocation={() => setStep("location")}
-    />
-  );
-
   // ---- menu ----------------------------------------------------------------
   const categories = ["All", ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
   const q = search.toLowerCase();
@@ -896,7 +728,6 @@ export default function ShopPage() {
     grouped[cat].push(p);
   });
 
-  const multi = branches.length > 1;
   const showStatusLine = status?.label && status.can_order && status.label !== "Open now" ? status.label : null;
   const freeDeliveryOffer = offers.some((o) => o.kind === "free_delivery");
   const cartBarBottom = `calc(${BOTTOM_BAR_HEIGHT + 8}px + env(safe-area-inset-bottom))`;
@@ -915,10 +746,6 @@ export default function ShopPage() {
         coverUrl={config?.cover_image_url}
         logoUrl={config?.logo_url}
         accent={accent}
-        branchName={branch?.name}
-        showBranch={multi}
-        canChangeBranch={canChangeBranch}
-        onChangeBranch={() => setStep("branches")}
         statusLine={showStatusLine}
       />
       <OffersStrip offers={offers} accent={accent} onPickCode={setPendingCode} />
@@ -952,7 +779,7 @@ export default function ShopPage() {
             ))}
           </div>
         )}
-        <ClosedBanner status={status} branchName={branch?.name} />
+        <ClosedBanner status={status} />
       </div>
 
       {pendingBanner && (
@@ -1056,19 +883,17 @@ export default function ShopPage() {
 
       {!checkoutOpen && bottomBar}
 
-      {checkoutOpen && branch && (
+      {checkoutOpen && (
         <CheckoutFlow
           projectId={projectId}
           token={token}
           identity={identity}
           effectivePhone={effectivePhone}
-          branch={branch}
+          shop={shop}
           status={status}
           currency={currency}
           accent={accent}
           india={india}
-          origin={origin}
-          canChangeBranch={canChangeBranch}
           items={cartItems}
           cartLines={cartLines}
           catalogId={catalogForSubmit}
@@ -1081,10 +906,6 @@ export default function ShopPage() {
           onPendingCodeUsed={() => setPendingCode(null)}
           freeDeliveryOffer={freeDeliveryOffer}
           onClose={() => setCheckoutOpen(false)}
-          onChangeBranch={() => {
-            setCheckoutOpen(false);
-            setStep("branches");
-          }}
           onAdd={addToCart}
           onRemove={removeFromCart}
           onKeepOnly={keepOnly}
@@ -1099,7 +920,6 @@ export default function ShopPage() {
             setSubmitted({
               total: d?.totals?.total ?? null,
               count: cartCount,
-              branchName: d?.branch_name || branch.name,
               fulfilment: d?.fulfilment || form.fulfilment,
             });
             setCheckoutOpen(false);

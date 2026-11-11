@@ -94,7 +94,7 @@ export default function MyOrders({ projectId, token, verified, currency, accent,
                   </p>
                   <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                     {o.fulfilment === "delivery" ? <Bike size={12} /> : <ShoppingBag size={12} />}
-                    {o.branch_name || ""} · {o.fulfilment === "delivery" ? "Delivery" : "Pickup"}
+                    {o.fulfilment === "delivery" ? "Delivery" : "Pickup"}
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={chipStyle(o)}>

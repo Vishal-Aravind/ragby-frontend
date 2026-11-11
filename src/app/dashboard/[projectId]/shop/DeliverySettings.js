@@ -18,10 +18,10 @@ export function deliveryProblems(form, hasLocation) {
     out.push("Delivery is on but no delivery area is set. Add a max distance or at least one pincode, otherwise customers can only pick up.");
   }
   if (radius && !hasLocation) {
-    out.push("A max distance needs the branch location. Place the pin on the map above.");
+    out.push("A max distance needs your shop's location. Place the pin on the map.");
   }
   if (num(form.delivery_per_km) > 0 && !hasLocation) {
-    out.push("A per-km fee needs the branch location to measure distance. Place the pin on the map above.");
+    out.push("A per-km fee needs your shop's location to measure distance. Place the pin on the map.");
   }
   return out;
 }
@@ -74,7 +74,7 @@ export default function DeliverySettings({ form, setField, currency = "₹", has
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-gray-700">Pickup</p>
-          <p className="text-xs text-gray-400">Customers collect the order from this branch</p>
+          <p className="text-xs text-gray-400">Customers collect the order from your shop</p>
         </div>
         <Switch checked={!!form.pickup_enabled} disabled={disabled}
           onCheckedChange={(on) => setField("pickup_enabled", on)} />
@@ -92,7 +92,7 @@ export default function DeliverySettings({ form, setField, currency = "₹", has
       {!form.pickup_enabled && !form.delivery_enabled && (
         <p className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-          Both pickup and delivery are off, so customers can't order from this branch.
+          Both pickup and delivery are off, so customers can't order.
         </p>
       )}
 
@@ -104,7 +104,7 @@ export default function DeliverySettings({ form, setField, currency = "₹", has
               hint="Charged on every delivery" />
             <MoneyField label="Fee per km" currency={currency} placeholder="0" disabled={disabled}
               value={form.delivery_per_km} onChange={v => setField("delivery_per_km", v)}
-              hint="Straight-line distance from the branch" />
+              hint="Straight-line distance from your shop" />
             <MoneyField label="Free delivery above (optional)" currency={currency} placeholder="e.g. 499" disabled={disabled}
               value={form.free_delivery_above} onChange={v => setField("free_delivery_above", v)}
               hint="Order value before GST" />

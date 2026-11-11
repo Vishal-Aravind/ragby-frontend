@@ -3,7 +3,7 @@
 // through the backend, which validates the GSTIN and checks access
 // (shop tab to read, admin to write). No secrets are involved.
 import { NextResponse } from "next/server";
-import { authedProxy, readJson, UUID_RE } from "@/app/api/shop-branches/_proxy";
+import { authedProxy, readJson, UUID_RE } from "@/lib/shopProxy";
 
 export async function GET(req, { params }) {
   const { projectId } = await params;

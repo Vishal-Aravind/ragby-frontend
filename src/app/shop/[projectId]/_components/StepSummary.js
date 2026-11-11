@@ -35,12 +35,12 @@ function Card({ title, action, onAction, accent, children }) {
 export function quoteErrorText(e, status) {
   switch (e.code) {
     case "out_of_area":
-      return "This branch doesn't deliver to your location. Try Pickup or another branch.";
+      return "We don't deliver to your location yet. Try Pickup instead.";
     case "location_required":
-      return e.message && /branch/i.test(e.message) ? e.message : "Set your delivery location on the map.";
-    case "branch_closed":
-    case "branch_paused":
-      return status?.label || e.message || "This branch isn't taking orders right now.";
+      return e.message && /hasn't set its location/i.test(e.message) ? e.message : "Set your delivery location on the map.";
+    case "shop_closed":
+    case "shop_paused":
+      return status?.label || e.message || "We're not taking orders right now.";
     case "item_unavailable":
     case "item_not_on_menu":
       return "Some items are no longer available.";
@@ -54,7 +54,7 @@ export function quoteErrorText(e, status) {
  * locally. The primary button lives in the CheckoutFlow footer.
  */
 export default function StepSummary({
-  items, branch, fulfilment, form, quote, quoteState, quoteErr, status, currency, accent,
+  items, shop, fulfilment, form, quote, quoteState, quoteErr, status, currency, accent,
   couponBusy, couponMessage, couponDisabledText, onApplyCoupon, onRemoveCoupon,
   soldOut, setSoldOut, note, setNote, onRetryQuote, onGo, onKeepOnly,
 }) {
@@ -137,13 +137,13 @@ export default function StepSummary({
             <p className="font-semibold text-gray-900">{form.name}</p>
             <p>{addressText}{a.pincode ? ` — ${a.pincode}` : ""}</p>
             {ready && quote.delivery_distance_km != null && (
-              <p className="text-xs text-gray-500">{formatKm(quote.delivery_distance_km)} from {branch?.name}</p>
+              <p className="text-xs text-gray-500">{formatKm(quote.delivery_distance_km)} from {shop?.name || "the shop"}</p>
             )}
           </div>
         ) : (
           <div className="text-sm text-gray-700 space-y-0.5">
-            <p className="font-semibold text-gray-900">{branch?.name}</p>
-            {branch?.address && <p>{branch.address}</p>}
+            {shop?.name && <p className="font-semibold text-gray-900">{shop.name}</p>}
+            {shop?.address && <p>{shop.address}</p>}
             <p className="text-xs text-gray-500">Name: {form.name}</p>
           </div>
         )}

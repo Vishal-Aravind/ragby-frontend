@@ -4,7 +4,7 @@
 // Supabase upsert like the main settings route) because the backend checks
 // each URL is one of our own uploaded images.
 import { NextResponse } from "next/server";
-import { authedProxy, readJson, UUID_RE } from "../../../shop-branches/_proxy";
+import { authedProxy, readJson, UUID_RE } from "@/lib/shopProxy";
 
 export async function PUT(req, { params }) {
   const { projectId } = await params;

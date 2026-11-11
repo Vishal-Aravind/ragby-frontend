@@ -25,21 +25,19 @@ const inputCls = (bad) =>
   `mt-1 w-full rounded-xl border px-3 py-3 text-base outline-none bg-white ${bad ? "border-red-400" : "border-gray-200 focus:border-gray-400"}`;
 
 /**
- * Step 3. Pickup: branch card + name. Delivery: map with "Use current
+ * Step 3. Pickup: shop card + name. Delivery: map with "Use current
  * location", structured address and name. `deliveryError` is the quote's
  * delivery/location problem, shown at the map.
  */
 export default function StepDetails({
-  branch, fulfilment, form, setForm, errors, deliveryError, india, accent, origin,
-  canChangeBranch, onChangeBranch, onTryPickup,
+  shop, fulfilment, form, setForm, errors, deliveryError, india, accent, onTryPickup,
 }) {
   const [locBusy, setLocBusy] = useState(false);
   const [locErr, setLocErr] = useState("");
   const isDelivery = fulfilment === "delivery";
   const setAddr = (k, v) => setForm((f) => ({ ...f, address: { ...f.address, [k]: v } }));
 
-  const branchPoint = branch?.lat != null && branch?.lng != null ? { lat: Number(branch.lat), lng: Number(branch.lng) } : null;
-  const originPoint = origin && origin.lat != null && origin.lng != null ? { lat: Number(origin.lat), lng: Number(origin.lng) } : null;
+  const shopPoint = shop?.lat != null && shop?.lng != null ? { lat: Number(shop.lat), lng: Number(shop.lng) } : null;
 
   const useCurrent = async () => {
     setLocBusy(true);
@@ -68,21 +66,14 @@ export default function StepDetails({
   );
 
   if (!isDelivery) {
-    const mapsUrl = branchPoint ? `https://maps.google.com/?q=${branchPoint.lat},${branchPoint.lng}` : null;
+    const mapsUrl = shopPoint ? `https://maps.google.com/?q=${shopPoint.lat},${shopPoint.lng}` : null;
     return (
       <div className="px-4 py-5 space-y-5">
         <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-1.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Pickup from</p>
-          <div className="flex items-start justify-between gap-3">
-            <p className="font-bold text-gray-900">{branch?.name}</p>
-            {canChangeBranch && (
-              <button onClick={onChangeBranch} className="text-sm font-semibold shrink-0" style={{ color: accent }}>
-                Change
-              </button>
-            )}
-          </div>
-          {branch?.address && <p className="text-sm text-gray-600">{branch.address}</p>}
-          {branch?.prep_minutes ? <p className="text-xs text-gray-500">Ready in ~{branch.prep_minutes} min</p> : null}
+          {shop?.name && <p className="font-bold text-gray-900">{shop.name}</p>}
+          {shop?.address && <p className="text-sm text-gray-600">{shop.address}</p>}
+          {shop?.prep_minutes ? <p className="text-xs text-gray-500">Ready in ~{shop.prep_minutes} min</p> : null}
           {mapsUrl && (
             <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: accent }}>
               <ExternalLink size={13} /> Open in Maps
@@ -119,8 +110,8 @@ export default function StepDetails({
           <LocationPickerMap
             value={form.coords}
             onChange={(p) => setForm((f) => ({ ...f, coords: p }))}
-            center={form.coords || originPoint || branchPoint}
-            markers={branchPoint ? [{ id: branch.id, lat: branchPoint.lat, lng: branchPoint.lng, label: branch.name }] : []}
+            center={form.coords || shopPoint}
+            markers={shopPoint ? [{ id: "shop", lat: shopPoint.lat, lng: shopPoint.lng, label: shop.name || "Shop" }] : []}
             height={220}
             showLocateButton={false}
           />
@@ -135,11 +126,8 @@ export default function StepDetails({
             <p>{deliveryError.text}</p>
             {deliveryError.code === "out_of_area" && (
               <div className="flex gap-4">
-                {branch?.pickup_enabled && (
+                {shop?.pickup_enabled && (
                   <button onClick={onTryPickup} className="text-xs font-semibold underline">Try pickup</button>
-                )}
-                {canChangeBranch && (
-                  <button onClick={onChangeBranch} className="text-xs font-semibold underline">Change branch</button>
                 )}
               </div>
             )}

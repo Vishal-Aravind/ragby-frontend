@@ -1,6 +1,6 @@
 // src/app/api/shop-offers/[offerId]/redemptions/route.js
 import { NextResponse } from "next/server";
-import { authedProxy, UUID_RE } from "../../../shop-branches/_proxy";
+import { authedProxy, UUID_RE } from "@/lib/shopProxy";
 
 export async function GET(req, { params }) {
   const { offerId } = await params;

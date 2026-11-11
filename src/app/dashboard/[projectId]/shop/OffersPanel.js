@@ -29,14 +29,11 @@ const FILTERS = [
   ["archived", "Archived", (o) => o.state === "archived"],
 ];
 
-function conditionsLine(o, { currency, branchNameById, multiBranch, timeZone }) {
+function conditionsLine(o, { currency, timeZone }) {
   const parts = [];
   if (Number(o.min_order_value) > 0) parts.push(`Min ${currency}${fmtAmount(o.min_order_value)}`);
   if (o.fulfilment === "delivery") parts.push("Delivery only");
   else if (o.fulfilment === "pickup") parts.push("Pickup only");
-  if (multiBranch && (o.branch_ids || []).length) {
-    parts.push(o.branch_ids.map(id => branchNameById[id] || "Removed branch").join(", "));
-  }
   if (o.first_order_only) parts.push("First order");
   if (o.per_customer_limit) parts.push(`${o.per_customer_limit} per customer`);
   if (o.starts_at && Date.parse(o.starts_at) > Date.now()) parts.push(`starts ${formatInZone(o.starts_at, timeZone)}`);
@@ -60,7 +57,7 @@ function UsageLine({ o, currency }) {
 }
 
 export default function OffersPanel({
-  projectId, branches = [], isAdmin, currency = "₹", defaultTimezone = "Asia/Kolkata", onOffersChange,
+  projectId, isAdmin, currency = "₹", defaultTimezone = "Asia/Kolkata", onOffersChange,
 }) {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,8 +69,6 @@ export default function OffersPanel({
   const [viewing, setViewing] = useState(null);
   const editorKey = useRef(0);
 
-  const multiBranch = branches.length > 1;
-  const branchNameById = Object.fromEntries(branches.map(b => [b.id, b.name]));
 
   const updateOffers = (next) => {
     setOffers(next);
@@ -210,7 +205,7 @@ export default function OffersPanel({
           {visible.map(o => {
             const [stateLabel, stateCls] = STATE_BADGE[o.state] || [o.state || "—", "bg-gray-50 text-gray-500 border-gray-200"];
             const archived = o.state === "archived" || !!o.archived_at;
-            const conditions = conditionsLine(o, { currency, branchNameById, multiBranch, timeZone: defaultTimezone });
+            const conditions = conditionsLine(o, { currency, timeZone: defaultTimezone });
             return (
               <div key={o.id} className={`border rounded-xl bg-white p-4 space-y-3 ${archived ? "opacity-70" : ""}`}>
                 <div className="flex items-start justify-between gap-3">
@@ -289,7 +284,6 @@ export default function OffersPanel({
           mode={editor.mode}
           offer={editor.offer}
           projectId={projectId}
-          branches={branches}
           currency={currency}
           timeZone={defaultTimezone}
           onClose={() => setEditor(null)}

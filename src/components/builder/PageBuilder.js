@@ -527,6 +527,20 @@ function TemplatePicker({ onPick, onBlank, onSkip, onClose, replacing }) {
 // ─────────────────────────────────────────────────────────
 // The "Event Registration Confirmed" template's status in the WhatsApp
 // account: 'APPROVED' | 'PENDING' | ... | 'MISSING' | null (unknown).
+function useRazorpayConnected(projectId) {
+  const [connected, setConnected] = useState(null)
+  useEffect(() => {
+    if (!projectId) return
+    let alive = true
+    fetch(`/api/razorpay/status/${projectId}`)
+      .then(r => (r.ok ? r.json() : { connected: false }))
+      .then(d => { if (alive) setConnected(!!d.connected) })
+      .catch(() => { if (alive) setConnected(null) })
+    return () => { alive = false }
+  }, [projectId])
+  return connected
+}
+
 function useRegistrationTemplateStatus(projectId) {
   const [status, setStatus] = useState(null)
   useEffect(() => {
@@ -593,6 +607,7 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
     event_time: event?.event_time || '',
     location: event?.location || '',
     capacity: event?.capacity ?? '',
+    price: event?.price ? String(Number(event.price)) : '',
     contact_phone: event?.contact_phone || '',
     accent_color: event?.accent_color || DEFAULT_ACCENT,
     bot_can_register: event?.bot_can_register ?? false,
@@ -600,6 +615,7 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
     send_wa_confirmation: event?.send_wa_confirmation ?? false,
   })
   const templateStatus = useRegistrationTemplateStatus(projectId || event?.project_id)
+  const razorpayConnected = useRazorpayConnected(projectId || event?.project_id)
 
   // Unsaved-changes guard: what was last saved (or loaded), to compare on Close.
   const snapshot = (b, f, d) => JSON.stringify({ b, f, d })
@@ -708,6 +724,7 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
       event_time: details.event_time.trim() || null,
       location: details.location.trim() || null,
       capacity: details.capacity ? parseInt(details.capacity) : null,
+      price: parseFloat(details.price) > 0 ? Math.round(parseFloat(details.price) * 100) / 100 : null,
       contact_phone: details.contact_phone.trim() || null,
       accent_color: details.accent_color,
       bot_can_register: details.bot_can_register,
@@ -867,6 +884,18 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
                       {details.accent_color === c && <Check size={12} className="text-white" />}
                     </button>
                   ))}
+                </div>
+                <div className="space-y-1">
+                  <TextField label="Registration fee (optional)" value={details.price}
+                    onChange={v => updateDetail({ price: v.replace(/[^0-9.]/g, '') })} placeholder="Free" />
+                  <p className="text-[11px] text-muted-foreground">
+                    {parseFloat(details.price) > 0
+                      ? `People pay online first. Their seat is held for 15 minutes and confirmed once paid.`
+                      : 'Leave empty for a free event.'}
+                  </p>
+                  {parseFloat(details.price) > 0 && razorpayConnected === false && (
+                    <p className="text-[11px] text-amber-700">Connect Razorpay in Integrations first. Until then nobody can register for this event.</p>
+                  )}
                 </div>
                 <TextField label={'Contact phone (for "Call to attend")'} value={details.contact_phone} onChange={v => updateDetail({ contact_phone: v })} placeholder="+91 98765 43210" />
 

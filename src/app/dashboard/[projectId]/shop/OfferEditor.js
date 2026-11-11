@@ -69,7 +69,7 @@ function generateCode() {
   return Array.from(bytes, b => alphabet[b % alphabet.length]).join("");
 }
 
-// ── Time zones (datetime-local <-> ISO UTC in the branch timezone) ──
+// ── Time zones (datetime-local <-> ISO UTC in the shop's timezone) ──
 function zoneParts(ms, timeZone) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit",
@@ -136,8 +136,6 @@ function toForm(o, timeZone, { duplicate = false } = {}) {
     starts_at: utcIsoToLocal(o?.starts_at, timeZone),
     ends_at: utcIsoToLocal(o?.ends_at, timeZone),
     is_active: o ? (duplicate ? false : o.is_active !== false) : true,
-    all_branches: !(o?.branch_ids || []).length,
-    branch_ids: o?.branch_ids || [],
     fulfilment: o?.fulfilment || "any",
     first_order_only: !!o?.first_order_only,
     usage_limit: o?.usage_limit == null ? "" : String(o.usage_limit),
@@ -161,7 +159,6 @@ function toPayload(f, timeZone) {
     starts_at: f.starts_at ? localToUtcIso(f.starts_at, timeZone) : null,
     ends_at: f.ends_at ? localToUtcIso(f.ends_at, timeZone) : null,
     is_active: !!f.is_active,
-    branch_ids: f.all_branches ? [] : f.branch_ids,
     fulfilment: free ? "delivery" : f.fulfilment,
     first_order_only: !!f.first_order_only,
     usage_limit: intOrNull(f.usage_limit),
@@ -219,7 +216,7 @@ function RadioCard({ active, disabled, onClick, children }) {
 // open: boolean; offer: existing offer (edit / duplicate source) or null;
 // mode: "new" | "edit" | "duplicate"
 export default function OfferEditor({
-  open, mode = "new", offer, projectId, branches = [], currency = "₹",
+  open, mode = "new", offer, projectId, currency = "₹",
   timeZone = "Asia/Kolkata", onClose, onSaved,
 }) {
   const isEdit = mode === "edit" && !!offer;
@@ -237,7 +234,6 @@ export default function OfferEditor({
   const payload = toPayload(form, timeZone);
   const preview = offerLabel(payload, currency);
   const free = form.kind === "free_delivery";
-  const multiBranch = branches.length > 1;
   const needsIdentity = form.first_order_only || form.per_customer_limit !== "";
 
   const setKind = (kind) => {
@@ -245,17 +241,9 @@ export default function OfferEditor({
     setErrors(e => ({ ...e, value: undefined, max_discount: undefined }));
   };
 
-  const toggleBranch = (id) => {
-    setForm(f => {
-      const has = f.branch_ids.includes(id);
-      return { ...f, branch_ids: has ? f.branch_ids.filter(x => x !== id) : [...f.branch_ids, id] };
-    });
-  };
-
   const save = async () => {
     const p = toPayload(form, timeZone);
     const errs = validate(p, { isNew });
-    if (!form.all_branches && p.branch_ids.length === 0) errs.branches = "Pick at least one branch, or choose All branches.";
     setErrors(errs);
     setFormError(null);
     if (Object.values(errs).some(Boolean)) return;
@@ -442,33 +430,6 @@ export default function OfferEditor({
               {free && <p className="text-xs text-gray-400 mt-1">Free delivery only applies to delivery orders.</p>}
             </div>
 
-            {multiBranch && (
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">Branches</label>
-                <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit">
-                  {[[true, "All branches"], [false, "Selected branches"]].map(([all, label]) => (
-                    <button key={label} type="button"
-                      onClick={() => { setField("all_branches", all); setErrors(e => ({ ...e, branches: undefined })); }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                        form.all_branches === all ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                      }`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {!form.all_branches && (
-                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {branches.map(b => (
-                      <label key={b.id} className="flex items-center gap-2 text-sm border rounded-lg px-3 py-2 cursor-pointer hover:bg-gray-50">
-                        <input type="checkbox" checked={form.branch_ids.includes(b.id)} onChange={() => toggleBranch(b.id)} />
-                        <span className="truncate">{b.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-                <FieldError text={errors.branches} />
-              </div>
-            )}
 
             <label className="flex items-start gap-2 cursor-pointer">
               <input type="checkbox" className="mt-1" checked={form.first_order_only}

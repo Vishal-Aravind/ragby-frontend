@@ -2,16 +2,16 @@
 
 import { Clock, PauseCircle } from "lucide-react";
 
-/** Strip under the menu header whenever the branch can't take orders. The page
+/** Strip under the menu header whenever the shop can't take orders. The page
  *  renders it inside its sticky header wrapper, so it stays pinned with it. */
-export default function ClosedBanner({ status, branchName }) {
+export default function ClosedBanner({ status }) {
   if (!status || status.can_order) return null;
   const paused = status.reason === "paused";
   const inactive = status.reason === "inactive";
   const text = paused
-    ? `${branchName || "This branch"} isn't taking orders right now.`
+    ? "We're not taking orders right now."
     : inactive
-      ? `${branchName || "This branch"} isn't taking orders.`
+      ? "We're not taking orders."
       : status.label || "Closed now";
 
   return (

@@ -3,30 +3,30 @@
 import { Check } from "lucide-react";
 import { formatMoney } from "../_lib/shopApi";
 
-/** Step 2: two big cards. A card that is off at this branch is greyed with the reason. */
-export default function StepOrderType({ branch, fulfilment, accent, currency, freeDeliveryOffer, onPick }) {
-  const pickupOn = !!branch?.pickup_enabled;
-  const deliveryOn = !!branch?.delivery_available;
-  const prep = branch?.prep_minutes ? `ready in ~${branch.prep_minutes} min` : "ready when you arrive";
-  const freeAbove = Number(branch?.free_delivery_above) > 0 ? `Free delivery above ${formatMoney(currency, branch.free_delivery_above)}` : null;
+/** Step 2: two big cards. A card that is switched off is greyed with the reason. */
+export default function StepOrderType({ shop, fulfilment, accent, currency, freeDeliveryOffer, onPick }) {
+  const pickupOn = !!shop?.pickup_enabled;
+  const deliveryOn = !!shop?.delivery_available;
+  const prep = shop?.prep_minutes ? `ready in ~${shop.prep_minutes} min` : "ready when you arrive";
+  const freeAbove = Number(shop?.free_delivery_above) > 0 ? `Free delivery above ${formatMoney(currency, shop.free_delivery_above)}` : null;
 
   const cards = [
     {
       key: "pickup",
       emoji: "🏃",
       title: "Pickup",
-      sub: `From ${branch?.name || "the store"} · ${prep}`,
+      sub: `From ${shop?.name || "the shop"} · ${prep}`,
       on: pickupOn,
-      reason: `Pickup isn't available at ${branch?.name || "this branch"}`,
+      reason: "Pickup isn't available",
     },
     {
       key: "delivery",
       emoji: "🛵",
       title: "Delivery",
       sub: "Delivered to your door",
-      extra: branch?.delivers_here === false ? "This branch may not deliver to your area" : freeAbove,
+      extra: freeAbove,
       on: deliveryOn,
-      reason: "Delivery isn't available at this branch",
+      reason: "Delivery isn't available",
       tag: freeDeliveryOffer ? "Free delivery offer" : null,
     },
   ];

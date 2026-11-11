@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Loader2, MapPin, ExternalLink, Store, FileText } from "lucide-react";
+import { Loader2, MapPin, ExternalLink, FileText } from "lucide-react";
 
 // Order statuses (shared contract). Old rows may still say "delivered";
 // the backend stores that as "completed".
@@ -75,7 +75,7 @@ function nextActions(status, delivery) {
 
 const money = (currency, v) => `${currency}${Number(v || 0).toFixed(2)}`;
 
-export default function OrderCard({ order, currency = "₹", branchName, busy, onAction, isNew = false }) {
+export default function OrderCard({ order, currency = "₹", busy, onAction, isNew = false }) {
   const status = normalizeStatus(order.status);
   const delivery = isDelivery(order);
   const actions = nextActions(status, delivery);
@@ -120,11 +120,6 @@ export default function OrderCard({ order, currency = "₹", branchName, busy, o
               <span className={`text-xs px-2 py-0.5 rounded-full border ${delivery ? "bg-sky-50 text-sky-700 border-sky-200" : "bg-gray-50 text-gray-600 border-gray-200"}`}>
                 {delivery ? `🛵 Delivery${distance != null ? ` · ${distance} km` : ""}` : "🏃 Pickup"}
               </span>
-              {branchName && (
-                <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-white text-gray-600 border border-gray-200">
-                  <Store size={10} /> {branchName}
-                </span>
-              )}
               <span className="text-xs text-gray-400">
                 {order.placed_at ? `Placed ${fmtTime(order.placed_at)}` : fmtTime(order.created_at)}
               </span>

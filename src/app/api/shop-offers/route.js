@@ -1,10 +1,10 @@
 // src/app/api/shop-offers/route.js
 //
 // Shop offers & coupons for the dashboard. The backend owns validation
-// (code format and uniqueness, ranges, branch ids, limits) and the
+// (code format and uniqueness, ranges, limits) and the
 // redemption counts; this route only forwards with the caller's JWT.
 import { NextResponse } from "next/server";
-import { authedProxy, readJson, UUID_RE } from "../shop-branches/_proxy";
+import { authedProxy, readJson, UUID_RE } from "@/lib/shopProxy";
 
 export async function GET(req) {
   const url = new URL(req.url);

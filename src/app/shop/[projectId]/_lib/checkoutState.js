@@ -53,16 +53,16 @@ export function readCheckout(pid) {
 export const writeCheckout = (pid, value) => write(checkoutKey(pid), value);
 export const clearCheckout = (pid) => write(checkoutKey(pid), null);
 
-// ---- cart: {branchId, items: {productId: qty}, info: {productId: {name, price, image_url}}}
+// ---- cart: {items: {productId: qty}, info: {productId: {name, price, image_url}}}
 export function readCart(pid) {
   const v = read(cartKey(pid));
-  if (!v || typeof v.branchId !== "string" || !v.items || typeof v.items !== "object") return null;
+  if (!v || !v.items || typeof v.items !== "object") return null;
   const items = {};
   for (const [k, q] of Object.entries(v.items)) {
     const n = Math.floor(Number(q));
     if (n > 0 && n <= 999) items[k] = n;
   }
-  return { branchId: v.branchId, items, info: v.info && typeof v.info === "object" ? v.info : {} };
+  return { items, info: v.info && typeof v.info === "object" ? v.info : {} };
 }
 
 export const writeCart = (pid, value) => write(cartKey(pid), value);
@@ -100,7 +100,6 @@ export function checkoutFingerprint(d) {
   const a = d.address || {};
   return JSON.stringify([
     d.order_id || null,
-    d.branch_id || null,
     items,
     d.fulfilment || null,
     (d.name || "").trim(),
@@ -112,13 +111,13 @@ export function checkoutFingerprint(d) {
   ]);
 }
 
-// Same order_id (Add More target) and branch in two fingerprints: an order
-// can't move branch, and an Add More edit is keyed by its order_id instead.
+// Same order_id (Add More target) in two fingerprints: an Add More edit is
+// keyed by its order_id.
 function sameOrderContext(a, b) {
   try {
     const x = JSON.parse(a);
     const y = JSON.parse(b);
-    return Array.isArray(x) && Array.isArray(y) && x[0] === y[0] && x[1] === y[1];
+    return Array.isArray(x) && Array.isArray(y) && x[0] === y[0];
   } catch {
     return false;
   }

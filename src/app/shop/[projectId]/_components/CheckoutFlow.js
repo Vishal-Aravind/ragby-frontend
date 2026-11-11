@@ -37,10 +37,10 @@ const isHttpsUrl = (u) => {
  * all land on the same order and the same payment link.
  */
 export default function CheckoutFlow({
-  projectId, token, identity, effectivePhone, branch, status, currency, accent, india, origin,
-  canChangeBranch, items, cartLines, catalogId, orderId,
+  projectId, token, identity, effectivePhone, shop, status, currency, accent, india,
+  items, cartLines, catalogId, orderId,
   form, setForm, checkout, setCheckout, pendingCode, onPendingCodeUsed, freeDeliveryOffer,
-  onClose, onChangeBranch, onAdd, onRemove, onKeepOnly, onOrderNotEditable, onVerifiedLost,
+  onClose, onAdd, onRemove, onKeepOnly, onOrderNotEditable, onVerifiedLost,
   onPlaced, onConfirmInWhatsApp, onBeforeRedirect,
 }) {
   const step = checkout.step;
@@ -76,9 +76,9 @@ export default function CheckoutFlow({
     };
   }, []);
 
-  // If the chosen type is off at this branch, fall back to the other one.
-  const pickupOn = !!branch?.pickup_enabled;
-  const deliveryOn = !!branch?.delivery_available;
+  // If the chosen type is off, fall back to the other one.
+  const pickupOn = !!shop?.pickup_enabled;
+  const deliveryOn = !!shop?.delivery_available;
   useEffect(() => {
     if (fulfilment === "delivery" && !deliveryOn && pickupOn) setForm((f) => ({ ...f, fulfilment: "pickup" }));
     if (fulfilment === "pickup" && !pickupOn && deliveryOn) setForm((f) => ({ ...f, fulfilment: "delivery" }));
@@ -88,7 +88,6 @@ export default function CheckoutFlow({
   const buildQuoteBody = useCallback(
     (code) => {
       const body = {
-        branch_id: branch?.id,
         items: cartLines,
         fulfilment,
         customer_token: token || null,
@@ -103,7 +102,7 @@ export default function CheckoutFlow({
       }
       return body;
     },
-    [branch?.id, cartLines, fulfilment, token, isDelivery, form.coords, form.address?.pincode, india]
+    [cartLines, fulfilment, token, isDelivery, form.coords, form.address?.pincode, india]
   );
   const currentKey = useMemo(() => JSON.stringify(buildQuoteBody(checkout.coupon)), [buildQuoteBody, checkout.coupon]);
 
@@ -239,7 +238,6 @@ export default function CheckoutFlow({
 
   const fingerprintData = () => ({
     order_id: orderId || null,
-    branch_id: branch?.id,
     items: cartLines,
     fulfilment,
     name: form.name,
@@ -283,7 +281,6 @@ export default function CheckoutFlow({
       phone: effectivePhone || null,
       idempotency_key: key,
       order_id: useOrderId,
-      branch_id: branch.id,
       catalog_id: catalogId || null,
       items: cartLines,
       fulfilment,
@@ -514,7 +511,7 @@ export default function CheckoutFlow({
           </button>
           <div className="flex-1 min-w-0">
             <h2 className="font-bold text-gray-900 leading-tight">Checkout</h2>
-            <p className="text-xs text-gray-500 truncate">🏪 {branch?.name}</p>
+            {shop?.name && <p className="text-xs text-gray-500 truncate">🏪 {shop.name}</p>}
           </div>
         </div>
         <Stepper step={step} accent={accent} onGo={setStep} />
@@ -526,11 +523,11 @@ export default function CheckoutFlow({
             <StepCart items={items} currency={currency} accent={accent} canOrder={canOrder} onAdd={onAdd} onRemove={onRemove} onBrowse={onClose} />
           )}
           {step === 2 && (
-            <StepOrderType branch={branch} fulfilment={fulfilment} accent={accent} currency={currency} freeDeliveryOffer={freeDelivery} onPick={pickFulfilment} />
+            <StepOrderType shop={shop} fulfilment={fulfilment} accent={accent} currency={currency} freeDeliveryOffer={freeDelivery} onPick={pickFulfilment} />
           )}
           {step === 3 && (
             <StepDetails
-              branch={branch}
+              shop={shop}
               fulfilment={fulfilment}
               form={form}
               setForm={(fn) => {
@@ -541,16 +538,13 @@ export default function CheckoutFlow({
               deliveryError={deliveryError}
               india={india}
               accent={accent}
-              origin={origin}
-              canChangeBranch={canChangeBranch}
-              onChangeBranch={onChangeBranch}
               onTryPickup={() => pickFulfilment("pickup")}
             />
           )}
           {step === 4 && (
             <StepSummary
               items={items}
-              branch={branch}
+              shop={shop}
               fulfilment={fulfilment}
               form={form}
               quote={quote}
