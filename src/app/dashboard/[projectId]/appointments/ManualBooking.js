@@ -1,7 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { X, Loader2 } from 'lucide-react'
-import { toast } from 'sonner'
 
 // The owner adds a booking by hand (a phone call, a walk-in). It is confirmed
 // straight away and the customer gets the usual WhatsApp confirmation.
@@ -52,7 +51,7 @@ export default function ManualBooking({ projectId, services, onClose, onDone }) 
       if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : data.error || 'Could not add the booking')
       onDone()
     } catch (e) {
-      toast.error(e.message)
+      alert(e.message)
     }
     setSaving(false)
   }

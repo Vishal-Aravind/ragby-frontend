@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { Plus, Trash2, Check } from 'lucide-react'
 import { WorkingHoursEditor, DateOverridesEditor } from './AvailabilityEditor'
 import { confirmDialog } from '@/components/confirmDialog'
-import { toast } from 'sonner'
 
 // Named schedules ("Clinic hours", "Evening hours"): weekly hours plus
 // date-specific hours. Each service picks one in its own form.
@@ -26,7 +25,7 @@ export default function SchedulesCard({ projectId, schedules, onChanged }) {
 
   const run = async (fn) => {
     setSaving(true)
-    try { await fn() } catch (e) { toast.error(e.message) }
+    try { await fn() } catch (e) { alert(e.message) }
     setSaving(false)
   }
 

@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react'
 import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays, Plus, Pencil, Trash2 } from 'lucide-react'
 import { confirmDialog } from "@/components/confirmDialog";
-import { toast } from 'sonner'
 import { BookingRules, ServiceOverrides, ServiceOptions, QuestionsEditor, NumberField, RemindersEditor, BookingLinkCard, FollowupCard } from './AvailabilityEditor'
 import ManualBooking from './ManualBooking'
 import SchedulesCard from './SchedulesCard'
@@ -157,7 +156,7 @@ export default function AppointmentsTab({ project }) {
       setShowServiceForm(false)
       fetchData()
     } catch (e) {
-      toast.error(e.message || 'Failed to save service')
+      alert(e.message || 'Failed to save service')
     }
     setSavingService(false)
   }
@@ -176,7 +175,7 @@ export default function AppointmentsTab({ project }) {
     const res = await fetch(`/api/appointment-services/${svc.id}`, { method: 'DELETE' })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      toast.error(data.detail || data.error || 'This service has existing bookings — deactivate it instead of deleting.')
+      alert(data.detail || data.error || 'This service has existing bookings — deactivate it instead of deleting.')
       return
     }
     fetchData()
@@ -195,7 +194,7 @@ export default function AppointmentsTab({ project }) {
           fetchData()
         } else if (event.data.event === 'ERROR') {
           setGoogleConnecting(false)
-          toast.error('Google Calendar connection failed: ' + event.data.error)
+          alert('Google Calendar connection failed: ' + event.data.error)
         }
       }
     }
@@ -213,7 +212,7 @@ export default function AppointmentsTab({ project }) {
       }
     } catch (e) {
       setGoogleConnecting(false)
-      toast.error('Failed to start Google auth')
+      alert('Failed to start Google auth')
     }
   }
 
@@ -237,7 +236,7 @@ export default function AppointmentsTab({ project }) {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      toast.error(e.message || 'Failed to save')
+      alert(e.message || 'Failed to save')
     }
     setSaving(false)
   }
