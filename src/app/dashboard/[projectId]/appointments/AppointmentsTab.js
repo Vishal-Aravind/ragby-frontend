@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays, Plus, Pencil, Trash2 } from 'lucide-react'
 import { confirmDialog } from "@/components/confirmDialog";
 import { toast } from 'sonner'
-import { BookingRules, ServiceOverrides, ServiceOptions, QuestionsEditor, NumberField, RemindersEditor, BookingLinkCard, FollowupCard } from './AvailabilityEditor'
+import { BookingRules, ServiceOverrides, ServiceOptions, QuestionsEditor, NumberField, RemindersEditor, BookingLinkCard, FollowupCard, InfoTip } from './AvailabilityEditor'
 import ManualBooking from './ManualBooking'
 import SchedulesCard from './SchedulesCard'
 
@@ -703,7 +703,10 @@ export default function AppointmentsTab({ project }) {
                 <NumberField label="Duration (minutes)" min={5} max={1440} fallback={30} value={serviceForm.duration_minutes}
                   onChange={v => setServiceForm(f => ({ ...f, duration_minutes: v }))} />
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Payment</label>
+                  <label className="text-xs text-gray-500 mb-1 inline-flex items-center">
+                    Payment
+                    <InfoTip text="Free: books instantly, no payment. Pay to confirm: the slot is held for 15 minutes while the customer pays — it only confirms once payment succeeds, and releases automatically if they don't pay in time. Book now, pay later: confirms right away, you collect payment separately (not enforced by the system)." />
+                  </label>
                   <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
                     value={serviceForm.payment_mode}
                     onChange={e => setServiceForm(f => ({ ...f, payment_mode: e.target.value }))}>
