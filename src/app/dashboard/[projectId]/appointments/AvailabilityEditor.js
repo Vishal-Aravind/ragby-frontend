@@ -39,22 +39,29 @@ function nextWindow(windows) {
 
 // Small "i" bubble: hover (or tap on mobile) to show a plain-language
 // explainer next to a field label, for fields whose name alone isn't
-// enough to know what to put in them.
-export function InfoTip({ text }) {
+// enough to know what to put in them. Pass `text` for a one-line
+// explainer, or `points` (an array) to lay it out as a short bullet
+// list instead of a wall of text. Anchored to open rightward from the
+// icon (not centered) so it doesn't spill off-screen past a sidebar.
+export function InfoTip({ text, points }) {
   return (
     <span className="relative inline-flex group/tip align-middle ml-1">
       <span tabIndex={0} className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 text-gray-400 text-[9px] leading-none cursor-help select-none focus:outline-none focus:ring-1 focus:ring-indigo-300">i</span>
-      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-56 rounded-lg bg-gray-900 text-white text-[11px] leading-snug px-2.5 py-1.5 opacity-0 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 transition-opacity z-20">
-        {text}
+      <span className="pointer-events-none absolute left-0 bottom-full mb-1.5 w-72 rounded-xl bg-gray-900 text-white text-[11px] leading-relaxed p-3 opacity-0 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100 transition-opacity z-20 normal-case font-normal">
+        {points ? (
+          <ul className="list-disc pl-3.5 space-y-1.5">
+            {points.map((p, i) => <li key={i}>{p}</li>)}
+          </ul>
+        ) : text}
       </span>
     </span>
   )
 }
 
-export function NumberField({ label, tip, hint, value, onChange, min = 0, max, placeholder, nullable = false, fallback = 0 }) {
+export function NumberField({ label, tip, tipPoints, hint, value, onChange, min = 0, max, placeholder, nullable = false, fallback = 0 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-muted-foreground inline-flex items-center">{label}{tip && <InfoTip text={tip} />}</label>
+      <label className="text-xs text-muted-foreground inline-flex items-center">{label}{(tip || tipPoints) && <InfoTip text={tip} points={tipPoints} />}</label>
       <input type="number" step="1" min={min} max={max} placeholder={placeholder} className={inputCls}
         value={value ?? ''}
         onChange={e => {
@@ -72,12 +79,12 @@ export function NumberField({ label, tip, hint, value, onChange, min = 0, max, p
 }
 
 // Minutes, entered as minutes / hours / days
-export function DurationField({ label, tip, hint, value, onChange, placeholder, nullable = false }) {
+export function DurationField({ label, tip, tipPoints, hint, value, onChange, placeholder, nullable = false }) {
   const [unit, setUnit] = useState(() => (value && value % 1440 === 0 ? 1440 : value && value % 60 === 0 ? 60 : 1))
   const shown = value == null || value === '' ? '' : Math.round((value / unit) * 100) / 100
   return (
     <div className="space-y-1">
-      <label className="text-xs text-muted-foreground inline-flex items-center">{label}{tip && <InfoTip text={tip} />}</label>
+      <label className="text-xs text-muted-foreground inline-flex items-center">{label}{(tip || tipPoints) && <InfoTip text={tip} points={tipPoints} />}</label>
       <div className="flex gap-2">
         <input type="number" min="0" step="any" placeholder={placeholder} className={inputCls} value={shown}
           onChange={e => {

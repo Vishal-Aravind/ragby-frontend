@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Clock, Settings, Check, X, RefreshCw, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Search, List, CalendarDays, Plus, Pencil, Trash2 } from 'lucide-react'
 import { confirmDialog } from "@/components/confirmDialog";
 import { toast } from 'sonner'
-import { BookingRules, ServiceOverrides, ServiceOptions, QuestionsEditor, NumberField, RemindersEditor, BookingLinkCard, FollowupCard, InfoTip } from './AvailabilityEditor'
+import { BookingRules, ServiceOverrides, ServiceOptions, QuestionsEditor, NumberField, RemindersEditor, BookingLinkCard, FollowupCard } from './AvailabilityEditor'
 import ManualBooking from './ManualBooking'
 import SchedulesCard from './SchedulesCard'
 
@@ -34,12 +34,6 @@ function emptyServiceForm() {
     booking_window_end: null, max_per_day: null, is_hidden: false, questions: [],
     requires_approval: false, location: '', confirmation_note: '', cancel_cutoff_hours: null, duration_options_text: '',
   }
-}
-
-const PAYMENT_MODE_LABELS = {
-  free: 'Free — no payment',
-  hold_to_confirm: 'Pay to confirm — slot held until paid',
-  request_after: 'Book now, pay later',
 }
 
 export default function AppointmentsTab({ project }) {
@@ -702,16 +696,21 @@ export default function AppointmentsTab({ project }) {
                   value={serviceForm.description} onChange={e => setServiceForm(f => ({ ...f, description: e.target.value }))} />
                 <NumberField label="Duration (minutes)" min={5} max={1440} fallback={30} value={serviceForm.duration_minutes}
                   onChange={v => setServiceForm(f => ({ ...f, duration_minutes: v }))} />
-                <div>
-                  <label className="text-xs text-gray-500 mb-1 inline-flex items-center">
-                    Payment
-                    <InfoTip text="Free: books instantly, no payment. Pay to confirm: the slot is held for 15 minutes while the customer pays — it only confirms once payment succeeds, and releases automatically if they don't pay in time. Book now, pay later: confirms right away, you collect payment separately (not enforced by the system)." />
-                  </label>
-                  <select className="w-full border rounded-lg px-3 py-2 text-sm bg-white"
-                    value={serviceForm.payment_mode}
-                    onChange={e => setServiceForm(f => ({ ...f, payment_mode: e.target.value }))}>
-                    {Object.entries(PAYMENT_MODE_LABELS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-                  </select>
+                <div className="space-y-1.5">
+                  <label className="text-xs text-gray-500">Payment</label>
+                  {[
+                    { v: 'free', label: 'Free', desc: 'No payment. Booking confirms right away.' },
+                    { v: 'hold_to_confirm', label: 'Pay to confirm', desc: "Customer pays before the booking is confirmed. Unpaid bookings release automatically after 15 minutes." },
+                    { v: 'request_after', label: 'Book now, pay later', desc: 'Booking confirms right away. You arrange payment with the customer yourself.' },
+                  ].map(opt => (
+                    <button key={opt.v} type="button" onClick={() => setServiceForm(f => ({ ...f, payment_mode: opt.v }))}
+                      className={`w-full text-left border rounded-lg px-3 py-2 transition-colors ${
+                        serviceForm.payment_mode === opt.v ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                      }`}>
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                    </button>
+                  ))}
                 </div>
                 {serviceForm.payment_mode !== 'free' && (
                   <div>
@@ -721,9 +720,20 @@ export default function AppointmentsTab({ project }) {
                       onChange={e => setServiceForm(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} />
                   </div>
                 )}
-                <ServiceOptions form={serviceForm} setForm={setServiceForm} schedules={schedules} projectId={projectId} serviceId={editingService?.id} />
-                <QuestionsEditor value={serviceForm.questions} onChange={q => setServiceForm(f => ({ ...f, questions: q }))} />
-                <ServiceOverrides form={serviceForm} setForm={setServiceForm} />
+
+                <details className="border rounded-lg bg-white">
+                  <summary className="cursor-pointer text-xs font-medium px-3 py-2">Advanced options for this service</summary>
+                  <div className="p-3 space-y-3 border-t">
+                    <p className="text-xs text-muted-foreground -mt-1">
+                      Open this if you need to change when it's bookable, add questions, hide it, or fine-tune its rules.
+                      Everything below already has a sensible default.
+                    </p>
+                    <ServiceOptions form={serviceForm} setForm={setServiceForm} schedules={schedules} projectId={projectId} serviceId={editingService?.id} />
+                    <QuestionsEditor value={serviceForm.questions} onChange={q => setServiceForm(f => ({ ...f, questions: q }))} />
+                    <ServiceOverrides form={serviceForm} setForm={setServiceForm} />
+                  </div>
+                </details>
+
                 <div className="flex gap-2">
                   <button onClick={saveService}
                     disabled={savingService || !serviceForm.name.trim() || (serviceForm.payment_mode !== 'free' && !(serviceForm.price > 0))}
