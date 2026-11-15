@@ -255,7 +255,7 @@ export function BookingRules({ settings, setSettings }) {
         hint="Empty = any time. 24 = not within 24 hours of the slot. Your own cancellations from the dashboard are never limited." />
       <NumberField label="Book up to how many days ahead" min={1} max={365} fallback={30} value={settings.advance_booking_days}
         onChange={v => set('advance_booking_days', v)}
-        tip="How far into the future customers can see and book slots, business-wide. A service left on 'Same as the main settings' in its own booking-window option uses this number." />
+        tip="How far into the future customers can see and book slots, business-wide. A service left on 'Same as Booking rules' in its own booking-window option uses this number." />
       <NumberField label="Capacity per slot" min={1} max={100} fallback={1} value={settings.slot_capacity}
         onChange={v => set('slot_capacity', v)} hint="How many bookings can share one time slot (1–100)" />
     </div>
@@ -269,19 +269,19 @@ export function ServiceOverrides({ form, setForm }) {
     <details className="border rounded-lg bg-white">
       <summary className="cursor-pointer text-xs font-medium px-3 py-2">Advanced: different rules for this service</summary>
       <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 border-t">
-        <NumberField label="Capacity per slot" min={1} max={100} nullable placeholder="Same as settings" value={form.slot_capacity}
+        <NumberField label="Capacity per slot" min={1} max={100} nullable placeholder="Same as Booking rules" value={form.slot_capacity}
           onChange={v => set('slot_capacity', v)} hint="For example 10 for a group class"
           tip="How many separate bookings can share the exact same time slot for this service, instead of your overall settings value. Use this for group classes or shared sessions." />
-        <NumberField label="Start a slot every (min)" min={5} max={720} nullable placeholder="Same as settings" value={form.slot_interval_minutes}
+        <NumberField label="Start a slot every (min)" min={5} max={720} nullable placeholder="Same as Booking rules" value={form.slot_interval_minutes}
           onChange={v => set('slot_interval_minutes', v)}
           tip="How far apart this service's bookable start times are, instead of your overall settings value. 15 = slots at :00, :15, :30, :45." />
-        <NumberField label="Buffer before (min)" min={0} max={240} nullable placeholder="Same as settings" value={form.buffer_before_minutes}
+        <NumberField label="Buffer before (min)" min={0} max={240} nullable placeholder="Same as Booking rules" value={form.buffer_before_minutes}
           onChange={v => set('buffer_before_minutes', v)}
           tip="Free time blocked off right before each booking of this service, instead of your overall settings value — e.g. time to get set up." />
-        <NumberField label="Buffer after (min)" min={0} max={240} nullable placeholder="Same as settings" value={form.buffer_after_minutes}
+        <NumberField label="Buffer after (min)" min={0} max={240} nullable placeholder="Same as Booking rules" value={form.buffer_after_minutes}
           onChange={v => set('buffer_after_minutes', v)}
           tip="Free time blocked off right after each booking of this service, instead of your overall settings value — e.g. cleanup or travel time." />
-        <DurationField label="Minimum notice" nullable placeholder="Same as settings" value={form.min_notice_minutes}
+        <DurationField label="Minimum notice" nullable placeholder="Same as Booking rules" value={form.min_notice_minutes}
           onChange={v => set('min_notice_minutes', v)}
           tip="How far in advance this service must be booked, instead of your overall settings value. 0 = can be booked right up until it starts." />
         <div className="space-y-1 sm:col-span-2">
@@ -296,11 +296,10 @@ export function ServiceOverrides({ form, setForm }) {
 }
 
 
-// Per-service: schedule, booking window, daily limit, hidden
-export function ServiceOptions({ form, setForm, schedules, projectId, serviceId }) {
+// Per-service: schedule, booking window, daily limit
+export function ServiceOptions({ form, setForm, schedules }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const type = form.booking_window_type || ''
-  const link = serviceId && typeof window !== 'undefined' ? `${window.location.origin}/book/${projectId}?service=${serviceId}` : ''
   return (
     <div className="space-y-3 border rounded-lg bg-white p-3">
       <div className="space-y-1">
@@ -317,10 +316,10 @@ export function ServiceOptions({ form, setForm, schedules, projectId, serviceId 
       <div className="space-y-1">
         <label className="text-xs text-muted-foreground inline-flex items-center">
           How far ahead can people book?
-          <InfoTip text="How many days into the future this service's slots are open for booking. 'Same as the main settings' uses the business-wide limit set in Availability → Booking rules. Pick a different option here only if this one service needs its own limit." />
+          <InfoTip text="How many days into the future this service's slots are open for booking. 'Same as Booking rules' uses the business-wide limit set in Availability → Booking rules. Pick a different option here only if this one service needs its own limit." />
         </label>
         <select className={inputCls} value={type} onChange={e => set('booking_window_type', e.target.value || null)}>
-          <option value="">Same as the main settings</option>
+          <option value="">Same as Booking rules</option>
           <option value="rolling">The next N days</option>
           <option value="range">Between two dates</option>
           <option value="indefinite">No end date</option>
@@ -340,17 +339,6 @@ export function ServiceOptions({ form, setForm, schedules, projectId, serviceId 
         value={form.max_per_day} onChange={v => set('max_per_day', v)}
         tip="Caps how many times just THIS service can be booked in one day — separate from your overall business-wide daily limit. Leave empty for no extra cap." />
 
-      <div className="space-y-1">
-        <label className="text-xs text-muted-foreground">Other lengths customers can choose (minutes)</label>
-        <input className={inputCls} placeholder="e.g. 15, 45, 60" disabled={form.payment_mode !== 'free'}
-          value={form.duration_options_text || ''} onChange={e => set('duration_options_text', e.target.value)} />
-        <p className="text-xs text-muted-foreground">
-          {form.payment_mode !== 'free'
-            ? 'Only for free services: the price is the same for every length.'
-            : `The customer picks one on the booking page, next to this service's own ${form.duration_minutes || 30} minutes. Empty = one length.`}
-        </p>
-      </div>
-
       <label className="flex items-start gap-2 text-xs">
         <input type="checkbox" className="mt-0.5" checked={!!form.requires_approval} onChange={e => set('requires_approval', e.target.checked)} />
         <span>
@@ -362,7 +350,7 @@ export function ServiceOptions({ form, setForm, schedules, projectId, serviceId 
         </span>
       </label>
 
-      <NumberField label="Customers can cancel or reschedule until (hours before)" min={0} max={720} nullable placeholder="Same as settings"
+      <NumberField label="Customers can cancel or reschedule until (hours before)" min={0} max={720} nullable placeholder="Same as Booking rules"
         value={form.cancel_cutoff_hours} onChange={v => set('cancel_cutoff_hours', v)}
         tip="How close to the appointment time a customer can still cancel or reschedule it themselves. Empty = any time, right up to the start. 24 = blocked within 24 hours of the slot. Your own changes from the dashboard are never limited." />
 
@@ -384,19 +372,6 @@ export function ServiceOptions({ form, setForm, schedules, projectId, serviceId 
         </p>
       </div>
 
-      <label className="flex items-start gap-2 text-xs">
-        <input type="checkbox" className="mt-0.5" checked={!!form.is_hidden} onChange={e => set('is_hidden', e.target.checked)} />
-        <span>
-          <span className="font-medium">Hidden: only bookable through its own link</span>
-          <span className="block text-muted-foreground">It won't appear on your main booking page or in the AI chat.</span>
-        </span>
-      </label>
-      {link && (
-        <div className="flex items-center gap-2 text-xs">
-          <input readOnly value={link} className="flex-1 min-w-0 border rounded px-2 py-1 bg-gray-50" onFocus={e => e.target.select()} />
-          <button type="button" onClick={() => navigator.clipboard?.writeText(link)} className="border rounded px-2 py-1">Copy</button>
-        </div>
-      )}
     </div>
   )
 }

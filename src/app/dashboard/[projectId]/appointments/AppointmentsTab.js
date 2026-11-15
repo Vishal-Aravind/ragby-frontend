@@ -32,7 +32,8 @@ function emptyServiceForm() {
     min_notice_minutes: null, fixed_times_text: '',
     schedule_id: null, booking_window_type: null, booking_window_days: null, booking_window_start: null,
     booking_window_end: null, max_per_day: null, is_hidden: false, questions: [],
-    requires_approval: false, location: '', confirmation_note: '', cancel_cutoff_hours: null, duration_options_text: '',
+    requires_approval: false, location: '', confirmation_note: '', cancel_cutoff_hours: null,
+    duration_options: null,
   }
 }
 
@@ -118,7 +119,7 @@ export default function AppointmentsTab({ project }) {
       is_hidden: !!svc.is_hidden, questions: svc.questions || [],
       requires_approval: !!svc.requires_approval, location: svc.location || '',
       confirmation_note: svc.confirmation_note || '', cancel_cutoff_hours: svc.cancel_cutoff_hours ?? null,
-      duration_options_text: (svc.duration_options || []).join(', '),
+      duration_options: svc.duration_options ?? null,
     })
     setShowServiceForm(true)
   }
@@ -127,9 +128,7 @@ export default function AppointmentsTab({ project }) {
     if (!serviceForm.name.trim()) return
     setSavingService(true)
     try {
-      const { fixed_times_text, duration_options_text, ...rest } = serviceForm
-      const lengths = String(duration_options_text || '').split(/[,\s]+/).filter(Boolean).map(n => parseInt(n)).filter(n => n > 0)
-      rest.duration_options = lengths.length ? lengths : null
+      const { fixed_times_text, ...rest } = serviceForm
       rest.questions = (rest.questions || []).filter(q => (q.label || '').trim()).map(({ options_text, ...q }) => q)
       const times = String(fixed_times_text || '').split(/[,\s]+/).filter(Boolean)
       const payload = { ...rest, fixed_times: times.length ? times : null }
@@ -728,7 +727,7 @@ export default function AppointmentsTab({ project }) {
                       Open this if you need to change when it's bookable, add questions, hide it, or fine-tune its rules.
                       Everything below already has a sensible default.
                     </p>
-                    <ServiceOptions form={serviceForm} setForm={setServiceForm} schedules={schedules} projectId={projectId} serviceId={editingService?.id} />
+                    <ServiceOptions form={serviceForm} setForm={setServiceForm} schedules={schedules} />
                     <QuestionsEditor value={serviceForm.questions} onChange={q => setServiceForm(f => ({ ...f, questions: q }))} />
                     <ServiceOverrides form={serviceForm} setForm={setServiceForm} />
                   </div>
