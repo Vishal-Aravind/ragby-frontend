@@ -614,6 +614,9 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
     registration_deadline: toLocalInput(event?.registration_deadline),
     send_wa_confirmation: event?.send_wa_confirmation ?? false,
   })
+  // Free/paid is a choice, not a number you have to guess at: an empty fee
+  // box reading "Free" gave no hint that a paid event was even possible.
+  const [paidEvent, setPaidEvent] = useState(() => parseFloat(event?.price) > 0)
   const templateStatus = useRegistrationTemplateStatus(projectId || event?.project_id)
   const razorpayConnected = useRazorpayConnected(projectId || event?.project_id)
 
@@ -857,6 +860,42 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
                   <TextField label="Time" value={details.event_time} onChange={v => updateDetail({ event_time: v })} placeholder="10 AM - 4 PM" />
                 </div>
                 <TextField label="Location" value={details.location} onChange={v => updateDetail({ location: v })} placeholder="Chennai Trade Centre" />
+
+                <div className="space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Registration fee</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => { setPaidEvent(false); updateDetail({ price: '' }) }}
+                      className={`text-left border rounded-lg px-3 py-2 transition-colors ${
+                        !paidEvent ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                      }`}>
+                      <p className="text-sm font-medium">Free</p>
+                      <p className="text-[11px] text-muted-foreground">Anyone can register.</p>
+                    </button>
+                    <button type="button" onClick={() => setPaidEvent(true)}
+                      className={`text-left border rounded-lg px-3 py-2 transition-colors ${
+                        paidEvent ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                      }`}>
+                      <p className="text-sm font-medium">Paid</p>
+                      <p className="text-[11px] text-muted-foreground">Pay to get a seat.</p>
+                    </button>
+                  </div>
+                  {paidEvent && (
+                    <div className="space-y-1 pt-0.5">
+                      <TextField label="Amount (₹)" value={details.price}
+                        onChange={v => updateDetail({ price: v.replace(/[^0-9.]/g, '') })} placeholder="e.g. 500" />
+                      <p className="text-[11px] text-muted-foreground">
+                        People pay online first. Their seat is held for 15 minutes and confirmed once paid.
+                      </p>
+                      {!(parseFloat(details.price) > 0) && (
+                        <p className="text-[11px] text-amber-700">Enter an amount — otherwise this saves as a free event.</p>
+                      )}
+                      {parseFloat(details.price) > 0 && razorpayConnected === false && (
+                        <p className="text-[11px] text-amber-700">Connect Razorpay in Integrations first. Until then nobody can register for this event.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">Registration closes on (optional)</label>
                   <div className="flex gap-1.5">
@@ -884,18 +923,6 @@ export default function PageBuilder({ event, onSave, onClose, projectId }) {
                       {details.accent_color === c && <Check size={12} className="text-white" />}
                     </button>
                   ))}
-                </div>
-                <div className="space-y-1">
-                  <TextField label="Registration fee (optional)" value={details.price}
-                    onChange={v => updateDetail({ price: v.replace(/[^0-9.]/g, '') })} placeholder="Free" />
-                  <p className="text-[11px] text-muted-foreground">
-                    {parseFloat(details.price) > 0
-                      ? `People pay online first. Their seat is held for 15 minutes and confirmed once paid.`
-                      : 'Leave empty for a free event.'}
-                  </p>
-                  {parseFloat(details.price) > 0 && razorpayConnected === false && (
-                    <p className="text-[11px] text-amber-700">Connect Razorpay in Integrations first. Until then nobody can register for this event.</p>
-                  )}
                 </div>
                 <TextField label={'Contact phone (for "Call to attend")'} value={details.contact_phone} onChange={v => updateDetail({ contact_phone: v })} placeholder="+91 98765 43210" />
 
