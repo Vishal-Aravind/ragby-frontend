@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Plus, Trash2, Loader2, ShoppingBag, Settings,
   Package, ClipboardList, ChevronLeft, Upload,
@@ -68,6 +69,7 @@ export default function ShopTab({ project }) {
   const [selectedCatalog, setSelectedCatalog] = useState(null);
   const [newCatalogName, setNewCatalogName] = useState("");
   const [creatingCatalog, setCreatingCatalog] = useState(false);
+  const [showCatalogDialog, setShowCatalogDialog] = useState(false);
 
   // ── Products ──────────────────────────────────────────
   const [products, setProducts] = useState([]);
@@ -247,6 +249,7 @@ export default function ShopTab({ project }) {
     });
     if (res.ok) {
       setNewCatalogName("");
+      setShowCatalogDialog(false);
       await fetchCatalogs();
     } else {
       const err = await res.json().catch(() => ({}));
@@ -880,16 +883,33 @@ export default function ShopTab({ project }) {
             /* Catalog list view */
             <div className="space-y-4">
               {/* Create catalog */}
-              <div className="flex gap-2">
-                <Input placeholder="Category name, e.g. Breakfast, Keychains, T-shirts"
-                  value={newCatalogName}
-                  onChange={e => setNewCatalogName(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleCreateCatalog()} />
-                <Button onClick={handleCreateCatalog} disabled={creatingCatalog || !newCatalogName.trim()}>
-                  {creatingCatalog ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                  Create
+              <div className="flex justify-end">
+                <Button onClick={() => { setNewCatalogName(""); setShowCatalogDialog(true); }}>
+                  <Plus size={14} /> New category
                 </Button>
               </div>
+
+              <Dialog open={showCatalogDialog} onOpenChange={setShowCatalogDialog}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>New category</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-2">
+                    <Input autoFocus placeholder="e.g. Breakfast, Keychains, T-shirts"
+                      value={newCatalogName}
+                      onChange={e => setNewCatalogName(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleCreateCatalog()} />
+                    <p className="text-xs text-gray-500">Group your products under this, e.g. Breakfast or Keychains.</p>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowCatalogDialog(false)}>Cancel</Button>
+                    <Button onClick={handleCreateCatalog} disabled={creatingCatalog || !newCatalogName.trim()}>
+                      {creatingCatalog ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                      Create
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {loadingCatalogs ? (
                 <div className="flex items-center justify-center h-20">
@@ -904,6 +924,9 @@ export default function ShopTab({ project }) {
                   <p className="text-xs text-gray-300 mt-1">
                     Create a category (e.g. Breakfast or Keychains), then add products to it
                   </p>
+                  <Button className="mt-4" onClick={() => { setNewCatalogName(""); setShowCatalogDialog(true); }}>
+                    <Plus size={14} /> New category
+                  </Button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
