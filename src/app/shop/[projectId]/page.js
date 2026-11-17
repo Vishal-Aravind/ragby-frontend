@@ -813,7 +813,9 @@ export default function ShopPage() {
           This order is already being processed — place a new order
         </div>
       )}
-      {!effectivePhone && (
+      {/* Only a shop with no online payment still needs WhatsApp: elsewhere a
+          website visitor can type their number and pay at checkout. */}
+      {!effectivePhone && config?.online_payment === false && (
         <div className="px-4 py-2 text-center text-xs font-medium" style={{ background: "#fef3c7", color: "#92400e" }}>
           ⚠️ Open this menu from your WhatsApp chat to place an order — you can browse below, but checkout needs WhatsApp.
         </div>

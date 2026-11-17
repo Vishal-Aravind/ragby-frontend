@@ -12,7 +12,7 @@ import {
   getQuote, placeOrder, cancelOrder, errorMessage, errorCode, formatMoney, closedToastText, offerReasonText,
 } from "../_lib/shopApi";
 import {
-  checkoutFingerprint, keyForAttempt, readPending, writePending, clearPending, validateDetails, pincodeLooksValid,
+  checkoutFingerprint, keyForAttempt, readPending, writePending, clearPending, validateDetails, pincodeLooksValid, joinPhone,
 } from "../_lib/checkoutState";
 
 const DELIVERY_ERROR_CODES = new Set(["out_of_area", "location_required", "delivery_off", "fulfilment_unavailable"]);
@@ -171,7 +171,11 @@ export default function CheckoutFlow({
   }, [canOrderNow]);
 
   // ---- step actions -------------------------------------------------------------
-  const fieldErrors = validateDetails(form, india);
+  // No WhatsApp token means no phone on file, so the details step has to ask
+  // for one — the order needs a number on it either way.
+  const needPhone = !effectivePhone;
+  const typedPhone = needPhone ? joinPhone(form.phoneCode ?? "91", form.phoneNumber) : "";
+  const fieldErrors = validateDetails(form, india, needPhone);
   const visibleFieldErrors = showFieldErrors ? fieldErrors : {};
 
   const continueFromDetails = async () => {
@@ -229,18 +233,28 @@ export default function CheckoutFlow({
   // ---- place order ----------------------------------------------------------------
   const mode = quote?.checkout_mode || "confirm_in_whatsapp";
   const quoteFresh = quoteState === "ready" && quote && quotedKey === currentKey;
-  const placeBlockedReason = !effectivePhone
+  // A verified WhatsApp customer keeps every mode, exactly as before. A
+  // number typed on the website is unverified, so it only buys where the
+  // server would take it anyway: paying online. Placing an unpaid order
+  // alerts the owner, so that stays token-only (see shop.py checkout_mode).
+  const orderPhone = effectivePhone || typedPhone;
+  const webCantPlace = !effectivePhone && quoteFresh && mode !== "pay_online";
+  const placeBlockedReason = webCantPlace
     ? "Open this menu from your WhatsApp chat to order"
-    : !canOrder
-      ? closedToastText(status)
-      : null;
-  const canPlace = quoteFresh && quote.ok && !!effectivePhone && !submitting && !redirecting && !couponBusy;
+    : !orderPhone
+      ? "Enter your phone number to order"
+      : !canOrder
+        ? closedToastText(status)
+        : null;
+  const canPlace = quoteFresh && quote.ok && !!orderPhone && (!!effectivePhone || mode === "pay_online")
+    && !submitting && !redirecting && !couponBusy;
 
   const fingerprintData = () => ({
     order_id: orderId || null,
     items: cartLines,
     fulfilment,
     name: form.name,
+    phone: orderPhone || null,
     address: form.address,
     coords: form.coords,
     coupon: checkout.coupon,
@@ -278,7 +292,9 @@ export default function CheckoutFlow({
 
     const body = {
       customer_token: token || null,
-      phone: effectivePhone || null,
+      // The server ignores this when customer_token is valid, so a WhatsApp
+      // customer's verified number always wins over anything typed here.
+      phone: orderPhone || null,
       idempotency_key: key,
       order_id: useOrderId,
       catalog_id: catalogId || null,
@@ -539,6 +555,7 @@ export default function CheckoutFlow({
               india={india}
               accent={accent}
               onTryPickup={() => pickFulfilment("pickup")}
+              needPhone={needPhone}
             />
           )}
           {step === 4 && (

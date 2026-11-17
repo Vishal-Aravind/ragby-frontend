@@ -42,6 +42,10 @@ export function readCheckout(pid) {
     step: [1, 2, 3, 4].includes(v.step) ? v.step : 1,
     fulfilment: v.fulfilment === "delivery" ? "delivery" : v.fulfilment === "pickup" ? "pickup" : null,
     name: str(v.name, 80),
+    // Only asked for when the page wasn't opened from WhatsApp (no token,
+    // so no phone). Kept as code + number, joined to digits on submit.
+    phoneCode: str(v.phoneCode, 4),
+    phoneNumber: str(v.phoneNumber, 15),
     address: { line1: str(a.line1, 110), line2: str(a.line2, 110), city: str(a.city, 50), pincode: str(a.pincode, 10) },
     coords: c && Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lng)) ? { lat: Number(c.lat), lng: Number(c.lng) } : null,
     coupon: typeof v.coupon === "string" && v.coupon ? v.coupon.slice(0, 20) : null,
@@ -171,12 +175,32 @@ export function pincodeLooksValid(pc, india) {
   return india ? /^[1-9]\d{5}$/.test(v) : /^[A-Za-z0-9][A-Za-z0-9 -]{1,8}[A-Za-z0-9]$/.test(v);
 }
 
-/** Client copy of the place-order delivery validation (B.6). Returns {field: message}. */
-export function validateDetails({ fulfilment, name, address, coords }, india) {
+/**
+ * Country code + number -> the digits the server wants, or "" when the pair
+ * can't make a valid number. Mirrors the backend's clean_phone(): digits
+ * only, 8-15 of them.
+ */
+export function joinPhone(code, number) {
+  const cc = String(code || "").replace(/\D/g, "");
+  const n = String(number || "").replace(/\D/g, "").replace(/^0+/, "");
+  if (cc.length < 1 || cc.length > 4 || n.length < 6) return "";
+  const full = cc + n;
+  return full.length >= 8 && full.length <= 15 ? full : "";
+}
+
+/**
+ * Client copy of the place-order delivery validation (B.6). Returns {field: message}.
+ * `needPhone` is passed in rather than inferred: a customer who opened the
+ * menu from WhatsApp already has a verified number and must not be asked.
+ */
+export function validateDetails({ fulfilment, name, phoneCode, phoneNumber, address, coords }, india, needPhone = false) {
   const e = {};
   const n = (name || "").trim();
   if (!n) e.name = "Enter your name";
   else if (n.length > 80 || /[\r\n]/.test(n)) e.name = "Name must be one line, up to 80 characters";
+  if (needPhone && !joinPhone(phoneCode, phoneNumber)) {
+    e.phone = (phoneNumber || "").trim() ? "Enter a valid phone number" : "Enter your phone number";
+  }
   if (fulfilment === "delivery") {
     const a = address || {};
     const l1 = (a.line1 || "").trim();

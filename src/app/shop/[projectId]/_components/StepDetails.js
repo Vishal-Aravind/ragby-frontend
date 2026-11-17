@@ -30,7 +30,7 @@ const inputCls = (bad) =>
  * delivery/location problem, shown at the map.
  */
 export default function StepDetails({
-  shop, fulfilment, form, setForm, errors, deliveryError, india, accent, onTryPickup,
+  shop, fulfilment, form, setForm, errors, deliveryError, india, accent, onTryPickup, needPhone,
 }) {
   const [locBusy, setLocBusy] = useState(false);
   const [locErr, setLocErr] = useState("");
@@ -65,6 +65,38 @@ export default function StepDetails({
     </Field>
   );
 
+  // Only when the menu wasn't opened from WhatsApp: we need a number to put
+  // on the order and to reach them about it.
+  const phoneField = needPhone ? (
+    <Field label="Phone number" required hint="We'll use this to contact you about your order" error={errors.phone}>
+      <div className="mt-1 flex gap-2">
+        <div className={`flex items-center rounded-xl border px-2 w-20 shrink-0 bg-white ${errors.phone ? "border-red-400" : "border-gray-200 focus-within:border-gray-400"}`}>
+          <span className="text-base text-gray-500">+</span>
+          <input
+            type="tel"
+            inputMode="numeric"
+            aria-label="Country code"
+            maxLength={4}
+            value={form.phoneCode ?? "91"}
+            onChange={(e) => setForm((f) => ({ ...f, phoneCode: e.target.value.replace(/\D/g, "") }))}
+            className="w-full py-3 pl-0.5 text-base outline-none bg-transparent"
+          />
+        </div>
+        <input
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          aria-label="Phone number"
+          maxLength={15}
+          value={form.phoneNumber || ""}
+          onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value.replace(/\D/g, "") }))}
+          placeholder="98765 43210"
+          className={`flex-1 min-w-0 rounded-xl border px-3 py-3 text-base outline-none bg-white ${errors.phone ? "border-red-400" : "border-gray-200 focus:border-gray-400"}`}
+        />
+      </div>
+    </Field>
+  ) : null;
+
   if (!isDelivery) {
     const mapsUrl = shopPoint ? `https://maps.google.com/?q=${shopPoint.lat},${shopPoint.lng}` : null;
     return (
@@ -81,6 +113,7 @@ export default function StepDetails({
           )}
         </div>
         {nameField}
+        {phoneField}
       </div>
     );
   }
@@ -183,6 +216,7 @@ export default function StepDetails({
         </Field>
       </div>
       {nameField}
+      {phoneField}
     </div>
   );
 }
