@@ -138,7 +138,7 @@ export default function PrivacyPage() {
           <p>For privacy questions, data requests, or concerns:</p>
           <ul className="list-none mt-2 space-y-1">
             <li><strong>Email:</strong> khavinprakash03@gmail.com</li>
-            <li><strong>Website:</strong> https://ragby-frontend.vercel.app</li>
+            <li><strong>Website:</strong> https://askzavo.com</li>
             <li><strong>Business:</strong> Askzavo</li>
           </ul>
         </section>
