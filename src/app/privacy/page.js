@@ -109,7 +109,7 @@ export default function PrivacyPage() {
             <li>Export your data</li>
             <li>Withdraw consent at any time</li>
           </ul>
-          <p className="mt-2">To exercise these rights, contact us at khavinprakash03@gmail.com</p>
+          <p className="mt-2">To exercise these rights, contact us at support@askzavo.com</p>
         </section>
 
         <section>
@@ -137,7 +137,7 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-2">12. Contact Us</h2>
           <p>For privacy questions, data requests, or concerns:</p>
           <ul className="list-none mt-2 space-y-1">
-            <li><strong>Email:</strong> khavinprakash03@gmail.com</li>
+            <li><strong>Email:</strong> support@askzavo.com</li>
             <li><strong>Website:</strong> https://askzavo.com</li>
             <li><strong>Business:</strong> Askzavo</li>
           </ul>
