@@ -7,7 +7,7 @@ export default function Home() {
       <div className="text-center space-y-6">
         <h1 className="text-4xl font-bold">Zavo</h1>
         <p className="text-muted-foreground">
-          Build RAG chatbots for your documents
+          Take orders and bookings on WhatsApp — without the commission
         </p>
 
         <div className="flex justify-center gap-4">
