@@ -1,6 +1,7 @@
 // src/app/api/analytics/route.js
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { requireProjectTab } from "@/lib/supabase-api";
 
 function getSupabase(req) {
   const response = NextResponse.next();
@@ -27,6 +28,11 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const project_id = searchParams.get("project_id");
   if (!project_id) return NextResponse.json({ error: "project_id required" }, { status: 400 });
+
+  // RLS only checks project membership, so without this a member whose
+  // Analytics tab is switched off still gets revenue and chat stats here.
+  const access = await requireProjectTab(user.id, project_id, { tab: "analytics" });
+  if (!access.ok) return access.response;
 
   const cutoffISO = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 

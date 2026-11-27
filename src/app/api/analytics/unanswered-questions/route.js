@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { dbError } from "@/lib/api-error";
+import { requireProjectTab } from "@/lib/supabase-api";
 
 const FALLBACK_TEXT = "I couldn't find that in your documents or data sources.";
 
@@ -37,6 +38,10 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const project_id = searchParams.get("project_id");
   if (!project_id) return NextResponse.json({ error: "project_id required" }, { status: 400 });
+
+  // RLS only checks project membership, not the Analytics tab toggle.
+  const access = await requireProjectTab(user.id, project_id, { tab: "analytics" });
+  if (!access.ok) return access.response;
 
   // Every real customer-facing channel — deliberately excludes "inapp"
   // (the internal Test Chat tool), since testing your own bot isn't a
@@ -117,6 +122,9 @@ export async function POST(req) {
   if (!project_id || !question) {
     return NextResponse.json({ error: "project_id and question required" }, { status: 400 });
   }
+
+  const access = await requireProjectTab(user.id, project_id, { tab: "analytics" });
+  if (!access.ok) return access.response;
 
   const { error } = await supabase.from("content_gap_resolutions").upsert({
     project_id,
